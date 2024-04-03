@@ -84,7 +84,7 @@ hide:
     <div class="tag-card">
     <a href="/Categories/CLOUDWATCH">
         
-            <img class="tag-card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/tag.svg" alt="CLOUDWATCH icon">
+            <img class="tag-card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/aws/cloudwatch.svg" alt="CLOUDWATCH icon">
         
         <br>
         CLOUDWATCH

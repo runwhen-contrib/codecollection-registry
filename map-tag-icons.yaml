@@ -7,6 +7,8 @@ icons:
     url: "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/OpenShift-LogoType.svg"
   - tags: ["Argo", "ARGO", "ArgoCD", "ARGOCD"]
     url: "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/argo-icon-color.svg"
+  - tags: ["CLOUDWATCH","CloudWatch"]
+    url: "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/aws/cloudwatch.svg"
   - tags: ["AKS"]
     url: "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/azure/containers/10023-icon-service-Kubernetes-Services.svg"
   - tags: ["Azure", "AZURE"]

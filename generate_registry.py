@@ -18,7 +18,7 @@ headers = {}
 
 
 # YAML file path
-yaml_file_path = 'codecollection_registry.yaml'
+yaml_file_path = 'codecollections.yaml'
 
 # Directory where to clone the repositories
 clone_dir = './cloned_repos'
