@@ -1,10 +1,9 @@
 cloned_repos/*
-cc-registry/docs/site/*
+cc-registry/site/*
 cc-registry/docs/Categories/*
 cc-registry/docs/CodeCollection/*
 cc-registry/docs/all_codecollections.md
 cc-registry/docs/overrides/home.html
-
 
 # Ignore Python bytecode files
 *.pyc
