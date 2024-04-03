@@ -281,16 +281,31 @@ li {
   background-size: cover;
   background-repeat: no-repeat;
   background-position: top center;
-  position: relative; /* Add position relative to the parent container */
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
-  height: 30vh;
+  min-height: 30vh; /* Changed from height to min-height */
   background-color: var(--md-primary-color);
   color: #ffffff;
-  font-size: 28;
+  font-size: 2vw; /* Example of using viewport width for sizing */
 }
+
+/* Media query for larger screens */
+@media (min-width: 1024px) {
+  .custom-section {
+    font-size: 1.5rem; /* Fixed size for larger screens */
+  }
+}
+
+/* Media query for smaller screens */
+@media (max-width: 768px) {
+  .custom-section {
+    font-size: 1rem; /* Smaller font size for mobile devices */
+  }
+}
+
 
 .custom-section .md-search {
   position: relative; /* Change position to relative */
