@@ -1,0 +1,11 @@
+---
+title: {{ category_tag }}
+---
+<table class="invisible-table">
+  <tr>
+    <td class="icon-cell">
+      <img src="{{ icon_url[category_tag] }}" alt="Icon" />
+    </td>
+  </tr>
+</table>
+{% raw %}{{ include_tagged_content('{% endraw %}{{ category_tag }}{% raw %}') }}{% endraw %}

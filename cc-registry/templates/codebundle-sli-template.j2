@@ -1,0 +1,80 @@
+---
+title: "{{ parsed_sli['display_name'] }}"
+tags:
+  - health
+  {% for tag in parsed_sli['support_tags'] %}
+  - {{ tag }}
+  {% endfor %}
+---
+<style>
+  .meta-useful-scenarios {
+    display: none;
+    margin-top: 8px;
+    background-color: #f9f9f9;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+</style>
+<div class="cc-card">
+    <div class="card-header">
+        <img class="card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/ecg_heart.svg" alt="Icon" />
+        <a href="{{ file_path }}">
+        {{ parsed_sli['display_name'] }}
+        </a>
+    </div>
+    <div>
+        <div class="author-block">
+            <div class="author-info">
+                <p class="author-bio">
+                    <img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/terminal.svg" alt="Icon 1" class="bio-icon">
+                    {{ total_tasks }} Troubleshooting Commands
+                </p>
+                <p class="author-bio">
+                    <img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/edit_note.svg" alt="Icon 2" class="bio-icon">
+                    Contributed by {{ parsed_sli['author'] }}
+                </p>
+                <p class="author-bio">
+                    <img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/content_copy.svg" alt="Icon 2" class="bio-icon">
+                    Codecollection: <a href="/CodeCollection/{{ codecollection_slug }}">{{ codecollection_slug }}</a>
+                </p>
+            </div>
+        </div>
+    </div>
+    <hr class="custom-hr">
+    <div class="card-description">
+        {{ parsed_sli['doc'] }}
+    <br><br>
+    <b>Tasks:</b>
+    <ul>
+        {% for task in parsed_sli['tasks'] %}
+        <li>
+            {{ task['name'] }}
+            {% if task['meta_useful_scenarios'] %}
+            <a href="#" class="show-more" data-target="meta{{ loop.index }}" onclick="toggleVisibility(this); return false;">Show More</a>
+            <div class="meta-useful-scenarios" id="meta{{ loop.index }}">
+            Common scenarios that might relate to this command or script: <br>
+            {{ task['meta_useful_scenarios'] }}</div>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    </div>
+    <div class="card-footer">
+        <a class="codebundle-button" href="{{ sli_source_url }}" target="_blank"><img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/github-mark.svg" alt="Icon" class="codebundle-button-icon">Source Code</a>    </div>
+</div>
+<script>
+function toggleVisibility(linkElement) {
+    var targetId = linkElement.getAttribute('data-target');
+    var targetElement = document.getElementById(targetId);
+
+    // Check and toggle the display style
+    if (targetElement.style.display === "none" || targetElement.style.display === "") {
+        targetElement.style.display = "block"; // Change this as needed
+        linkElement.textContent = "Show Less";
+    } else {
+        targetElement.style.display = "none";
+        linkElement.textContent = "Show More";
+    }
+}
+</script>
