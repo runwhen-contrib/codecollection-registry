@@ -1,5 +1,6 @@
 site_name: CodeCollection Registry
 site_author: RunWhen Inc.
+site_url: https://registry.runwhen.com
 dev_addr: 0.0.0.0:8081
 theme:
     name: material
