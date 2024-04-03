@@ -1,0 +1,9 @@
+robotframework==6.0.2
+gitpython>=3.1.41
+jinja2>=3.1
+jsonschema>=4.21
+mkdocs
+mkdocs-material
+mkdocs-macros-plugin
+pymdown-extensions
+ruamel.yaml

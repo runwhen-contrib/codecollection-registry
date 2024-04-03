@@ -1,0 +1,5 @@
+cloned_repos/*
+cc-registry/docs/Categories/*
+cc-registry/docs/CodeCollection/*
+cc-registry/docs/all_codecollections.md
+cc-registry/docs/overrides/home.html
