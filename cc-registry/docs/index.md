@@ -22,22 +22,22 @@ hide:
     </div>
     
     <div class="tag-card">
-    <a href="/Categories/AKS">
-        
-            <img class="tag-card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/azure/containers/10023-icon-service-Kubernetes-Services.svg" alt="AKS icon">
-        
-        <br>
-        AKS
-    </a>
-    </div>
-    
-    <div class="tag-card">
     <a href="/Categories/GKE">
         
             <img class="tag-card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/gcp/google_kubernetes_engine/google_kubernetes_engine.svg" alt="GKE icon">
         
         <br>
         GKE
+    </a>
+    </div>
+    
+    <div class="tag-card">
+    <a href="/Categories/AKS">
+        
+            <img class="tag-card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/azure/containers/10023-icon-service-Kubernetes-Services.svg" alt="AKS icon">
+        
+        <br>
+        AKS
     </a>
     </div>
     
@@ -62,22 +62,22 @@ hide:
     </div>
     
     <div class="tag-card">
-    <a href="/Categories/AWS">
-        
-            <img class="tag-card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Amazon_Web_Services_Logo.svg" alt="AWS icon">
-        
-        <br>
-        AWS
-    </a>
-    </div>
-    
-    <div class="tag-card">
     <a href="/Categories/GCP">
         
             <img class="tag-card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/google-cloud-platform.svg" alt="GCP icon">
         
         <br>
         GCP
+    </a>
+    </div>
+    
+    <div class="tag-card">
+    <a href="/Categories/AWS">
+        
+            <img class="tag-card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Amazon_Web_Services_Logo.svg" alt="AWS icon">
+        
+        <br>
+        AWS
     </a>
     </div>
     
@@ -92,22 +92,22 @@ hide:
     </div>
     
     <div class="tag-card">
-    <a href="/Categories/AZURE">
-        
-            <img class="tag-card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/azure-icon.svg" alt="AZURE icon">
-        
-        <br>
-        AZURE
-    </a>
-    </div>
-    
-    <div class="tag-card">
     <a href="/Categories/HTTP">
         
             <img class="tag-card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/code_blocks.svg" alt="HTTP icon">
         
         <br>
         HTTP
+    </a>
+    </div>
+    
+    <div class="tag-card">
+    <a href="/Categories/GITHUB">
+        
+            <img class="tag-card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/github-mark.svg" alt="GITHUB icon">
+        
+        <br>
+        GITHUB
     </a>
     </div>
     
