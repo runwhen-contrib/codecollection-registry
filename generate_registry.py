@@ -417,6 +417,20 @@ def generate_github_stats(collection):
     # all_codecollection_stats[f"{collection['slug']}"]['total_contributors']=len(contributors)
     # all_codecollection_stats[f"{collection['slug']}"]['contributors']=[contributor['login'] for contributor in contributors]
 
+def update_footer(): 
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    build_date_path = f'{mkdocs_root}/{docs_dir}/overrides/partials/build_date.html'
+    build_date_template_file = f"{mkdocs_root}/templates/build_date.j2"
+    build_date_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
+    build_date_template = build_date_env.get_template(build_date_template_file)
+    build_date_output = build_date_template.render(
+        current_date=current_date
+    )
+    with open(build_date_path, 'w') as build_date_file:
+        build_date_file.write(build_date_output)
+    build_date_file.close()
+
+
 def main():
     """
     Reads in the registry.yaml file to parse robot files and generate an index.  
@@ -484,7 +498,7 @@ def main():
     
     # # Generate stats and home page
     generate_index(all_support_tags_freq, all_codecollection_stats, codecollections_yaml=data)
-   
+    update_footer()
 
 if __name__ == "__main__":
     main()
