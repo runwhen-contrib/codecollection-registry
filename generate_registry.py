@@ -418,17 +418,17 @@ def generate_github_stats(collection):
     # all_codecollection_stats[f"{collection['slug']}"]['contributors']=[contributor['login'] for contributor in contributors]
 
 def update_footer(): 
-    current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    footer_path = f'{mkdocs_root}/{docs_dir}/overrides/partials/footer.html'
-    footer_template_file = f"{mkdocs_root}/templates/footer.j2"
-    footer_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
-    footer_template = footer_env.get_template(footer_template_file)
-    footer = footer_template.render(
-        current_datetime=current_datetime
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    build_date_path = f'{mkdocs_root}/{docs_dir}/overrides/partials/build_date.html'
+    build_date_template_file = f"{mkdocs_root}/templates/build_date.j2"
+    build_date_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
+    build_date_template = build_date_env.get_template(build_date_template_file)
+    build_date_output = build_date_template.render(
+        current_date=current_date
     )
-    with open(footer_path, 'w') as footer_file:
-        index_file.write(footer_output)
-    index_file.close()
+    with open(build_date_path, 'w') as build_date_file:
+        build_date_file.write(build_date_output)
+    build_date_file.close()
 
 
 def main():
