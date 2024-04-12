@@ -22,5 +22,5 @@ jobs:
         with:
           python-version: 3.x
       - run: pip install -r requirements.txt
-      - run: python3 generate_index.py
+      - run: python3 generate_registry.py
       - run: mkdocs gh-deploy  -f cc-registry/mkdocs.yml
