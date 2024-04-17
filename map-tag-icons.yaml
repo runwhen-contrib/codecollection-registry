@@ -25,3 +25,5 @@ icons:
     url: "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/code_blocks.svg"
   - tags: ["GITHUB"]
     url: "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/github-mark.svg"
+  - tags: ["PATRONI", "POSTGRES", "POSTGRESQL"]
+    url: "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/postgresql.svg"
