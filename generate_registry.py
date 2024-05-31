@@ -7,6 +7,7 @@ import os
 import requests
 import jinja2
 from collections import Counter
+from collections import defaultdict
 import datetime
 
 
@@ -297,28 +298,7 @@ def generate_codebundle_content(collection, clone_path):
         with open(file_path, 'w') as md_file:
             md_file.write(sli_codebundle_content)
 
-    # readme_template_file_name="./cc-index/templates/codebundle-readme-template.j2"
-    # readme_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
-    # readme_jinja_template = readme_jinja_env.get_template(readme_template_file_name)
-    # readme_files=find_files(f'{clone_path}/{codecollection}/codebundles/', 'README.md')
-    # for readme in readme_files: 
-    #     print(readme)
-    #     codebundle=readme.split('/')[5]
-    #     # Generate the directory path
-    #     dir_path = f'cc-index/docs/CodeCollection/{codecollection}/{codebundle}'
-    #     # Ensure the directory exists
-    #     os.makedirs(dir_path, exist_ok=True)
-    #     if os.path.exists(readme):
-    #         with open(readme, 'r', encoding='utf-8') as file:
-    #             readme_md_contents = file.read()
-    #             readme_content = readme_jinja_template.render(
-    #                 readme_content=readme_md_contents
-    #             )
-    #         file_path = os.path.join(dir_path, 'readme.md')
-    #         with open(file_path, 'w') as md_file:
-    #             md_file.write(readme_content)
-
-def generate_index(all_support_tags_freq, all_codecollection_stats, codecollections_yaml): 
+def generate_index(all_support_tags_freq, all_codecollection_stats, top_latest_files, codecollections_yaml): 
     index_path = f'{mkdocs_root}/{docs_dir}/index.md'
     home_path = f'{mkdocs_root}/{docs_dir}/overrides/home.html'
     index_template_file = f"{mkdocs_root}/templates/index-template.j2"
@@ -347,7 +327,8 @@ def generate_index(all_support_tags_freq, all_codecollection_stats, codecollecti
         tags_with_icons=tags_with_icons,
         total_codebundles=total_codebundles,
         total_tasks=total_tasks,
-        total_contributors=total_contributors
+        total_contributors=total_contributors,
+        top_latest_files=top_latest_files
     )
     home_output = home_template.render(
         total_codebundles=total_codebundles,
@@ -396,6 +377,68 @@ def load_icon_urls_for_tags(tags, filename="map-tag-icons.yaml", default_url="ht
     
     return tag_icon_url_map
 
+def get_last_commit_date(repo_base, filepath):
+    relative_path = os.path.relpath(filepath, repo_base)
+    result = subprocess.run(['git', 'log', '-1', '--format=%ct', relative_path],
+                            cwd=repo_base, capture_output=True, text=True)
+    timestamp = result.stdout.strip()
+    if timestamp:
+        return datetime.datetime.fromtimestamp(int(timestamp))
+    else:
+        print(f"Warning: No commit date found for {filepath}")
+    return datetime.datetime.fromtimestamp(0)  # Using Unix epoch start time
+
+def calculate_age(commit_date):
+    now = datetime.datetime.now()
+    delta = now - commit_date
+    
+    if delta.days > 0:
+        if delta.days == 1:
+            return "1 day ago"
+        else:
+            return f"{delta.days} days ago"
+    elif delta.seconds // 3600 > 0:
+        hours = delta.seconds // 3600
+        if hours == 1:
+            return "1 hour ago"
+        else:
+            return f"{hours} hours ago"
+    elif delta.seconds // 60 > 0:
+        minutes = delta.seconds // 60
+        if minutes == 1:
+            return "1 minute ago"
+        else:
+            return f"{minutes} minutes ago"
+    else:
+        return "Just now"
+
+
+def get_latest_files_by_pattern(repo_base, pattern='*', top_n=5):
+    files_with_dates = []
+    for root, dirs, files in os.walk(repo_base):
+        for filename in fnmatch.filter(files, pattern):
+            filepath = os.path.join(root, filename)
+            commit_date = get_last_commit_date(repo_base, filepath)
+            if 'runbook' in filename: 
+                slug = f'/CodeCollection/{root.split("/")[3]}/{root.split("/")[5]}/tasks'
+            elif 'sli' in filename: 
+                slug = f'/CodeCollection/{root.split("/")[3]}/{root.split("/")[5]}/health'
+            else:
+                slug = "None"
+            parsed_robot_contents = parse_robot_file(filepath)
+            if "display_name" in parsed_robot_contents:
+                name = f'{parsed_robot_contents["display_name"]}'
+            else:
+                name = "Missing Display Name"
+            files_with_dates.append({
+                'commit_date': commit_date,
+                'filepath': filepath,
+                'slug': slug,
+                'name': name,
+                'age': calculate_age(commit_date)
+            })
+    files_with_dates.sort(reverse=True, key=lambda x: x['commit_date'])
+    return files_with_dates[:top_n]
 
 def generate_github_stats(collection): 
     # If the 'GITHUB_TOKEN' environment variable exists, add it as a Bearer token
@@ -413,9 +456,6 @@ def generate_github_stats(collection):
             'total_tasks': 0,
             'total_codebundles': 0
     }
-
-    # all_codecollection_stats[f"{collection['slug']}"]['total_contributors']=len(contributors)
-    # all_codecollection_stats[f"{collection['slug']}"]['contributors']=[contributor['login'] for contributor in contributors]
 
 def update_footer(): 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -442,6 +482,7 @@ def main():
         args (str): The path the output contents from map-builder. 
     """
     data = read_yaml(yaml_file_path)
+    all_files_with_dates = []
     clean_path(clone_dir)
     clean_path(f"{mkdocs_root}/{docs_dir}/CodeCollection")
 
@@ -453,10 +494,10 @@ def main():
         clone_repository(collection['git_url'], clone_path, ref)
         generate_github_stats(collection)
         generate_codebundle_content(collection, clone_path)
+        latest_files=get_latest_files_by_pattern(f'{clone_path}/{collection["git_url"].split("/")[-1]}', '*.robot', 5)
+        all_files_with_dates.extend(latest_files)
     
     cc_list_content = generate_cc_list(data)
-    # with open(f'{mkdocs_root}/{docs_dir}/all_codecollections.md', 'w') as md_file:
-    #     md_file.write(cc_list_content)
 
     ## Should clean this up. we are pulling from Robot "support tags"
     ## but calling them category tags in the app. 
@@ -491,13 +532,16 @@ def main():
         with open(file_path, 'w') as md_file:
             md_file.write(category_content)
 
-    # for collection in data.get('codecollections', []):
-    #     print(f"Indexing and genenerating content for {collection['name']}...")
-    #     generate_codebundle_content(**collection)
+    # Determine last 5 updated codebundles across all codecollections
+    # Sort all files by commit date in descending order
+    all_files_with_dates.sort(reverse=True, key=lambda x: x['commit_date'])
+    top_latest_files = all_files_with_dates[:5]
+    # for file_info in top_latest_files:
+    #     print(f"Top File: {file_info['filepath']}, Commit Date: {file_info['commit_date']}, Relative Path: {file_info['relative_path']}")
 
     
     # # Generate stats and home page
-    generate_index(all_support_tags_freq, all_codecollection_stats, codecollections_yaml=data)
+    generate_index(all_support_tags_freq, all_codecollection_stats, top_latest_files, codecollections_yaml=data)
     update_footer()
 
 if __name__ == "__main__":
