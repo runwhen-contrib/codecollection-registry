@@ -1,6 +1,6 @@
 name: CodeBundle Wanted
 description: Request a new CodeBundle from the Community
-title: "[new-codebundle-request] "
+title: "[new-codebundle-request] - "
 labels: [new-codebundle-request"] 
 assignees: 
   - stewartshea
@@ -8,9 +8,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        Hello there 🎉! We're excited that you're using RunWhen. Your request for a contribution will make a big difference in improving the community's experience with Kubernetes and cloud environments. Feel free to add as much or as little detail below. 
+        Hello there 🎉! We're excited that you want RunWhen's libraries to expand. Your request for a contribution will make a big difference in improving the community's experience with Kubernetes and cloud environments. Feel free to add as much or as little detail below. 
         
-        Remember, every request is highly appreciated! Let's make navigating complex environments easier together!
+        Each and every request is highly appreciated! Let's make navigating complex environments easier together!
         
         If you're open to being contacted with follow-up questions, please place an [x] beside 'yes, please' at the end of the form. 😊
 
@@ -28,9 +28,13 @@ body:
     attributes:
       label: What are some key tasks that should be performed?
       description: Please outline a 3-7 key tasks that should be automated, along with any issues that should be raised if the result is not "healthy".
-      placeholder: ex. 1. Trace Namespace Errors - Raise issue if Warning or Error events in last 10 minutes\n2. Fetch Unready Pods - Raise issue if more than 0 pods are unready\n3. List all Namespace Resources and Add to Report
+      placeholder: | 
+        ex. 
+        1. Trace Namespace Errors - Raise issue if Warning or Error events in last 10 minutes
+        2. Fetch Unready Pods - Raise issue if more than 0 pods are unready
+        3. List all Namespace Resources and Add to Report
     validations:
-      required: false
+      required: true
 
   - type: textarea
     id: additional-context
