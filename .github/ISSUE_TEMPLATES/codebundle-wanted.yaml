@@ -1,0 +1,57 @@
+name: CodeBundle Wanted
+description: Request a new CodeBundle from the Community
+title: "[new-codebundle-request] "
+labels: [new-codebundle-request"] 
+assignees: 
+  - stewartshea
+body: 
+  - type: markdown
+    attributes:
+      value: |
+        Hello there 🎉! We're excited that you're using RunWhen. Your request for a contribution will make a big difference in improving the community's experience with Kubernetes and cloud environments. Feel free to add as much or as little detail below. 
+        
+        Remember, every request is highly appreciated! Let's make navigating complex environments easier together!
+        
+        If you're open to being contacted with follow-up questions, please place an [x] beside 'yes, please' at the end of the form. 😊
+
+  - type: textarea
+    id: codebundle-request
+    attributes:
+      label: What cloud platform(s) should this support?
+      description: Please describe, as best as you can, what this CodeBundle should do - including which cloud resources it should interact with. 
+      placeholder: ex. Collect diagnosis information for troubleshooting a GitLab installation via Helm in Kubernetes. 
+    validations:
+      required: true
+
+  - type: textarea
+    id: task-titles
+    attributes:
+      label: What are some key tasks that should be performed?
+      description: Please outline a 3-7 key tasks that should be automated, along with any issues that should be raised if the result is not "healthy".
+      placeholder: ex. 1. Trace Namespace Errors - Raise issue if Warning or Error events in last 10 minutes\n2. Fetch Unready Pods - Raise issue if more than 0 pods are unready\n3. List all Namespace Resources and Add to Report
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Any other helpful context?
+      description: Provide any additional context surrounding this Codebundle, such as specific circumstances or dependencies that make it particularly useful.
+      placeholder: ex. We run a multi-cluster istio setup, so it's important to support multiple contexts/clusters. 
+    validations:
+      required: false
+
+  - type: dropdown
+    id: contact
+    attributes:
+      label: Contact
+      description: Are you willing to be contacted for additional questions? 
+      options:
+        - Yes, please
+        - No, thanks
+
+
+  - type: markdown
+    attributes:
+      value: |
+        You're done🎉! Woohoo! Thanks for taking the time to share your troubleshooting needs with the community! We appreciate your request!
