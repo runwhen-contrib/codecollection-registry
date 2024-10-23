@@ -19,7 +19,7 @@ body:
     attributes:
       label: What cloud platform(s) should this support?
       description: Please describe, as best as you can, what this CodeBundle should do - including which cloud resources it should interact with. 
-      placeholder: ex. Collect diagnosis information for troubleshooting a GitLab installation via Helm in Kubernetes. 
+      placeholder: ex. Kubernetes on Azure (AKS)
     validations:
       required: true
 
