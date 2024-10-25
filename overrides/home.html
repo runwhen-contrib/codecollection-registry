@@ -1,0 +1,39 @@
+
+{% extends "main.html" %}
+
+{% block header %}
+  {{ super() }}	
+{% endblock %} 
+
+{% block tabs %}
+{{ super() }}
+{% import "partials/language.html" as lang with context %}
+
+
+<div class="custom-section">
+  <div class="home-title">
+      RunWhen | CodeCollection Registry
+  </div>
+  <div class="home-subtitle"><br><br>Discover the Troubleshooting Tasks from an <b>Expert Community</b><br>that powers the brain of the <b>RunWhen Platform Engineering Assistants</b></p><br>
+  <div class="button-container">
+    <button type="button" class="front-page-button"><a href="/all_codecollections">Explore CodeCollections</a></button>
+    <button type="button" class="front-page-button"><a href="/Categories/KUBERNETES">Troubleshoot Kubernetes</a></button>
+    <button type="button" class="front-page-button"><a href="/Categories/AZURE">Troubleshoot Microsoft Azure</a></button>
+    <button type="button" class="front-page-button"><a href="/Categories/GCP">Troubleshoot GCP</a></button>
+  </div>
+  <p  class="home-subtitle"><b>377 tasks</b> across <b>156 codebundles</b> from <b>22 contributors</b> (& counting!)</p>
+  <br>
+  </div>
+</div>
+</div>
+
+
+
+{% endblock %}
+
+{% block content %}
+{{ page.content }}
+{% endblock %}
+{% block footer %}
+{{ super() }}
+{% endblock %}
