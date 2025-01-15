@@ -2,22 +2,18 @@
     "name": "registry-devimage",
     "shutdownAction": "none",
     "build": {
-        "dockerfile": "Dockerfile",
+        "dockerfile": ".devcontainer.Dockerfile",
         "context": "."
     },
-    "overrideCommand": false,
+    "overrideCommand": true, // Allows overriding the CMD in the Dockerfile
     "runArgs": [
         "-p",
-        "8081:8081",
-        "--name",
-        "registry-devimage"
+        "8081:8081"
     ],
-    "forwardPorts": [
-        8081
-    ],
+    "forwardPorts": [8081],
     "workspaceFolder": "/app",
     "features": {
-        "ghcr.io/devcontainers/features/docker-in-docker:2": {} // Enables Docker inside the dev container
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
     },
     "customizations": {
         "vscode": {
@@ -31,24 +27,12 @@
             "settings": {
                 "python.languageServer": "Jedi",
                 "python.linting.enabled": true,
-                "python.linting.pylintEnabled": true,
-                "python.linting.pylintArgs": [
-                    "--max-line-length=120",
-                    "--enable=W0614"
-                ],
-                "[python]": {
-                    "editor.insertSpaces": true,
-                    "editor.tabSize": 4
-                },
                 "editor.formatOnSave": true,
                 "editor.lineNumbers": "on",
-                "python.formatting.provider": "black",
-                "python.formatting.blackArgs": [
-                    "--line-length",
-                    "120"
-                ]
+                "python.formatting.provider": "black"
             }
         }
     },
-    "remoteUser": "runwhen" // Matches the user defined in your Dockerfile
+    "remoteUser": "runwhen",
+    "postStartCommand": "mkdocs serve -a 0.0.0.0:8081 || bash" // Optionally start MkDocs or drop into a shell
 }
