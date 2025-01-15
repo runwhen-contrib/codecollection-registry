@@ -1,7 +1,8 @@
 ---
-title: "{{ parsed_sli['display_name'] }}"
+title: "{{ parsed_sli['display_name'] }} SLI"
 tags:
   - health
+  - SLI
   {% for tag in parsed_sli['support_tags'] %}
   - {{ tag }}
   {% endfor %}
