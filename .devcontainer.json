@@ -5,7 +5,6 @@
         "dockerfile": "Dockerfile",
         "context": "."
     },
-    "overrideCommand": true, // Allows overriding the CMD in the Dockerfile
     "runArgs": [
         "-p",
         "8081:8081"

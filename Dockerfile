@@ -10,7 +10,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR $APP_HOME
-ADD . $APP_HOME
+COPY . $APP_HOME
 
 RUN usermod -g 0 runwhen -G 0  \
     && chown -R runwhen:0 $APP_HOME\
