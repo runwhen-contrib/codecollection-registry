@@ -33,6 +33,5 @@
             }
         }
     },
-    "remoteUser": "runwhen",
-    "postStartCommand": "mkdocs serve -a 0.0.0.0:8081 || bash" // Optionally start MkDocs or drop into a shell
+    "remoteUser": "runwhen"
 }
