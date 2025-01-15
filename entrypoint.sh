@@ -20,4 +20,4 @@ create_system_user_if_missing
 
 python3 generate_index.py
 
-mkdocs serve -f cc-index/mkdocs.yml
+mkdocs serve -f cc-registry/mkdocs.yml

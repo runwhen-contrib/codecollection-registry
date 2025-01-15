@@ -2,7 +2,7 @@
     "name": "registry-devimage",
     "shutdownAction": "none",
     "build": {
-        "dockerfile": ".devcontainer.Dockerfile",
+        "dockerfile": "Dockerfile",
         "context": "."
     },
     "overrideCommand": true, // Allows overriding the CMD in the Dockerfile
