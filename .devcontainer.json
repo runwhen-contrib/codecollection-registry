@@ -1,0 +1,32 @@
+{
+    "name": "Basic Python with Docker",
+    "image": "mcr.microsoft.com/devcontainers/python:3.12",
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {
+            "version": "latest"
+        }
+    },
+    "postCreateCommand": "pip install -r requirements.txt && python3 generate_registry.py && mkdocs serve -f cc-registry/mkdocs.yml",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.pylint",
+                "ms-python.black-formatter",
+                "njpwerner.autodocstring",
+                "ms-azuretools.vscode-docker"
+            ],
+            "settings": {
+                "python.linting.enabled": true,
+                "python.linting.pylintEnabled": true,
+                "editor.formatOnSave": true,
+                "editor.defaultFormatter": "ms-python.black-formatter"
+            }
+        }
+    },
+    "remoteUser": "vscode",
+    "forwardPorts": [8081],
+    "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+    }
+}

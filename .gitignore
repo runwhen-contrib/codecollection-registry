@@ -4,6 +4,9 @@ cc-registry/docs/Categories/*
 cc-registry/docs/CodeCollection/*
 cc-registry/docs/all_codecollections.md
 cc-registry/docs/overrides/home.html
+cc-registry/docs/overrides/partials/build_date.html
+cc-registry/docs/index.md
+
 
 # Ignore Python bytecode files
 *.pyc
@@ -12,4 +15,3 @@ cc-registry/docs/overrides/home.html
 __pycache__/
 *.py[cod]
 *$py.class
-
