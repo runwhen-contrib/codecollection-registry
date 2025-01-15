@@ -1,36 +1,32 @@
 {
-    "name": "registry-devimage",
-    "shutdownAction": "none",
-    "build": {
-        "dockerfile": "Dockerfile",
-        "context": "."
-    },
-    "runArgs": [
-        "-p",
-        "8081:8081"
-    ],
-    "forwardPorts": [8081],
-    "workspaceFolder": "/app",
+    "name": "Basic Python with Docker",
+    "image": "mcr.microsoft.com/devcontainers/python:3.12",
     "features": {
-        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {
+            "version": "latest"
+        }
     },
+    "postCreateCommand": "pip install -r requirements.txt && python3 generate_index.py && mkdocs serve -f cc-registry/mkdocs.yml",
     "customizations": {
         "vscode": {
             "extensions": [
-                "robocorp.robotframework-lsp",
+                "ms-python.python",
                 "ms-python.pylint",
                 "ms-python.black-formatter",
-                "ms-python.python",
-                "njpwerner.autodocstring"
+                "njpwerner.autodocstring",
+                "ms-azuretools.vscode-docker"
             ],
             "settings": {
-                "python.languageServer": "Jedi",
                 "python.linting.enabled": true,
+                "python.linting.pylintEnabled": true,
                 "editor.formatOnSave": true,
-                "editor.lineNumbers": "on",
-                "python.formatting.provider": "black"
+                "editor.defaultFormatter": "ms-python.black-formatter"
             }
         }
     },
-    "remoteUser": "runwhen"
+    "remoteUser": "vscode",
+    "forwardPorts": [8081],
+    "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+    }
 }
