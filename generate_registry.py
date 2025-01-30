@@ -470,6 +470,46 @@ def update_footer():
         build_date_file.write(build_date_output)
     build_date_file.close()
 
+def generate_codebundle_task_list(data):
+    """
+    Generate a Markdown file listing CodeBundles and their tasks.
+    """
+    task_list_template_file_name = f"./{mkdocs_root}/templates/codebundle-task-list-template.j2"
+    task_list_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
+    task_list_jinja_template = task_list_jinja_env.get_template(task_list_template_file_name)
+
+    task_list_content = task_list_jinja_template.render(
+        data=data
+    )
+
+    output_file_path = f'{mkdocs_root}/{docs_dir}/codebundle_tasks.md'
+    with open(output_file_path, 'w') as md_file:
+        md_file.write(task_list_content)
+    
+    print(f"Generated task list at {output_file_path}")
+
+
+def generate_codebundle_content(collection, clone_path):
+    """
+    Existing function extended to collect task data.
+    """
+    codecollection = collection["git_url"].split('/')[-1].replace('.git', '')
+    runbook_files = find_files(f"{clone_path}/{codecollection}/codebundles", 'runbook.robot')
+    
+    codebundle_task_data = []
+    for runbook in runbook_files:
+        codebundle = runbook.split('/')[5]
+        parsed_runbook = parse_robot_file(runbook)
+        
+        task_list = [task['name'] for task in parsed_runbook.get("tasks", [])]
+        codebundle_task_data.append({
+            "codebundle": codebundle,
+            "tasks": task_list
+        })
+    
+    return codebundle_task_data
+
+
 
 def main():
     """
@@ -483,6 +523,16 @@ def main():
     """
     data = read_yaml(yaml_file_path)
     all_files_with_dates = []
+
+    all_codebundle_tasks = []
+    
+    for collection in data.get('codecollections', []):
+        clone_path = os.path.join(clone_dir, collection["git_url"].split("/")[-2])
+        codebundle_tasks = generate_codebundle_content(collection, clone_path)
+        all_codebundle_tasks.extend(codebundle_tasks)
+    
+    generate_codebundle_task_list({"codebundles": all_codebundle_tasks})
+
     clean_path(clone_dir)
     clean_path(f"{mkdocs_root}/{docs_dir}/CodeCollection")
 

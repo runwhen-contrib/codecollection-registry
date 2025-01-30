@@ -1,0 +1,10 @@
+{% for bundle in data.codebundles %}
+## {{ bundle.codebundle }}
+
+{% if bundle.tasks %}
+- {{ bundle.tasks | join('\n- ') }}
+{% else %}
+_No tasks found_
+{% endif %}
+
+{% endfor %}
