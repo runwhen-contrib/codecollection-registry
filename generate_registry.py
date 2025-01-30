@@ -182,7 +182,7 @@ def generate_codebundle_task_list(data):
     """
     Generate an interactive Markdown file listing CodeBundles, their tasks, SLIs, categories, and page URLs with filtering for MkDocs.
     """
-    task_list_template_file_name = f"./{mkdocs_root}/templates/codebundle-task-list-template.md.j2"
+    task_list_template_file_name = f"./{mkdocs_root}/templates/task-index-template.md.j2"
     task_list_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
     task_list_jinja_template = task_list_jinja_env.get_template(task_list_template_file_name)
 
@@ -190,60 +190,66 @@ def generate_codebundle_task_list(data):
         data=data
     )
 
-    output_file_path = f'{mkdocs_root}/{docs_dir}/codebundle_tasks.md'
+    output_file_path = f'{mkdocs_root}/{docs_dir}/task_index.md'
     with open(output_file_path, 'w') as md_file:
         md_file.write(task_list_content)
     
     print(f"Generated interactive task list at {output_file_path}")
 
 def generate_codebundle_task_content(collection, clone_path):
-    # This is duplicitive code with generate_codebundle_content and should likely be merged in
-    # It's currently used for rendering the table / filter of all tasks 
+    """
+    Generates a structured dataset for CodeBundles, ensuring tasks and SLIs appear together.
+    """
     codecollection = collection["git_url"].split('/')[-1].replace('.git', '')
     runbook_files = find_files(f"{clone_path}/{codecollection}/codebundles", 'runbook.robot')
     sli_files = find_files(f"{clone_path}/{codecollection}", 'sli.robot')
-    
-    codebundle_task_data = []
+
+    codebundle_task_data = {}
+
+    def get_display_name(parsed_file, default_name):
+        return parsed_file.get("display_name", default_name)
+
+    # Process runbooks (tasks)
     for runbook in runbook_files:
         codebundle = runbook.split('/')[5]
         parsed_runbook = parse_robot_file(runbook)
+        display_name = get_display_name(parsed_runbook, codebundle)
         
-        task_list = [task['name'] for task in parsed_runbook.get("tasks", [])]
-        categories = parsed_runbook.get("support_tags", [])  # Extract from support metadata
-        page_url = f"/CodeCollection/{codecollection}/{codebundle}/tasks"
-        
-        codebundle_task_data.append({
-            "codecollection": codecollection,
-            "codebundle": codebundle,
-            "tasks": task_list,
-            "slis": [],
-            "categories": categories,
-            "page_url": page_url
-        })
-    
+        if codebundle not in codebundle_task_data:
+            codebundle_task_data[codebundle] = {
+                "codecollection": codecollection,
+                "codebundle": codebundle,
+                "display_name": display_name,
+                "tasks": [],
+                "slis": [],
+                "categories": [],
+                "page_url": f"/CodeCollection/{codecollection}/{codebundle}"
+            }
+
+        codebundle_task_data[codebundle]["tasks"].extend(task["name"] for task in parsed_runbook.get("tasks", []))
+        codebundle_task_data[codebundle]["categories"].extend(parsed_runbook.get("support_tags", []))
+
+    # Process SLIs
     for sli in sli_files:
         codebundle = sli.split('/')[5]
         parsed_sli = parse_robot_file(sli)
-        
-        sli_list = [sli_task['name'] for sli_task in parsed_sli.get("tasks", [])]
-        categories = parsed_sli.get("support_tags", [])  # Extract from support metadata
-        page_url = f"/CodeCollection/{codecollection}/{codebundle}/health"
-        
-        existing_bundle = next((b for b in codebundle_task_data if b["codebundle"] == codebundle), None)
-        if existing_bundle:
-            existing_bundle["slis"].extend(sli_list)
-            existing_bundle["categories"].extend(categories)
-        else:
-            codebundle_task_data.append({
+        display_name = get_display_name(parsed_sli, codebundle)
+
+        if codebundle not in codebundle_task_data:
+            codebundle_task_data[codebundle] = {
                 "codecollection": codecollection,
                 "codebundle": codebundle,
+                "display_name": display_name,
                 "tasks": [],
-                "slis": sli_list,
-                "categories": categories,
-                "page_url": page_url
-            })
-    
-    return codebundle_task_data
+                "slis": [],
+                "categories": [],
+                "page_url": f"/CodeCollection/{codecollection}/{codebundle}"
+            }
+
+        codebundle_task_data[codebundle]["slis"].extend(sli_task["name"] for sli_task in parsed_sli.get("tasks", []))
+        codebundle_task_data[codebundle]["categories"].extend(parsed_sli.get("support_tags", []))
+
+    return list(codebundle_task_data.values())
 
 def generate_codebundle_content(collection, clone_path):
     """
@@ -571,7 +577,7 @@ def main():
     
     cc_list_content = generate_cc_list(data)
     # print(all_codebundle_tasks)
-    generate_codebundle_task_list({"codebundles": all_codebundle_tasks})
+    generate_codebundle_task_list({"codebundles": list(all_codebundle_tasks)})
 
     ## Should clean this up. we are pulling from Robot "support tags"
     ## but calling them category tags in the app. 
