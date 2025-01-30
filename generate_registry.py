@@ -197,9 +197,8 @@ def generate_codebundle_task_list(data):
     print(f"Generated interactive task list at {output_file_path}")
 
 def generate_codebundle_task_content(collection, clone_path):
-    """
-    Existing function extended to collect task, SLI, categories, and URL data.
-    """
+    # This is duplicitive code with generate_codebundle_content and should likely be merged in
+    # It's currently used for rendering the table / filter of all tasks 
     codecollection = collection["git_url"].split('/')[-1].replace('.git', '')
     runbook_files = find_files(f"{clone_path}/{codecollection}/codebundles", 'runbook.robot')
     sli_files = find_files(f"{clone_path}/{codecollection}", 'sli.robot')
@@ -214,6 +213,7 @@ def generate_codebundle_task_content(collection, clone_path):
         page_url = f"/CodeCollection/{codecollection}/{codebundle}/tasks"
         
         codebundle_task_data.append({
+            "codecollection": codecollection,
             "codebundle": codebundle,
             "tasks": task_list,
             "slis": [],
@@ -235,6 +235,7 @@ def generate_codebundle_task_content(collection, clone_path):
             existing_bundle["categories"].extend(categories)
         else:
             codebundle_task_data.append({
+                "codecollection": codecollection,
                 "codebundle": codebundle,
                 "tasks": [],
                 "slis": sli_list,
