@@ -1,0 +1,55 @@
+<script>
+function filterBundles() {
+    let checkboxes = document.querySelectorAll("input[name='category']:checked");
+    let selectedCategories = Array.from(checkboxes).map(cb => cb.value);
+    let rows = document.querySelectorAll(".codebundle-row");
+    
+    rows.forEach(row => {
+        let bundleCategories = row.getAttribute("data-categories").split(",").map(cat => cat.trim());
+        let show = selectedCategories.length === 0 || selectedCategories.some(cat => bundleCategories.includes(cat));
+        row.style.display = show ? "table-row" : "none";
+    });
+}
+</script>
+
+# CodeBundle Task List
+
+<details>
+<summary><strong>Filter by Category</strong></summary>
+{% set all_categories = [] %}
+{% for bundle in data.codebundles %}
+    {% for category in bundle.categories %}
+        {% if category and category not in all_categories %}
+            {% set _ = all_categories.append(category) %}
+        {% endif %}
+    {% endfor %}
+{% endfor %}
+{% set all_categories = all_categories | sort %}
+
+{% for category in all_categories %}
+<label><input type="checkbox" name="category" value="{{ category }}" onchange="filterBundles()"> {{ category }}</label>
+{% endfor %}
+</details>
+
+<table>
+<thead>
+<tr>
+<th>CodeBundle</th>
+<th>Tasks</th>
+<th>SLIs</th>
+<th>Categories</th>
+<th>Page</th>
+</tr>
+</thead>
+<tbody>
+{% for bundle in data.codebundles %}
+<tr class="codebundle-row" data-categories="{{ bundle.categories | join(',') }}">
+<td><strong>{{ bundle.codebundle }}</strong></td>
+<td>{{ bundle.tasks | join('<br>') }}</td>
+<td>{{ bundle.slis | join('<br>') }}</td>
+<td>{{ bundle.categories | join(', ') }}</td>
+<td><a href="{{ bundle.page_url }}">View</a></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>

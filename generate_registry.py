@@ -6,6 +6,7 @@ import subprocess
 import os   
 import requests
 import jinja2
+import json
 from collections import Counter
 from collections import defaultdict
 import datetime
@@ -176,6 +177,72 @@ def count_directories_at_depth_one(path):
     # Count only those items which are directories
     directory_count = sum(os.path.isdir(os.path.join(path, item)) for item in items)
     return directory_count
+
+def generate_codebundle_task_list(data):
+    """
+    Generate an interactive Markdown file listing CodeBundles, their tasks, SLIs, categories, and page URLs with filtering for MkDocs.
+    """
+    task_list_template_file_name = f"./{mkdocs_root}/templates/codebundle-task-list-template.md.j2"
+    task_list_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
+    task_list_jinja_template = task_list_jinja_env.get_template(task_list_template_file_name)
+
+    task_list_content = task_list_jinja_template.render(
+        data=data
+    )
+
+    output_file_path = f'{mkdocs_root}/{docs_dir}/codebundle_tasks.md'
+    with open(output_file_path, 'w') as md_file:
+        md_file.write(task_list_content)
+    
+    print(f"Generated interactive task list at {output_file_path}")
+
+def generate_codebundle_task_content(collection, clone_path):
+    """
+    Existing function extended to collect task, SLI, categories, and URL data.
+    """
+    codecollection = collection["git_url"].split('/')[-1].replace('.git', '')
+    runbook_files = find_files(f"{clone_path}/{codecollection}/codebundles", 'runbook.robot')
+    sli_files = find_files(f"{clone_path}/{codecollection}", 'sli.robot')
+    
+    codebundle_task_data = []
+    for runbook in runbook_files:
+        codebundle = runbook.split('/')[5]
+        parsed_runbook = parse_robot_file(runbook)
+        
+        task_list = [task['name'] for task in parsed_runbook.get("tasks", [])]
+        categories = parsed_runbook.get("support_tags", [])  # Extract from support metadata
+        page_url = f"/CodeCollection/{codecollection}/{codebundle}/tasks"
+        
+        codebundle_task_data.append({
+            "codebundle": codebundle,
+            "tasks": task_list,
+            "slis": [],
+            "categories": categories,
+            "page_url": page_url
+        })
+    
+    for sli in sli_files:
+        codebundle = sli.split('/')[5]
+        parsed_sli = parse_robot_file(sli)
+        
+        sli_list = [sli_task['name'] for sli_task in parsed_sli.get("tasks", [])]
+        categories = parsed_sli.get("support_tags", [])  # Extract from support metadata
+        page_url = f"/CodeCollection/{codecollection}/{codebundle}/health"
+        
+        existing_bundle = next((b for b in codebundle_task_data if b["codebundle"] == codebundle), None)
+        if existing_bundle:
+            existing_bundle["slis"].extend(sli_list)
+            existing_bundle["categories"].extend(categories)
+        else:
+            codebundle_task_data.append({
+                "codebundle": codebundle,
+                "tasks": [],
+                "slis": sli_list,
+                "categories": categories,
+                "page_url": page_url
+            })
+    
+    return codebundle_task_data
 
 def generate_codebundle_content(collection, clone_path):
     """
@@ -471,6 +538,7 @@ def update_footer():
     build_date_file.close()
 
 
+
 def main():
     """
     Reads in the registry.yaml file to parse robot files and generate an index.  
@@ -485,6 +553,7 @@ def main():
     all_files_with_dates = []
     clean_path(clone_dir)
     clean_path(f"{mkdocs_root}/{docs_dir}/CodeCollection")
+    all_codebundle_tasks = []
 
     for collection in data.get('codecollections', []):
         print(f"Cloning {collection['name']}...")
@@ -494,10 +563,14 @@ def main():
         clone_repository(collection['git_url'], clone_path, ref)
         generate_github_stats(collection)
         generate_codebundle_content(collection, clone_path)
+        codebundle_tasks = generate_codebundle_task_content(collection, clone_path)
+        all_codebundle_tasks.extend(codebundle_tasks)    
         latest_files=get_latest_files_by_pattern(f'{clone_path}/{collection["git_url"].split("/")[-1]}', '*.robot', 5)
         all_files_with_dates.extend(latest_files)
     
     cc_list_content = generate_cc_list(data)
+    # print(all_codebundle_tasks)
+    generate_codebundle_task_list({"codebundles": all_codebundle_tasks})
 
     ## Should clean this up. we are pulling from Robot "support tags"
     ## but calling them category tags in the app. 
@@ -509,7 +582,6 @@ def main():
     all_support_tags_freq = Counter(all_support_tags)
 
     # Sort Global Tags
-    # If you need a deduplicated list of tags, you can extract keys from the Counter
     deduplicated_support_tags = list(all_support_tags_freq.keys())
 
     # Sorted list of unique tags, if needed
