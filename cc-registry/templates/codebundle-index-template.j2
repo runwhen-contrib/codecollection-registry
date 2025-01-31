@@ -1,0 +1,40 @@
+# {{ codebundle }} - Overview
+
+{% if doc %}
+## Description
+{{ doc }}
+{% endif %}
+
+{% if task_page or sli_page %}
+## Available Pages
+<ul>
+    {% if task_page %}
+    <li><a href="{{ task_page }}">View Tasks</a></li>
+    {% endif %}
+    {% if sli_page %}
+    <li><a href="{{ sli_page }}">View SLIs</a></li>
+    {% endif %}
+</ul>
+{% endif %}
+
+{% if tasks %}
+## Tasks
+<ul>
+    {% for task in tasks %}
+    <li>{{ task }}</li>
+    {% endfor %}
+</ul>
+{% else %}
+_No tasks available._
+{% endif %}
+
+{% if slis %}
+## Service Level Indicators (SLIs)
+<ul>
+    {% for sli in slis %}
+    <li>{{ sli }}</li>
+    {% endfor %}
+</ul>
+{% else %}
+_No SLIs available._
+{% endif %}
