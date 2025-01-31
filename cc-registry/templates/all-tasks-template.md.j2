@@ -1,3 +1,6 @@
+---
+title: All Tasks
+---
 <script>
 function filterBundles() {
     let selectedCategories = Array.from(document.querySelectorAll("input[name='categoryFilter']:checked"))
@@ -29,11 +32,17 @@ function clearSelections() {
 }
 </script>
 
-# CodeBundle Task List
+# CodeBundle Task Index
 
 <strong>Filter by Category:</strong>
-<input type="text" id="categorySearch" placeholder="Search categories..." onkeyup="filterCategoryList()" style="width: 100%; padding: 5px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px;">
-<button onclick="clearSelections()" style="margin-bottom: 10px; background: #f5f5f5; border: 1px solid #ccc; border-radius: 5px; padding: 5px 10px;">Clear Selection</button>
+<input type="text" id="categorySearch" placeholder="Search categories..." 
+       onkeyup="filterCategoryList()" class="theme-input" style="width: 100%; margin-bottom: 10px;">
+<button onclick="clearSelections()" style="font-size: 14px; background: var(--md-default-bg-color); border: 1px solid var(--md-default-fg-color); border-radius: 5px; padding: 5px 10px; color: var(--md-default-fg-color);">
+  Clear Selection
+</button>
+
+
+
 
 <div id="categoryFilters" style="display: flex; flex-wrap: wrap; gap: 10px; max-height: 200px; overflow-y: auto; padding: 5px;">
     {% set all_categories = [] %}
@@ -51,35 +60,33 @@ function clearSelections() {
     {% endfor %}
 </div>
 
+{% set sorted_codebundles = data.codebundles | sort(attribute="display_name") %}
+
 <table style="width: 100%; border-collapse: collapse; border-spacing: 0;">
-    <thead>
-        <tr style="background: #f8f8f8; border-bottom: 2px solid #ddd;">
-            <th style="text-align: left; padding: 10px;">CodeBundle</th>
-            <th style="text-align: left; padding: 10px;">Type</th>
-            <th style="text-align: left; padding: 10px;">Details</th>
-        </tr>
-    </thead>
     <tbody>
-    {% for bundle in data.codebundles %}
+    {% for bundle in sorted_codebundles %}
         <tbody class="codebundle-group" data-categories="{{ bundle.categories | join(',') }}">
         <tr>
-            <td colspan="3" style="font-weight: bold; text-align: left; background: #eef2f7; padding: 10px;">
-                <h3 style="margin: 0;"><a href="{{ bundle.page_url }}" style="text-decoration: none; color: #0056b3;">{{ bundle.display_name }}</a></h3>
+            <td colspan="3" style="font-weight: bold; text-align: left; background: var(--md-default-bg-color); color: var(--md-default-fg-color); padding: 10px;">
+                <h3 style="margin: 0;">
+                    <a href="{{ bundle.page_url }}" style="text-decoration: none; color: var(--md-accent-fg-color);">{{ bundle.display_name }}</a>
+                </h3>
             </td>
         </tr>
         {% if bundle.tasks %}
         <tr style="border-bottom: 1px solid #ddd;">
-            <td style="font-weight: bold; width: 20%; padding: 8px;">TaskSet</td>
-            <td colspan="2" style="padding: 8px;">{{ bundle.tasks | join('<br>') }}</td>
+            <td style="font-weight: bold; font-size: 14px; width: 20%; padding: 8px;">TaskSet</td>
+            <td colspan="2" style="font-size: 14px; padding: 8px;">{{ bundle.tasks | join('<br>') }}</td>
         </tr>
         {% endif %}
         {% if bundle.slis %}
         <tr style="border-bottom: 1px solid #ddd;">
-            <td style="font-weight: bold; width: 20%; padding: 8px;">SLI</td>
-            <td colspan="2" style="padding: 8px;">{{ bundle.slis | join('<br>') }}</td>
+            <td style="font-weight: bold; font-size: 14px; width: 20%; padding: 8px;">SLI</td>
+            <td colspan="2" style="font-size: 14px; padding: 8px;">{{ bundle.slis | join('<br>') }}</td>
         </tr>
         {% endif %}
         </tbody>
     {% endfor %}
     </tbody>
 </table>
+

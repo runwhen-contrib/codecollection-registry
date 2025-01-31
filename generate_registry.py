@@ -182,7 +182,7 @@ def generate_codebundle_task_list(data):
     """
     Generate an interactive Markdown file listing CodeBundles, their tasks, SLIs, categories, and page URLs with filtering for MkDocs.
     """
-    task_list_template_file_name = f"./{mkdocs_root}/templates/task-index-template.md.j2"
+    task_list_template_file_name = f"./{mkdocs_root}/templates/all-tasks-template.md.j2"
     task_list_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
     task_list_jinja_template = task_list_jinja_env.get_template(task_list_template_file_name)
 
@@ -190,7 +190,7 @@ def generate_codebundle_task_list(data):
         data=data
     )
 
-    output_file_path = f'{mkdocs_root}/{docs_dir}/task_index.md'
+    output_file_path = f'{mkdocs_root}/{docs_dir}/all-tasks.md'
     with open(output_file_path, 'w') as md_file:
         md_file.write(task_list_content)
     
@@ -198,13 +198,16 @@ def generate_codebundle_task_list(data):
 
 def generate_codebundle_task_content(collection, clone_path):
     """
-    Generates a structured dataset for CodeBundles, ensuring tasks and SLIs appear together.
+    Generates a structured dataset for CodeBundles, ensuring tasks and SLIs appear together and generating index.md.
     """
     codecollection = collection["git_url"].split('/')[-1].replace('.git', '')
     runbook_files = find_files(f"{clone_path}/{codecollection}/codebundles", 'runbook.robot')
     sli_files = find_files(f"{clone_path}/{codecollection}", 'sli.robot')
 
     codebundle_task_data = {}
+
+    # Load Jinja template for the index file
+    index_template = jinja2.Environment(loader=jinja2.FileSystemLoader(".")).get_template(f"./{mkdocs_root}/templates/codebundle-index-template.j2")
 
     def get_display_name(parsed_file, default_name):
         return parsed_file.get("display_name", default_name)
@@ -220,14 +223,19 @@ def generate_codebundle_task_content(collection, clone_path):
                 "codecollection": codecollection,
                 "codebundle": codebundle,
                 "display_name": display_name,
+                "doc": parsed_runbook.get("doc", ""),  # Store runbook description
                 "tasks": [],
                 "slis": [],
                 "categories": [],
-                "page_url": f"/CodeCollection/{codecollection}/{codebundle}"
+                "task_page": None,
+                "sli_page": None,
+                "page_url": f"../CodeCollection/{codecollection}/{codebundle}"
             }
 
-        codebundle_task_data[codebundle]["tasks"].extend(task["name"] for task in parsed_runbook.get("tasks", []))
+        task_names = [task["name"] for task in parsed_runbook.get("tasks", [])]
+        codebundle_task_data[codebundle]["tasks"].extend(task_names)
         codebundle_task_data[codebundle]["categories"].extend(parsed_runbook.get("support_tags", []))
+        codebundle_task_data[codebundle]["task_page"] = "tasks/"
 
     # Process SLIs
     for sli in sli_files:
@@ -240,14 +248,36 @@ def generate_codebundle_task_content(collection, clone_path):
                 "codecollection": codecollection,
                 "codebundle": codebundle,
                 "display_name": display_name,
+                "doc": parsed_sli.get("doc", ""),  # Store SLI description
                 "tasks": [],
                 "slis": [],
                 "categories": [],
-                "page_url": f"/CodeCollection/{codecollection}/{codebundle}"
+                "task_page": None,
+                "sli_page": None
             }
 
-        codebundle_task_data[codebundle]["slis"].extend(sli_task["name"] for sli_task in parsed_sli.get("tasks", []))
+        sli_names = [sli_task["name"] for sli_task in parsed_sli.get("tasks", [])]
+        codebundle_task_data[codebundle]["slis"].extend(sli_names)
         codebundle_task_data[codebundle]["categories"].extend(parsed_sli.get("support_tags", []))
+        codebundle_task_data[codebundle]["sli_page"] = "health/"
+
+    # Generate index.md for each CodeBundle
+    for codebundle, data in codebundle_task_data.items():
+        dir_path = f'{mkdocs_root}/{docs_dir}/CodeCollection/{codecollection}/{codebundle}'
+        os.makedirs(dir_path, exist_ok=True)
+        index_path = os.path.join(dir_path, "index.md")
+
+        index_content = index_template.render(
+            codebundle=data["display_name"],
+            doc=data["doc"],
+            tasks=data["tasks"],
+            slis=data["slis"],
+            task_page=data["task_page"],
+            sli_page=data["sli_page"]
+        )
+
+        with open(index_path, 'w') as index_file:
+            index_file.write(index_content)
 
     return list(codebundle_task_data.values())
 
