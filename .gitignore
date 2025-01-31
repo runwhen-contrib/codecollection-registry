@@ -15,3 +15,6 @@ cc-registry/docs/index.md
 __pycache__/
 *.py[cod]
 *$py.class
+cc-registry/docs/overrides/partials/build_date.html
+cc-registry/docs/index.md
+cc-registry/docs/all-tasks.md
