@@ -28,13 +28,13 @@ codecollections:
     owner_icon: https://assets-global.website-files.com/64f9646ad0f39e9ee5c116c4/659f80c7391d64a0ec2a840e_icon_rw-platform.svg
     owner_email: shea.stewart@runwhen.com
     description: Workspace Utilies such as Webhook integrations
-  - name: InfraCloud CodeCollection
-    slug: ifc-rw-codecollection
-    git_url: https://github.com/infracloudio/ifc-rw-codecollection
-    owner: InfraCloud IO
-    owner_icon: https://www.infracloud.io/assets/img/favicon/favicon-16x16.png
-    owner_email: saurabh.yadav@infracloud.io
-    description: InfraCloud CodeCollection for Community CodeBundles
+  # - name: InfraCloud CodeCollection
+  #   slug: ifc-rw-codecollection
+  #   git_url: https://github.com/infracloudio/ifc-rw-codecollection
+  #   owner: InfraCloud IO
+  #   owner_icon: https://www.infracloud.io/assets/img/favicon/favicon-16x16.png
+  #   owner_email: saurabh.yadav@infracloud.io
+  #   description: InfraCloud CodeCollection for Community CodeBundles
   - name: AWS CloudCustodian CodeCollection
     slug: aws-c7n-codecollection
     git_url: https://github.com/runwhen-contrib/aws-c7n-codecollection
