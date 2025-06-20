@@ -144,12 +144,6 @@ hide:
     </a>
     </div>
   
-    <div class="card">
-    <img class="card-icon" src="https://www.infracloud.io/assets/img/favicon/favicon-16x16.png" alt="Icon" />
-    <a href="/CodeCollection/ifc-rw-codecollection"><br>
-    InfraCloud CodeCollection
-    </a>
-    </div>
   
   </div>
 </div>
