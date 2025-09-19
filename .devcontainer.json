@@ -2,11 +2,14 @@
     "name": "Basic Python with Docker",
     "image": "mcr.microsoft.com/devcontainers/python:3.12",
     "features": {
-        "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {
+            "moby": false
+        },
         "ghcr.io/devcontainers/features/sshd:1": {
             "version": "latest"
         }
     },
+
     // "postCreateCommand": "pip install -r requirements.txt && python3 generate_registry.py && mkdocs serve -f cc-registry/mkdocs.yml",
     "postCreateCommand": "pip install -r requirements.txt",
     "customizations": {
