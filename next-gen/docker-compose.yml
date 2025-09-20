@@ -4,7 +4,7 @@ services:
   app:
     build: .
     ports:
-      - "8000:8000"
+      - "8001:8001"
     environment:
       - DATABASE_URL=postgresql://user:password@db:5432/codecollection_registry
       - GITHUB_TOKEN=your_github_token_here
@@ -18,7 +18,9 @@ services:
       - redis
     volumes:
       - ./app:/app/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      - ./scripts:/app/scripts
+      - ./codecollections.yaml:/app/codecollections.yaml
+    command: sh -c "python scripts/create_raw_data_tables.py && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload"
 
   db:
     image: postgres:15
@@ -37,6 +39,64 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+
+  celery-worker:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/codecollection_registry
+      - GITHUB_TOKEN=your_github_token_here
+      - GITHUB_WEBHOOK_SECRET=your_webhook_secret_here
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - DEBUG=True
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./app:/app/app
+      - ./codecollections.yaml:/app/codecollections.yaml
+    command: celery -A app.tasks.data_population_tasks worker --loglevel=info --concurrency=2
+    restart: unless-stopped
+
+  celery-beat:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/codecollection_registry
+      - GITHUB_TOKEN=your_github_token_here
+      - GITHUB_WEBHOOK_SECRET=your_webhook_secret_here
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - DEBUG=True
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./app:/app/app
+      - ./codecollections.yaml:/app/codecollections.yaml
+    command: celery -A app.tasks.data_population_tasks beat --loglevel=info
+    restart: unless-stopped
+
+  celery-flower:
+    build: .
+    ports:
+      - "5555:5555"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/codecollection_registry
+      - GITHUB_TOKEN=your_github_token_here
+      - GITHUB_WEBHOOK_SECRET=your_webhook_secret_here
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - DEBUG=True
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./app:/app/app
+    command: celery -A app.tasks.data_population_tasks flower --port=5555
+    restart: unless-stopped
 
 volumes:
   postgres_data:

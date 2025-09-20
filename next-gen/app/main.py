@@ -65,8 +65,9 @@ async def health_check():
     try:
         # Test database connection
         from app.core.database import SessionLocal
+        from sqlalchemy import text
         db = SessionLocal()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db.close()
         database_status = "connected"
     except Exception as e:
@@ -79,6 +80,12 @@ async def health_check():
         "environment": settings.ENVIRONMENT,
         "version": "1.0.0"
     }
+
+# Include routers
+from app.routers import admin, tasks, raw_data
+app.include_router(admin.router)
+app.include_router(tasks.router)
+app.include_router(raw_data.router)
 
 @app.get("/api/v1/registry/collections")
 async def list_collections():

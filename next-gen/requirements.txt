@@ -24,6 +24,21 @@ redis==5.0.1
 # GitHub integration
 PyGithub==1.59.1
 
+# Git operations
+GitPython==3.1.40
+
+# YAML and templating
+PyYAML==6.0.1
+Jinja2==3.1.2
+
+# Robot Framework
+robotframework==6.1.1
+
+# Task scheduling and background jobs
+celery==5.3.4
+redis==5.0.1
+flower==2.0.1
+
 # Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
