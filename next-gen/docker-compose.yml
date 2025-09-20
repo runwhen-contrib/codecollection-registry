@@ -19,7 +19,6 @@ services:
     volumes:
       - ./app:/app/app
       - ./scripts:/app/scripts
-      - ./codecollections.yaml:/app/codecollections.yaml
     command: sh -c "python scripts/create_raw_data_tables.py && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload"
 
   db:
@@ -44,58 +43,37 @@ services:
     build: .
     environment:
       - DATABASE_URL=postgresql://user:password@db:5432/codecollection_registry
-      - GITHUB_TOKEN=your_github_token_here
-      - GITHUB_WEBHOOK_SECRET=your_webhook_secret_here
-      - SECRET_KEY=dev-secret-key-change-in-production
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=development
       - DEBUG=True
     depends_on:
       - db
       - redis
-    volumes:
-      - ./app:/app/app
-      - ./codecollections.yaml:/app/codecollections.yaml
-    command: celery -A app.tasks.data_population_tasks worker --loglevel=info --concurrency=2
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
     restart: unless-stopped
 
   celery-beat:
     build: .
     environment:
       - DATABASE_URL=postgresql://user:password@db:5432/codecollection_registry
-      - GITHUB_TOKEN=your_github_token_here
-      - GITHUB_WEBHOOK_SECRET=your_webhook_secret_here
-      - SECRET_KEY=dev-secret-key-change-in-production
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=development
       - DEBUG=True
     depends_on:
       - db
       - redis
-    volumes:
-      - ./app:/app/app
-      - ./codecollections.yaml:/app/codecollections.yaml
-    command: celery -A app.tasks.data_population_tasks beat --loglevel=info
+    command: celery -A app.tasks.celery_app beat --loglevel=info
     restart: unless-stopped
 
   celery-flower:
-    build: .
+    image: mher/flower:2.0
     ports:
       - "5555:5555"
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/codecollection_registry
-      - GITHUB_TOKEN=your_github_token_here
-      - GITHUB_WEBHOOK_SECRET=your_webhook_secret_here
-      - SECRET_KEY=dev-secret-key-change-in-production
-      - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=development
-      - DEBUG=True
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
-      - db
       - redis
-    volumes:
-      - ./app:/app/app
-    command: celery -A app.tasks.data_population_tasks flower --port=5555
     restart: unless-stopped
 
 volumes:
