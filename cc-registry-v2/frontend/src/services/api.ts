@@ -10,10 +10,24 @@ const api = axios.create({
   },
 });
 
-// Add request interceptor for debugging
+// Helper function to get auth token
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('auth_token');
+};
+
+// Add request interceptor for debugging and auth
 api.interceptors.request.use(
   (config) => {
     console.log('API Request:', config.method?.toUpperCase(), config.url);
+    
+    // Add auth token for admin and tasks endpoints
+    if (config.url?.includes('/admin') || config.url?.includes('/tasks')) {
+      const token = getAuthToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    
     return config;
   },
   (error) => {
@@ -354,7 +368,7 @@ export const apiService = {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data;
-  },
+  }
 };
 
 export default api;

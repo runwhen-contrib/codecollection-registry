@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -8,7 +8,6 @@ import {
   CardContent,
   Alert,
   CircularProgress,
-  TextField,
   Chip,
   Table,
   TableBody,
@@ -19,20 +18,18 @@ import {
   Paper,
   Tabs,
   Tab,
-  IconButton,
-  Tooltip,
 } from '@mui/material';
 import {
   PlayArrow,
-  Stop,
   Refresh,
   CheckCircle,
   Error as ErrorIcon,
   Schedule,
 } from '@mui/icons-material';
 import { apiService } from '../services/api';
+import { useAuth, getAuthToken } from '../contexts/AuthContext';
 
-interface Task {
+interface TaskStatus {
   task_id: string;
   status: string;
   result?: any;
@@ -70,7 +67,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const TaskManager: React.FC = () => {
-  const [token, setToken] = useState('admin-dev-token');
+  const { user, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [triggeredTasks, setTriggeredTasks] = useState<{[key: string]: any}>({});
   const [taskMetrics, setTaskMetrics] = useState<any>(null);
@@ -83,10 +80,21 @@ const TaskManager: React.FC = () => {
     setActiveTab(newValue);
   };
 
-  const refreshData = useCallback(async () => {
+  const refreshData = async () => {
+    if (!isAuthenticated) {
+      setError('Authentication required');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
+
+      const token = getAuthToken();
+      if (!token) {
+        setError('No authentication token available');
+        return;
+      }
 
       // Get task health and admin metrics
       const [taskHealth, adminMetrics] = await Promise.all([
@@ -97,30 +105,28 @@ const TaskManager: React.FC = () => {
       setTaskMetrics(adminMetrics);
       setWorkerStats(taskHealth);
 
-      // Refresh status of all triggered tasks
-      const updatedTasks = { ...triggeredTasks };
-      for (const taskId of Object.keys(triggeredTasks)) {
-        try {
-          const taskStatus = await apiService.getTaskStatus(token, taskId);
-          updatedTasks[taskId] = {
-            ...updatedTasks[taskId],
-            ...taskStatus,
-            last_checked: new Date().toISOString()
-          };
-        } catch (err) {
-          console.error(`Failed to get status for task ${taskId}:`, err);
-        }
-      }
-      setTriggeredTasks(updatedTasks);
+      // Note: Skip task status refresh to avoid infinite loops
+      // Individual task status updates will be handled when tasks are triggered
 
     } catch (err) {
       setError(`Failed to refresh data: ${err}`);
     } finally {
       setLoading(false);
     }
-  }, [token, triggeredTasks]);
+  };
 
   const triggerTask = async (taskType: string, params: any = {}) => {
+    if (!isAuthenticated) {
+      setError('Authentication required');
+      return;
+    }
+
+    const token = getAuthToken();
+    if (!token) {
+      setError('No authentication token available');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -211,8 +217,21 @@ const TaskManager: React.FC = () => {
   };
 
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    if (isAuthenticated) {
+      refreshData();
+    }
+  }, [isAuthenticated]); // Remove refreshData from dependencies to prevent infinite loop
+
+  // Show loading if not authenticated (should be handled by ProtectedRoute, but just in case)
+  if (!isAuthenticated) {
+    return (
+      <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+          <CircularProgress />
+        </Box>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
@@ -220,24 +239,25 @@ const TaskManager: React.FC = () => {
         Task Manager
       </Typography>
 
-      {/* Authentication */}
+      {/* User Info and Refresh */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <TextField
-              label="Admin Token"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              size="small"
-              sx={{ minWidth: 200 }}
-            />
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box>
+              <Typography variant="h6">
+                Welcome, {user?.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {user?.email} • {user?.roles?.join(', ')}
+              </Typography>
+            </Box>
             <Button
               variant="outlined"
               onClick={refreshData}
-              disabled={loading || !token}
-              startIcon={<Refresh />}
+              disabled={loading || !isAuthenticated}
+              startIcon={loading ? <CircularProgress size={16} /> : <Refresh />}
             >
-              Refresh
+              {loading ? 'Refreshing...' : 'Refresh'}
             </Button>
           </Box>
         </CardContent>
@@ -276,7 +296,7 @@ const TaskManager: React.FC = () => {
             <Button
               variant="contained"
               onClick={() => triggerTask('seed-database')}
-              disabled={loading}
+              disabled={loading || !isAuthenticated}
               startIcon={<PlayArrow />}
             >
               Seed Database
@@ -284,7 +304,7 @@ const TaskManager: React.FC = () => {
             <Button
               variant="contained"
               onClick={() => triggerTask('sync-collections')}
-              disabled={loading}
+              disabled={loading || !isAuthenticated}
               startIcon={<PlayArrow />}
             >
               Sync Collections
@@ -292,7 +312,7 @@ const TaskManager: React.FC = () => {
             <Button
               variant="contained"
               onClick={() => triggerTask('parse-codebundles')}
-              disabled={loading}
+              disabled={loading || !isAuthenticated}
               startIcon={<PlayArrow />}
             >
               Parse Codebundles
@@ -300,7 +320,7 @@ const TaskManager: React.FC = () => {
             <Button
               variant="contained"
               onClick={() => triggerTask('enhance-codebundles')}
-              disabled={loading}
+              disabled={loading || !isAuthenticated}
               startIcon={<PlayArrow />}
             >
               Enhance Codebundles
@@ -308,7 +328,7 @@ const TaskManager: React.FC = () => {
             <Button
               variant="contained"
               onClick={() => triggerTask('validate-yaml')}
-              disabled={loading}
+              disabled={loading || !isAuthenticated}
               startIcon={<PlayArrow />}
             >
               Validate YAML
@@ -316,7 +336,7 @@ const TaskManager: React.FC = () => {
             <Button
               variant="contained"
               onClick={() => triggerTask('generate-metrics')}
-              disabled={loading}
+              disabled={loading || !isAuthenticated}
               startIcon={<PlayArrow />}
             >
               Generate Metrics

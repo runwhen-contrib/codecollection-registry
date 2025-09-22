@@ -7,16 +7,43 @@ import {
   Box,
   IconButton,
   Badge,
+  Menu,
+  MenuItem,
+  Avatar,
+  Divider,
 } from '@mui/material';
-import { Link, useLocation } from 'react-router-dom';
-import SearchIcon from '@mui/icons-material/Search';
-import MenuIcon from '@mui/icons-material/Menu';
-import ListIcon from '@mui/icons-material/List';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import {
+  Search as SearchIcon,
+  Menu as MenuIcon,
+  List as ListIcon,
+  Login as LoginIcon,
+  Logout as LogoutIcon,
+  Person as PersonIcon,
+} from '@mui/icons-material';
 import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const Header: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { getCartCount } = useCart();
+  const { isAuthenticated, user, logout } = useAuth();
+  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+
+  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleUserMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleLogout = () => {
+    logout();
+    handleUserMenuClose();
+    navigate('/');
+  };
 
   return (
     <AppBar position="static" sx={{ backgroundColor: '#2f80ed' }}>
@@ -92,36 +119,40 @@ const Header: React.FC = () => {
             >
               Categories
             </Button>
-            <Button
-              component={Link}
-              to="/admin"
-              color="inherit"
-              sx={{
-                color: 'white',
-                fontWeight: location.pathname === '/admin' ? 'bold' : 'normal',
-                backgroundColor: 'rgba(255,255,255,0.1)',
-                '&:hover': {
-                  backgroundColor: 'rgba(255,255,255,0.2)',
-                }
-              }}
-            >
-              Admin
-            </Button>
-            <Button
-              component={Link}
-              to="/tasks"
-              color="inherit"
-              sx={{
-                color: 'white',
-                fontWeight: location.pathname === '/tasks' ? 'bold' : 'normal',
-                backgroundColor: 'rgba(255,255,255,0.1)',
-                '&:hover': {
-                  backgroundColor: 'rgba(255,255,255,0.2)',
-                }
-              }}
-            >
-              Tasks
-            </Button>
+            {isAuthenticated && (
+              <>
+                <Button
+                  component={Link}
+                  to="/admin"
+                  color="inherit"
+                  sx={{
+                    color: 'white',
+                    fontWeight: location.pathname === '/admin' ? 'bold' : 'normal',
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255,255,255,0.2)',
+                    }
+                  }}
+                >
+                  Admin
+                </Button>
+                <Button
+                  component={Link}
+                  to="/tasks"
+                  color="inherit"
+                  sx={{
+                    color: 'white',
+                    fontWeight: location.pathname === '/tasks' ? 'bold' : 'normal',
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255,255,255,0.2)',
+                    }
+                  }}
+                >
+                  Tasks
+                </Button>
+              </>
+            )}
           </Box>
         </Box>
 
@@ -134,6 +165,67 @@ const Header: React.FC = () => {
           <IconButton color="inherit">
             <SearchIcon />
           </IconButton>
+          
+          {/* Authentication Section */}
+          {isAuthenticated ? (
+            <>
+              <IconButton
+                color="inherit"
+                onClick={handleUserMenuOpen}
+                sx={{ ml: 1 }}
+              >
+                <Avatar sx={{ width: 32, height: 32, bgcolor: 'rgba(255,255,255,0.2)' }}>
+                  <PersonIcon />
+                </Avatar>
+              </IconButton>
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleUserMenuClose}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'right',
+                }}
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
+              >
+                <MenuItem disabled>
+                  <Box>
+                    <Typography variant="body2" fontWeight="bold">
+                      {user?.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {user?.email}
+                    </Typography>
+                  </Box>
+                </MenuItem>
+                <Divider />
+                <MenuItem onClick={handleLogout}>
+                  <LogoutIcon sx={{ mr: 1 }} />
+                  Logout
+                </MenuItem>
+              </Menu>
+            </>
+          ) : (
+            <Button
+              component={Link}
+              to="/login"
+              color="inherit"
+              startIcon={<LoginIcon />}
+              sx={{
+                color: 'white',
+                border: '1px solid rgba(255,255,255,0.3)',
+                '&:hover': {
+                  backgroundColor: 'rgba(255,255,255,0.1)',
+                }
+              }}
+            >
+              Login
+            </Button>
+          )}
+          
           <IconButton
             color="inherit"
             sx={{ display: { xs: 'block', md: 'none' } }}
