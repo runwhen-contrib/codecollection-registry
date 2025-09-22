@@ -15,7 +15,12 @@ import {
   Grid,
   Button,
 } from '@mui/material';
-import { GitHub as GitHubIcon, Launch as LaunchIcon } from '@mui/icons-material';
+import { 
+  GitHub as GitHubIcon, 
+  Launch as LaunchIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon
+} from '@mui/icons-material';
 import { useParams, Link } from 'react-router-dom';
 import { apiService, CodeBundle } from '../services/api';
 
@@ -194,6 +199,100 @@ const CodeBundleDetail: React.FC = () => {
                   {codebundle.task_count}
                 </Typography>
               </Box>
+            </CardContent>
+          </Card>
+
+          {/* Discovery Information */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Discovery
+              </Typography>
+              
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Discoverable
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {codebundle.discovery?.is_discoverable ? (
+                    <>
+                      <CheckCircleIcon color="success" fontSize="small" />
+                      <Typography variant="body1" color="success.main">
+                        Yes
+                      </Typography>
+                    </>
+                  ) : (
+                    <>
+                      <CancelIcon color="error" fontSize="small" />
+                      <Typography variant="body1" color="error.main">
+                        No
+                      </Typography>
+                    </>
+                  )}
+                </Box>
+              </Box>
+
+              {codebundle.discovery?.is_discoverable && (
+                <>
+                  {codebundle.discovery.platform && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Platform
+                      </Typography>
+                      <Chip 
+                        label={codebundle.discovery.platform.toUpperCase()} 
+                        size="small" 
+                        color="primary" 
+                        variant="outlined" 
+                      />
+                    </Box>
+                  )}
+
+                  {codebundle.discovery.resource_types && codebundle.discovery.resource_types.length > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Resource Types
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {codebundle.discovery.resource_types.map((type, index) => (
+                          <Chip 
+                            key={index}
+                            label={type} 
+                            size="small" 
+                            variant="outlined" 
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {codebundle.discovery.templates && codebundle.discovery.templates.length > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Templates ({codebundle.discovery.templates.length})
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        {codebundle.discovery.templates.map((template, index) => (
+                          <Typography key={index} variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                            {template}
+                          </Typography>
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {codebundle.discovery.level_of_detail && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Level of Detail
+                      </Typography>
+                      <Typography variant="body1">
+                        {codebundle.discovery.level_of_detail}
+                      </Typography>
+                    </Box>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
 

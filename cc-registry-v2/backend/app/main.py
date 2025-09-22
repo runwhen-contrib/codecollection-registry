@@ -372,6 +372,14 @@ async def list_codebundles():
                     "tasks": cb.tasks,
                     "task_count": cb.task_count,
                     "created_at": cb.created_at,
+                    # Discovery information
+                    "discovery": {
+                        "is_discoverable": cb.is_discoverable,
+                        "platform": cb.discovery_platform,
+                        "resource_types": cb.discovery_resource_types,
+                        "templates": cb.discovery_templates,
+                        "level_of_detail": cb.discovery_level_of_detail
+                    },
                     "codecollection": {
                         "id": collection.id,
                         "name": collection.name,
@@ -438,6 +446,17 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
                 "runbook_source_url": codebundle.runbook_source_url,
                 "created_at": codebundle.created_at,
                 "updated_at": codebundle.updated_at,
+                # Discovery information
+                "discovery": {
+                    "is_discoverable": codebundle.is_discoverable,
+                    "platform": codebundle.discovery_platform,
+                    "resource_types": codebundle.discovery_resource_types,
+                    "match_patterns": codebundle.discovery_match_patterns,
+                    "templates": codebundle.discovery_templates,
+                    "output_items": codebundle.discovery_output_items,
+                    "level_of_detail": codebundle.discovery_level_of_detail,
+                    "runwhen_directory_path": codebundle.runwhen_directory_path
+                },
                 "codecollection": {
                     "id": collection.id,
                     "name": collection.name,

@@ -721,6 +721,91 @@ def _parse_robot_file_content(content: str, file_path: str) -> Optional[Dict[str
         return None
 
 
+def _parse_runwhen_discovery(db, collection_slug: str, codebundle_name: str) -> Dict[str, Any]:
+    """Parse .runwhen directory for discovery configuration"""
+    discovery_info = {
+        'is_discoverable': False,
+        'platform': None,
+        'resource_types': [],
+        'match_patterns': [],
+        'templates': [],
+        'output_items': [],
+        'level_of_detail': None,
+        'runwhen_directory_path': None
+    }
+    
+    try:
+        # Look for .runwhen directory files in raw repository data
+        from app.models.raw_data import RawRepositoryData
+        
+        # Check for generation-rules YAML file
+        generation_rules_pattern = f"codebundles/{codebundle_name}/.runwhen/generation-rules/"
+        generation_rules_files = db.query(RawRepositoryData).filter(
+            RawRepositoryData.collection_slug == collection_slug,
+            RawRepositoryData.file_path.like(f"{generation_rules_pattern}%.yaml")
+        ).all()
+        
+        if generation_rules_files:
+            discovery_info['is_discoverable'] = True
+            discovery_info['runwhen_directory_path'] = f"codebundles/{codebundle_name}/.runwhen"
+            
+            # Parse the first generation rules file found
+            rules_file = generation_rules_files[0]
+            try:
+                rules_content = yaml.safe_load(rules_file.file_content)
+                
+                if 'spec' in rules_content:
+                    spec = rules_content['spec']
+                    
+                    # Extract platform
+                    discovery_info['platform'] = spec.get('platform')
+                    
+                    # Extract generation rules
+                    if 'generationRules' in spec:
+                        gen_rules = spec['generationRules']
+                        
+                        for rule in gen_rules:
+                            # Extract resource types
+                            if 'resourceTypes' in rule:
+                                discovery_info['resource_types'].extend(rule['resourceTypes'])
+                            
+                            # Extract match rules
+                            if 'matchRules' in rule:
+                                discovery_info['match_patterns'] = rule['matchRules']
+                            
+                            # Extract SLX configuration
+                            if 'slxs' in rule:
+                                for slx in rule['slxs']:
+                                    if 'levelOfDetail' in slx:
+                                        discovery_info['level_of_detail'] = slx['levelOfDetail']
+                                    
+                                    if 'outputItems' in slx:
+                                        discovery_info['output_items'] = slx['outputItems']
+                
+            except yaml.YAMLError as e:
+                logger.warning(f"Failed to parse generation rules YAML for {codebundle_name}: {e}")
+        
+        # Check for template files
+        templates_pattern = f"codebundles/{codebundle_name}/.runwhen/templates/"
+        template_files = db.query(RawRepositoryData).filter(
+            RawRepositoryData.collection_slug == collection_slug,
+            RawRepositoryData.file_path.like(f"{templates_pattern}%")
+        ).all()
+        
+        if template_files:
+            discovery_info['templates'] = [
+                os.path.basename(tf.file_path) for tf in template_files
+            ]
+        
+        # Remove duplicates from resource types
+        discovery_info['resource_types'] = list(set(discovery_info['resource_types']))
+        
+    except Exception as e:
+        logger.error(f"Failed to parse .runwhen directory for {codebundle_name}: {e}")
+    
+    return discovery_info
+
+
 def _create_or_update_codebundle(db, collection: CodeCollection, codebundle_data: Dict[str, Any], file_path: str) -> Optional[Codebundle]:
     """Create or update a codebundle with task indexing"""
     try:
@@ -764,6 +849,22 @@ def _create_or_update_codebundle(db, collection: CodeCollection, codebundle_data
             task_index[task_name] = hashlib.md5(index_source.encode()).hexdigest()[:8]
         
         codebundle.task_index = task_index
+        
+        # Parse discovery information from .runwhen directory
+        discovery_info = _parse_runwhen_discovery(db, collection.slug, codebundle_data['name'])
+        
+        # Update discovery fields
+        codebundle.is_discoverable = discovery_info['is_discoverable']
+        codebundle.discovery_platform = discovery_info['platform']
+        codebundle.discovery_resource_types = discovery_info['resource_types']
+        codebundle.discovery_match_patterns = discovery_info['match_patterns']
+        codebundle.discovery_templates = discovery_info['templates']
+        codebundle.discovery_output_items = discovery_info['output_items']
+        codebundle.discovery_level_of_detail = discovery_info['level_of_detail']
+        codebundle.runwhen_directory_path = discovery_info['runwhen_directory_path']
+        
+        # Update has_genrules flag for backward compatibility
+        codebundle.has_genrules = discovery_info['is_discoverable']
         
         # Reset enhancement status if tasks changed
         if existing and existing.tasks != codebundle_data['tasks']:

@@ -43,6 +43,16 @@ class Codebundle(Base):
     found_in_cheatsheet = Column(Boolean, default=False)
     raises_issues = Column(Boolean, default=False)
     
+    # Discovery configuration
+    is_discoverable = Column(Boolean, default=False)
+    discovery_platform = Column(String(100))  # e.g., "aws", "kubernetes", "gcp"
+    discovery_resource_types = Column(JSON, default=list)  # e.g., ["aws_eks_clusters"]
+    discovery_match_patterns = Column(JSON, default=list)  # Match rules from generation-rules
+    discovery_templates = Column(JSON, default=list)  # Available template files
+    discovery_output_items = Column(JSON, default=list)  # Types: slx, sli, runbook
+    discovery_level_of_detail = Column(String(50))  # e.g., "basic", "detailed"
+    runwhen_directory_path = Column(String(500))  # Path to .runwhen directory
+    
     # Status and timestamps
     is_active = Column(Boolean, default=True)
     last_synced = Column(DateTime)

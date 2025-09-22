@@ -68,6 +68,17 @@ export interface CodeCollection {
   };
 }
 
+export interface DiscoveryInfo {
+  is_discoverable: boolean;
+  platform: string | null;
+  resource_types: string[];
+  match_patterns: any[];
+  templates: string[];
+  output_items: any[];
+  level_of_detail: string | null;
+  runwhen_directory_path: string | null;
+}
+
 export interface CodeBundle {
   id: number;
   name: string;
@@ -83,6 +94,7 @@ export interface CodeBundle {
   sli_count: number;
   runbook_source_url: string;
   created_at: string;
+  discovery: DiscoveryInfo;
   codecollection: {
     id: number;
     name: string;
