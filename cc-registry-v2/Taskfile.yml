@@ -1,0 +1,194 @@
+version: '3'
+
+vars:
+  PROJECT_NAME: cc-registry-v2
+  COMPOSE_FILE: docker-compose.yml
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # Main lifecycle commands
+  start:
+    desc: Start all services
+    cmds:
+      - echo "🚀 Starting all services..."
+      - docker-compose up -d --build
+
+  stop:
+    desc: Stop all services
+    cmds:
+      - echo "🛑 Stopping all services..."
+      - docker-compose down
+
+  restart:
+    desc: Restart all services
+    cmds:
+      - echo "🔄 Restarting all services..."
+      - docker-compose restart
+
+  # Monitoring commands
+  logs:
+    desc: Show logs for all services
+    cmds:
+      - docker-compose logs -f
+
+  logs:service:
+    desc: Show logs for a specific service
+    cmds:
+      - docker-compose logs -f {{.SERVICE}}
+    vars:
+      SERVICE: '{{.SERVICE | default "backend"}}'
+
+  status:
+    desc: Show service status
+    cmds:
+      - echo "📊 Service Status:"
+      - docker-compose ps
+
+  # Build commands
+  build:
+    desc: Build all services
+    cmds:
+      - echo "🏗️  Building all services..."
+      - docker-compose build
+
+  build:service:
+    desc: Build a specific service
+    cmds:
+      - echo "🏗️  Building {{.SERVICE}}..."
+      - docker-compose build {{.SERVICE}}
+    vars:
+      SERVICE: '{{.SERVICE | default "backend"}}'
+
+  # Cleanup commands
+  clean:
+    desc: Clean up Docker resources
+    cmds:
+      - echo "🧹 Cleaning up Docker resources..."
+      - docker-compose down -v
+      - docker system prune -f
+
+  clean:all:
+    desc: Clean up everything (including images)
+    cmds:
+      - echo "🧹 Cleaning up everything..."
+      - docker-compose down -v --rmi all
+      - docker system prune -af
+
+  # Individual service groups
+  backend:
+    desc: Start only backend services (db, redis, backend)
+    cmds:
+      - echo "🔧 Starting backend services..."
+      - docker-compose up -d database redis backend
+
+  frontend:
+    desc: Start only frontend (requires backend)
+    cmds:
+      - echo "🎨 Starting frontend..."
+      - docker-compose up -d frontend
+
+  workers:
+    desc: Start worker services
+    cmds:
+      - echo "🔄 Starting worker services..."
+      - docker-compose up -d worker scheduler flower
+
+  # Development commands
+  dev:
+    desc: Start development environment (backend + frontend)
+    cmds:
+      - echo "💻 Starting development environment..."
+      - docker-compose up -d database redis backend frontend
+
+  dev:logs:
+    desc: Show logs for development services
+    cmds:
+      - docker-compose logs -f backend frontend
+
+  dev:restart:
+    desc: Restart development services
+    cmds:
+      - docker-compose restart backend frontend
+
+  # Database commands
+  db:shell:
+    desc: Connect to database shell
+    cmds:
+      - docker-compose exec database psql -U user -d codecollection_registry
+
+  db:backup:
+    desc: Backup database
+    cmds:
+      - echo "💾 Creating database backup..."
+      - docker-compose exec database pg_dump -U user codecollection_registry > backup_$(date +%Y%m%d_%H%M%S).sql
+
+  # Health checks
+  health:
+    desc: Check health of all services
+    cmds:
+      - echo "🏥 Checking service health..."
+      - |
+        echo "Database:" && curl -s http://localhost:5432 > /dev/null && echo "✅ Reachable" || echo "❌ Not reachable"
+        echo "Redis:" && docker-compose exec redis redis-cli ping && echo "✅ Redis OK" || echo "❌ Redis down"
+        echo "Backend:" && curl -s http://localhost:8001/api/v1/health | jq -r '.status' && echo "✅ Backend OK" || echo "❌ Backend down"
+        echo "Frontend:" && curl -s http://localhost:3000 > /dev/null && echo "✅ Frontend OK" || echo "❌ Frontend down"
+
+  # Kubernetes preparation
+  k8s:export:
+    desc: Export Docker Compose to Kubernetes manifests (requires kompose)
+    cmds:
+      - |
+        if command -v kompose >/dev/null 2>&1; then
+          echo "📦 Exporting to Kubernetes manifests..."
+          kompose convert -f {{.COMPOSE_FILE}} -o k8s/
+          echo "✅ Kubernetes manifests generated in k8s/ directory"
+        else
+          echo "❌ kompose not installed."
+          echo "Install with: curl -L https://github.com/kubernetes/kompose/releases/latest/download/kompose-linux-amd64 -o kompose && chmod +x kompose && sudo mv kompose /usr/local/bin/"
+        fi
+
+  k8s:deploy:
+    desc: Deploy to Kubernetes cluster
+    cmds:
+      - echo "🚀 Deploying to Kubernetes..."
+      - kubectl apply -f k8s/
+
+  k8s:undeploy:
+    desc: Remove from Kubernetes cluster
+    cmds:
+      - echo "🗑️  Removing from Kubernetes..."
+      - kubectl delete -f k8s/
+
+  # Setup commands
+  setup:
+    desc: Initial setup (create .env, install dependencies)
+    cmds:
+      - |
+        if [ ! -f .env ]; then
+          echo "📝 Creating .env file from example..."
+          cp env.example .env
+          echo "⚠️  Please update .env file with your actual configuration values"
+        else
+          echo "✅ .env file already exists"
+        fi
+      - echo "🔧 Setup complete!"
+
+  # Quick commands
+  up:
+    desc: Alias for start
+    cmds:
+      - task start
+
+  down:
+    desc: Alias for stop
+    cmds:
+      - task stop
+
+  ps:
+    desc: Alias for status
+    cmds:
+      - task status

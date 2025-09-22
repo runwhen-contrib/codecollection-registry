@@ -1,5 +1,21 @@
-# codecollection-registry
-CodeCollection Registry Site
+# CodeCollection Registry
+
+A modern, scalable registry for RunWhen CodeCollections with AI-powered enhancement capabilities.
+
+## 🚀 Quick Start
+
+The new microservices architecture is located in the `cc-registry-v2/` directory:
+
+```bash
+cd cc-registry-v2/
+task setup    # Initial setup
+task start    # Start all services
+task --list   # See all available commands
+```
+
+## Legacy Static Site
+
+The original static site generator is still available in the root directory.
 
 ## Requesting or Tracking CodeBundles
 CodeBundles can be requested through the [Issues templats](https://github.com/runwhen-contrib/codecollection-registry/issues/new/choose)

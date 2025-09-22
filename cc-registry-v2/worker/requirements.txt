@@ -1,0 +1,34 @@
+# Worker uses same dependencies as backend
+# This file exists for Docker build context, but requirements are copied from backend
+
+# FastAPI and core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.23
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# Background tasks
+celery==5.3.4
+redis==5.0.1
+
+# Git operations
+GitPython==3.1.40
+
+# YAML and templating
+PyYAML==6.0.1
+Jinja2==3.1.2
+
+# Robot Framework
+robotframework==6.1.1
+
+# Task scheduling and background jobs
+flower==2.0.1
+
+# Environment
+python-dotenv==1.0.0
+
