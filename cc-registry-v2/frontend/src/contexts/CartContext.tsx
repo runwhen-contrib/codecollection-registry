@@ -1,25 +1,32 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { Task } from '../services/api';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { CodeBundle } from '../services/api';
 
-interface CartItem {
-  task: Task;
-  selected: boolean;
-  addedAt: Date;
+export interface CartItem {
+  codebundle: CodeBundle;
+  addedAt: string;
+}
+
+export interface RepositoryConfig {
+  collection_name: string;
+  collection_slug: string;
+  git_url: string;
+  git_ref?: string;
+  codebundles: CartItem[];
 }
 
 interface CartContextType {
-  cartItems: CartItem[];
-  addToCart: (task: Task) => void;
-  removeFromCart: (taskId: string) => void;
-  isInCart: (taskId: string) => boolean;
+  items: CartItem[];
+  addToCart: (codebundle: CodeBundle) => void;
+  removeFromCart: (codebundleId: number) => void;
   clearCart: () => void;
-  getCartCount: () => number;
-  getSelectedTasks: () => Task[];
+  isInCart: (codebundleId: number) => boolean;
+  getRepositoryConfigs: () => RepositoryConfig[];
+  itemCount: number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-export const useCart = () => {
+export const useCart = (): CartContextType => {
   const context = useContext(CartContext);
   if (!context) {
     throw new Error('useCart must be used within a CartProvider');
@@ -32,60 +39,84 @@ interface CartProviderProps {
 }
 
 export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [items, setItems] = useState<CartItem[]>([]);
 
-  const addToCart = (task: Task) => {
-    setCartItems(prev => {
-      // Check if task is already in cart
-      const existingIndex = prev.findIndex(item => item.task.id === task.id);
-      if (existingIndex >= 0) {
-        // Update existing item
-        const updated = [...prev];
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          selected: true,
-          addedAt: new Date()
-        };
-        return updated;
-      } else {
-        // Add new item
-        return [...prev, {
-          task,
-          selected: true,
-          addedAt: new Date()
-        }];
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    const savedCart = localStorage.getItem('runwhen-cart');
+    if (savedCart) {
+      try {
+        const parsedCart = JSON.parse(savedCart);
+        setItems(parsedCart);
+      } catch (error) {
+        console.error('Failed to parse saved cart:', error);
+        localStorage.removeItem('runwhen-cart');
       }
-    });
+    }
+  }, []);
+
+  // Save cart to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('runwhen-cart', JSON.stringify(items));
+  }, [items]);
+
+  const addToCart = (codebundle: CodeBundle) => {
+    if (!isInCart(codebundle.id)) {
+      const newItem: CartItem = {
+        codebundle,
+        addedAt: new Date().toISOString()
+      };
+      setItems(prev => [...prev, newItem]);
+    }
   };
 
-  const removeFromCart = (taskId: string) => {
-    setCartItems(prev => prev.filter(item => item.task.id !== taskId));
-  };
-
-  const isInCart = (taskId: string) => {
-    return cartItems.some(item => item.task.id === taskId && item.selected);
+  const removeFromCart = (codebundleId: number) => {
+    setItems(prev => prev.filter(item => item.codebundle.id !== codebundleId));
   };
 
   const clearCart = () => {
-    setCartItems([]);
+    setItems([]);
   };
 
-  const getCartCount = () => {
-    return cartItems.filter(item => item.selected).length;
+  const isInCart = (codebundleId: number): boolean => {
+    return items.some(item => item.codebundle.id === codebundleId);
   };
 
-  const getSelectedTasks = () => {
-    return cartItems.filter(item => item.selected).map(item => item.task);
+  const getRepositoryConfigs = (): RepositoryConfig[] => {
+    const configMap = new Map<string, RepositoryConfig>();
+
+    items.forEach(item => {
+      const collection = item.codebundle.codecollection;
+      if (!collection) return;
+
+      const key = `${collection.slug}`;
+      
+      if (!configMap.has(key)) {
+        configMap.set(key, {
+          collection_name: collection.name,
+          collection_slug: collection.slug,
+          git_url: collection.git_url,
+          git_ref: collection.git_ref || 'main',
+          codebundles: []
+        });
+      }
+
+      configMap.get(key)!.codebundles.push(item);
+    });
+
+    return Array.from(configMap.values()).sort((a, b) => 
+      a.collection_name.localeCompare(b.collection_name)
+    );
   };
 
   const value: CartContextType = {
-    cartItems,
+    items,
     addToCart,
     removeFromCart,
-    isInCart,
     clearCart,
-    getCartCount,
-    getSelectedTasks
+    isInCart,
+    getRepositoryConfigs,
+    itemCount: items.length
   };
 
   return (

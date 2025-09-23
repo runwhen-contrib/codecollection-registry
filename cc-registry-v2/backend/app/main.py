@@ -284,7 +284,8 @@ async def get_all_tasks(
                             "author": codebundle.author,
                             "runbook_path": codebundle.runbook_path,
                             "runbook_source_url": codebundle.runbook_source_url,
-                            "git_url": codebundle.codecollection.git_url
+                            "git_url": codebundle.codecollection.git_url,
+                            "git_ref": codebundle.codecollection.git_ref
                         })
                 
                 # Add SLI tasks
@@ -308,7 +309,8 @@ async def get_all_tasks(
                             "author": codebundle.author,
                             "runbook_path": codebundle.runbook_path,
                             "runbook_source_url": codebundle.runbook_source_url,
-                            "git_url": codebundle.codecollection.git_url
+                            "git_url": codebundle.codecollection.git_url,
+                            "git_ref": codebundle.codecollection.git_ref
                         })
             
             # Get all unique support tags for filtering

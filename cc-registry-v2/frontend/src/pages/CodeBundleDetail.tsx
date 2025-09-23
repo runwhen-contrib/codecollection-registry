@@ -12,22 +12,25 @@ import {
   ListItem,
   ListItemText,
   Divider,
-  Grid,
   Button,
 } from '@mui/material';
 import { 
   GitHub as GitHubIcon, 
   Launch as LaunchIcon,
   CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  Add as AddIcon,
+  Remove as RemoveIcon
 } from '@mui/icons-material';
 import { useParams, Link } from 'react-router-dom';
 import { apiService, CodeBundle } from '../services/api';
+import { useCart } from '../contexts/CartContext';
 
 const CodeBundleDetail: React.FC = () => {
   const { collectionSlug, codebundleSlug } = useParams<{ collectionSlug: string; codebundleSlug: string }>();
   const [codebundle, setCodebundle] = useState<CodeBundle | null>(null);
   const [loading, setLoading] = useState(true);
+  const { addToCart, removeFromCart, isInCart } = useCart();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -92,6 +95,48 @@ const CodeBundleDetail: React.FC = () => {
         <Typography variant="body1" sx={{ mb: 3 }}>
           {codebundle.description}
         </Typography>
+
+        {/* Action Buttons */}
+        <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Button
+            variant={isInCart(codebundle.id) ? "outlined" : "contained"}
+            color={isInCart(codebundle.id) ? "error" : "primary"}
+            startIcon={isInCart(codebundle.id) ? <RemoveIcon /> : <AddIcon />}
+            onClick={() => {
+              if (isInCart(codebundle.id)) {
+                removeFromCart(codebundle.id);
+              } else {
+                addToCart(codebundle);
+              }
+            }}
+          >
+            {isInCart(codebundle.id) ? "Remove from Configuration" : "Add to Configuration"}
+          </Button>
+          
+          {codebundle.codecollection?.git_url && (
+            <Button
+              variant="outlined"
+              startIcon={<GitHubIcon />}
+              href={codebundle.codecollection.git_url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View Repository
+            </Button>
+          )}
+          
+          {codebundle.runbook_source_url && (
+            <Button
+              variant="outlined"
+              startIcon={<LaunchIcon />}
+              href={codebundle.runbook_source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View Source
+            </Button>
+          )}
+        </Box>
 
         {codebundle.support_tags && codebundle.support_tags.length > 0 && (
           <Box sx={{ mb: 3 }}>

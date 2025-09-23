@@ -27,7 +27,7 @@ import { useAuth } from '../contexts/AuthContext';
 const Header: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { getCartCount } = useCart();
+  const { itemCount } = useCart();
   const { isAuthenticated, user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
 
@@ -157,8 +157,17 @@ const Header: React.FC = () => {
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <IconButton color="inherit">
-            <Badge badgeContent={getCartCount()} color="error">
+          <IconButton 
+            color="inherit"
+            component={Link}
+            to="/cart"
+            sx={{
+              '&:hover': {
+                backgroundColor: 'rgba(255,255,255,0.1)',
+              }
+            }}
+          >
+            <Badge badgeContent={itemCount} color="error">
               <ListIcon />
             </Badge>
           </IconButton>

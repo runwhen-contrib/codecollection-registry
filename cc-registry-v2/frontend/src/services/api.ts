@@ -100,6 +100,7 @@ export interface CodeBundle {
     name: string;
     slug: string;
     git_url: string;
+    git_ref?: string;
   } | null;
 }
 
@@ -119,6 +120,7 @@ export interface Task {
   runbook_path: string;
   runbook_source_url: string;
   git_url: string;
+  git_ref?: string;
 }
 
 export interface TasksResponse {

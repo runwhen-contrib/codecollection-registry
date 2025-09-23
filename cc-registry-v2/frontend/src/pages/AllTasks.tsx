@@ -442,38 +442,53 @@ const AllTasks: React.FC = () => {
                             )}
                             
                             <Button
-                              variant={isInCart(`codebundle_${group.codebundle.id}`) ? "contained" : "outlined"}
+                              variant={isInCart(group.codebundle.id) ? "contained" : "outlined"}
                               size="small"
-                              color={isInCart(`codebundle_${group.codebundle.id}`) ? "error" : "primary"}
-                              startIcon={isInCart(`codebundle_${group.codebundle.id}`) ? <RemoveIcon /> : <AddIcon />}
+                              color={isInCart(group.codebundle.id) ? "error" : "primary"}
+                              startIcon={isInCart(group.codebundle.id) ? <RemoveIcon /> : <AddIcon />}
                               onClick={() => {
-                                const codebundleId = `codebundle_${group.codebundle.id}`;
-                                if (isInCart(codebundleId)) {
-                                  removeFromCart(codebundleId);
+                                if (isInCart(group.codebundle.id)) {
+                                  removeFromCart(group.codebundle.id);
                                 } else {
-                                  // Add the entire codebundle as a single cart item
+                                  // Create a proper CodeBundle object for the cart
                                   const codebundleItem = {
-                                    id: codebundleId,
+                                    id: group.codebundle.id,
                                     name: group.codebundle.name,
-                                    type: 'CodeBundle' as const,
-                                    codebundle_id: group.codebundle.id,
-                                    codebundle_name: group.codebundle.name,
-                                    codebundle_slug: group.codebundle.slug,
-                                    collection_name: group.codebundle.collection_name,
-                                    collection_slug: group.codebundle.collection_slug,
+                                    slug: group.codebundle.slug,
+                                    display_name: group.codebundle.name,
                                     description: group.codebundle.description,
-                                    support_tags: group.codebundle.support_tags,
-                                    categories: [],
+                                    doc: '',
                                     author: group.codebundle.author,
-                                    runbook_path: group.codebundle.runbook_path || '',
+                                    support_tags: group.codebundle.support_tags,
+                                    tasks: group.tasks.filter(t => t.type === 'TaskSet').map(t => t.name),
+                                    slis: group.tasks.filter(t => t.type === 'SLI').map(t => t.name),
+                                    task_count: group.tasks.filter(t => t.type === 'TaskSet').length,
+                                    sli_count: group.tasks.filter(t => t.type === 'SLI').length,
                                     runbook_source_url: group.codebundle.runbook_source_url || '',
-                                    git_url: group.tasks[0]?.git_url || ''
+                                    created_at: new Date().toISOString(),
+                                    discovery: {
+                                      is_discoverable: false,
+                                      platform: null,
+                                      resource_types: [],
+                                      match_patterns: [],
+                                      templates: [],
+                                      output_items: [],
+                                      level_of_detail: null,
+                                      runwhen_directory_path: null
+                                    },
+                                    codecollection: {
+                                      id: 0, // We don't have this info in the current structure
+                                      name: group.codebundle.collection_name,
+                                      slug: group.codebundle.collection_slug,
+                                      git_url: group.tasks[0]?.git_url || '',
+                                      git_ref: (group.tasks[0] as any)?.git_ref || 'main'
+                                    }
                                   };
                                   addToCart(codebundleItem);
                                 }
                               }}
                             >
-                              {isInCart(`codebundle_${group.codebundle.id}`) ? "Remove CodeBundle" : "Select CodeBundle"}
+                              {isInCart(group.codebundle.id) ? "Remove CodeBundle" : "Select CodeBundle"}
                             </Button>
                           </Box>
                         </Box>
