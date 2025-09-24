@@ -11,3 +11,13 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Remove visited link color changes */
+a:visited {
+  color: inherit !important;
+}
+
+/* Ensure React Router Links maintain their color */
+a[href]:visited {
+  color: inherit !important;
+}

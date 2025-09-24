@@ -27,7 +27,7 @@ const theme = createTheme({
       fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
       fontSize: '2.5rem',
       fontWeight: 700,
-      color: '#000',
+      color: '#858484',
     },
     h2: {
       fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
@@ -100,6 +100,15 @@ const theme = createTheme({
         root: {
           backgroundColor: '#2f80ed',
           color: '#ffffff',
+        },
+      },
+    },
+    MuiLink: {
+      styleOverrides: {
+        root: {
+          '&:visited': {
+            color: 'inherit',
+          },
         },
       },
     },

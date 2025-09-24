@@ -69,12 +69,15 @@ function TabPanel(props: TabPanelProps) {
 const TaskManager: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
-  const [triggeredTasks, setTriggeredTasks] = useState<{[key: string]: any}>({});
+  const [taskHistory, setTaskHistory] = useState<any[]>([]);
+  const [runningTasks, setRunningTasks] = useState<any[]>([]);
+  const [taskStats, setTaskStats] = useState<any>(null);
   const [taskMetrics, setTaskMetrics] = useState<any>(null);
   const [workerStats, setWorkerStats] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -96,17 +99,20 @@ const TaskManager: React.FC = () => {
         return;
       }
 
-      // Get task health and admin metrics
-      const [taskHealth, adminMetrics] = await Promise.all([
+      // Get live task data, task health and admin metrics
+      const [taskHistoryData, runningTasksData, taskStatsData, taskHealth, adminMetrics] = await Promise.all([
+        apiService.getTaskHistory(token, 50, 0),
+        apiService.getRunningTasks(token),
+        apiService.getTaskStats(token, 7),
         apiService.getTaskHealth(token),
         apiService.getAdminMetrics(token, 7)
       ]);
 
+      setTaskHistory(taskHistoryData.tasks || []);
+      setRunningTasks(runningTasksData.running_tasks || []);
+      setTaskStats(taskStatsData);
       setTaskMetrics(adminMetrics);
       setWorkerStats(taskHealth);
-
-      // Note: Skip task status refresh to avoid infinite loops
-      // Individual task status updates will be handled when tasks are triggered
 
     } catch (err) {
       setError(`Failed to refresh data: ${err}`);
@@ -156,24 +162,9 @@ const TaskManager: React.FC = () => {
           throw new Error(`Unknown task type: ${taskType}`);
       }
 
-      // Add task to triggered tasks list
-      const newTask = {
-        task_id: response.task_id,
-        task_type: taskType,
-        status: response.status,
-        message: response.message,
-        triggered_at: new Date().toISOString(),
-        last_checked: new Date().toISOString()
-      };
-      
-      setTriggeredTasks(prev => ({
-        ...prev,
-        [response.task_id]: newTask
-      }));
-
       setMessage(`Task started: ${taskType} (ID: ${response.task_id})`);
       
-      // Refresh to get initial status
+      // Refresh to get updated task list
       setTimeout(() => refreshData(), 1000);
 
     } catch (err) {
@@ -182,6 +173,19 @@ const TaskManager: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Auto-refresh effect
+  useEffect(() => {
+    refreshData(); // Initial load
+    
+    if (autoRefresh) {
+      const interval = setInterval(() => {
+        refreshData();
+      }, 5000); // Refresh every 5 seconds
+      
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, autoRefresh]);
 
   // Note: Cancel and retry functions removed - not available in database-driven task system
   // Tasks are managed through the new database-driven architecture
@@ -279,18 +283,187 @@ const TaskManager: React.FC = () => {
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={activeTab} onChange={handleTabChange}>
-          <Tab label="Triggered Tasks" />
+          <Tab label={`Running Tasks (${runningTasks.length})`} />
+          <Tab label={`Task History (${taskHistory.length})`} />
+          <Tab label="Trigger Tasks" />
           <Tab label="System Info" />
-          <Tab label="Task Details" />
           <Tab label="Metrics & Stats" />
         </Tabs>
       </Box>
 
-      {/* Active Tasks Tab */}
+      {/* Auto-refresh toggle */}
+      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Button
+          variant={autoRefresh ? "contained" : "outlined"}
+          onClick={() => setAutoRefresh(!autoRefresh)}
+          size="small"
+        >
+          {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}
+        </Button>
+        {autoRefresh && (
+          <Typography variant="body2" color="text.secondary">
+            Refreshing every 5 seconds
+          </Typography>
+        )}
+      </Box>
+
+      {/* Running Tasks Tab */}
       <TabPanel value={activeTab} index={0}>
         <Box sx={{ mb: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            Triggered Tasks ({Object.keys(triggeredTasks).length})
+            Currently Running Tasks ({runningTasks.length})
+          </Typography>
+          
+          {runningTasks.length === 0 ? (
+            <Alert severity="info">No tasks are currently running</Alert>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Task Name</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Progress</TableCell>
+                    <TableCell>Current Step</TableCell>
+                    <TableCell>Started</TableCell>
+                    <TableCell>Duration</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {runningTasks.map((task) => (
+                    <TableRow key={task.task_id}>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2" fontWeight="bold">
+                            {task.task_name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {task.task_id}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          icon={getStatusIcon(task.status)} 
+                          label={task.status} 
+                          color={task.status === 'STARTED' ? 'primary' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <CircularProgress 
+                            variant="determinate" 
+                            value={task.progress || 0} 
+                            size={20} 
+                          />
+                          <Typography variant="body2">
+                            {Math.round(task.progress || 0)}%
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {task.current_step || 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {task.started_at ? new Date(task.started_at).toLocaleString() : 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {task.duration_seconds ? `${Math.round(task.duration_seconds)}s` : 
+                           task.started_at ? `${Math.round((Date.now() - new Date(task.started_at).getTime()) / 1000)}s` : 'N/A'}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Box>
+      </TabPanel>
+
+      {/* Task History Tab */}
+      <TabPanel value={activeTab} index={1}>
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Task History ({taskHistory.length})
+          </Typography>
+          
+          {taskHistory.length === 0 ? (
+            <Alert severity="info">No task history available</Alert>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Task Name</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Started</TableCell>
+                    <TableCell>Completed</TableCell>
+                    <TableCell>Duration</TableCell>
+                    <TableCell>Triggered By</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {taskHistory.map((task) => (
+                    <TableRow key={task.task_id}>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2" fontWeight="bold">
+                            {task.task_name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {task.task_id}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          icon={getStatusIcon(task.status)} 
+                          label={task.status} 
+                          color={task.is_successful ? 'success' : task.is_failed ? 'error' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {task.started_at ? new Date(task.started_at).toLocaleString() : 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {task.completed_at ? new Date(task.completed_at).toLocaleString() : 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {task.duration_seconds ? `${Math.round(task.duration_seconds)}s` : 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {task.triggered_by || 'system'}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Box>
+      </TabPanel>
+
+      {/* Trigger Tasks Tab */}
+      <TabPanel value={activeTab} index={2}>
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Trigger New Tasks
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <Button
@@ -344,68 +517,10 @@ const TaskManager: React.FC = () => {
           </Box>
         </Box>
 
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Task ID</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Progress</TableCell>
-                <TableCell>Task Type</TableCell>
-                <TableCell>Triggered At</TableCell>
-                <TableCell>Last Checked</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {Object.values(triggeredTasks).map((task: any) => (
-                <TableRow key={task.task_id}>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                      {task.task_id.substring(0, 8)}...
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {getStatusIcon(task.status)}
-                      <Chip
-                        label={task.status}
-                        color={getStatusColor(task.status) as any}
-                        size="small"
-                      />
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    {task.progress ? JSON.stringify(task.progress) : 'N/A'}
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={task.task_type} size="small" variant="outlined" />
-                  </TableCell>
-                  <TableCell>
-                    {new Date(task.triggered_at).toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" color="text.secondary">
-                      Last checked: {new Date(task.last_checked).toLocaleString()}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {Object.keys(triggeredTasks).length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    <Typography variant="body2" color="text.secondary">
-                      No tasks triggered yet. Click a button above to start a task.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
       </TabPanel>
 
-      {/* Scheduled Tasks Tab */}
-      <TabPanel value={activeTab} index={1}>
+      {/* System Info Tab */}
+      <TabPanel value={activeTab} index={3}>
         <Typography variant="h6" sx={{ mb: 2 }}>
           System Information
         </Typography>
@@ -451,69 +566,9 @@ const TaskManager: React.FC = () => {
         </Card>
       </TabPanel>
 
-      {/* Task History Tab */}
-      <TabPanel value={activeTab} index={2}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Task Details
-        </Typography>
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Task ID</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Result</TableCell>
-                <TableCell>Started At</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {Object.values(triggeredTasks).map((task: any) => (
-                <TableRow key={task.task_id}>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                      {task.task_id}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {getStatusIcon(task.status)}
-                      <Chip
-                        label={task.status}
-                        color={getStatusColor(task.status) as any}
-                        size="small"
-                      />
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    {task.result ? JSON.stringify(task.result).substring(0, 100) + '...' : 'N/A'}
-                  </TableCell>
-                  <TableCell>
-                    {task.triggered_at ? new Date(task.triggered_at).toLocaleString() : 'N/A'}
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" color="text.secondary">
-                      {task.task_type}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {Object.keys(triggeredTasks).length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    <Typography variant="body2" color="text.secondary">
-                      No tasks triggered yet.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </TabPanel>
 
       {/* Metrics & Stats Tab */}
-      <TabPanel value={activeTab} index={3}>
+      <TabPanel value={activeTab} index={4}>
         <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
           <Box sx={{ flex: '1 1 300px', minWidth: '300px' }}>
             <Card>

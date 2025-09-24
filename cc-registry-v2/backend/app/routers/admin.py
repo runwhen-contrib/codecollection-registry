@@ -94,3 +94,61 @@ async def clear_all_data(token: str = Depends(verify_admin_token)):
     except Exception as e:
         logger.error(f"Error clearing data: {e}")
         raise HTTPException(status_code=500, detail=f"Clear data failed: {str(e)}")
+
+
+@router.get("/releases/status")
+async def get_releases_status(token: str = Depends(verify_admin_token)):
+    """Get version management status and statistics (versions are now automatically synced during collection indexing)"""
+    try:
+        from app.core.database import SessionLocal
+        from app.models import CodeCollection, CodeCollectionVersion, VersionCodebundle
+        
+        db = SessionLocal()
+        try:
+            # Get release statistics
+            total_collections = db.query(CodeCollection).filter(CodeCollection.is_active == True).count()
+            collections_with_versions = db.query(CodeCollection).join(CodeCollectionVersion).distinct().count()
+            total_versions = db.query(CodeCollectionVersion).filter(CodeCollectionVersion.is_active == True).count()
+            total_version_codebundles = db.query(VersionCodebundle).count()
+            
+            # Get latest versions
+            latest_versions = db.query(CodeCollectionVersion).filter(
+                CodeCollectionVersion.is_latest == True,
+                CodeCollectionVersion.is_active == True
+            ).count()
+            
+            # Get prerelease count
+            prereleases = db.query(CodeCollectionVersion).filter(
+                CodeCollectionVersion.is_prerelease == True,
+                CodeCollectionVersion.is_active == True
+            ).count()
+            
+            # Get version type counts
+            main_versions = db.query(CodeCollectionVersion).filter(
+                CodeCollectionVersion.version_type == 'main',
+                CodeCollectionVersion.is_active == True
+            ).count()
+            
+            tag_versions = db.query(CodeCollectionVersion).filter(
+                CodeCollectionVersion.version_type == 'tag',
+                CodeCollectionVersion.is_active == True
+            ).count()
+            
+            return {
+                "total_collections": total_collections,
+                "collections_with_versions": collections_with_versions,
+                "total_versions": total_versions,
+                "latest_versions": latest_versions,
+                "prereleases": prereleases,
+                "main_versions": main_versions,
+                "tag_versions": tag_versions,
+                "total_version_codebundles": total_version_codebundles,
+                "coverage_percentage": round((collections_with_versions / total_collections * 100) if total_collections > 0 else 0, 2)
+            }
+            
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Error getting release status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get release status: {str(e)}")

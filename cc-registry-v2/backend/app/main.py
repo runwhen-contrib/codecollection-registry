@@ -10,6 +10,9 @@ import time
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Import all models to ensure they're registered with SQLAlchemy
+from app.models import *
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
@@ -82,11 +85,14 @@ async def health_check():
     }
 
 # Include routers
-from app.routers import admin, tasks, raw_data, admin_crud
+from app.routers import admin, tasks, raw_data, admin_crud, ai_admin, versions, task_management
 app.include_router(admin.router)
 app.include_router(tasks.router)
 app.include_router(raw_data.router)
 app.include_router(admin_crud.router)
+app.include_router(ai_admin.router)
+app.include_router(versions.router, prefix="/api/v1/registry")
+app.include_router(task_management.router)
 
 @app.get("/api/v1/registry/collections")
 async def list_collections():

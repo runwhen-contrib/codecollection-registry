@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
@@ -26,7 +27,11 @@ class RawRepositoryData(Base):
     file_path = Column(String(500), nullable=False)
     file_content = Column(Text, nullable=False)
     file_type = Column(String(50), nullable=False)  # e.g., "robot", "yaml", "json"
+    version_id = Column(Integer, ForeignKey("codecollection_versions.id"), nullable=True, index=True)
     is_processed = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    version = relationship("CodeCollectionVersion", back_populates="raw_files")
 

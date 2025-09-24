@@ -8,6 +8,7 @@ import CodeCollections from './pages/CodeCollections';
 import CodeCollectionDetail from './pages/CodeCollectionDetail';
 import CodeBundles from './pages/CodeBundles';
 import CodeBundleDetail from './pages/CodeBundleDetail';
+import VersionDetail from './pages/VersionDetail';
 import AllTasks from './pages/AllTasks';
 import Categories from './pages/Categories';
 import TestAPI from './pages/TestAPI';
@@ -30,6 +31,7 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/collections" element={<CodeCollections />} />
               <Route path="/collections/:collectionSlug" element={<CodeCollectionDetail />} />
+              <Route path="/collections/:collectionSlug/versions/:versionName" element={<VersionDetail />} />
               <Route path="/codebundles" element={<CodeBundles />} />
               <Route path="/collections/:collectionSlug/codebundles/:codebundleSlug" element={<CodeBundleDetail />} />
               <Route path="/all-tasks" element={<AllTasks />} />

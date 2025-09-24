@@ -11,8 +11,11 @@ import {
   TextField,
   Chip,
   Divider,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { apiService } from '../services/api';
+import AIConfiguration from '../components/AIConfiguration';
 
 const Admin: React.FC = () => {
   const [token, setToken] = useState('admin-dev-token');
@@ -21,6 +24,7 @@ const Admin: React.FC = () => {
   const [isClearing, setIsClearing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentTab, setCurrentTab] = useState(0);
 
   const checkStatus = async () => {
     try {
@@ -76,13 +80,23 @@ const Admin: React.FC = () => {
     checkStatus();
   }, []);
 
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setCurrentTab(newValue);
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Typography variant="h4" sx={{ mb: 4 }}>
-        Admin Panel - Data Population
+        Admin Panel
       </Typography>
 
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <Tabs value={currentTab} onChange={handleTabChange} sx={{ mb: 3 }}>
+        <Tab label="Data Management" />
+        <Tab label="AI Configuration" />
+      </Tabs>
+
+      {currentTab === 0 && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {/* Token Input */}
         <Card>
           <CardContent>
@@ -217,7 +231,12 @@ const Admin: React.FC = () => {
             {error}
           </Alert>
         )}
-      </Box>
+        </Box>
+      )}
+
+      {currentTab === 1 && (
+        <AIConfiguration token={token} />
+      )}
     </Container>
   );
 };

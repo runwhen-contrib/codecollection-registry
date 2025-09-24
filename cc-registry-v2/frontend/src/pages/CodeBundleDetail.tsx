@@ -83,14 +83,6 @@ const CodeBundleDetail: React.FC = () => {
           {codebundle.display_name}
         </Typography>
         
-        {codebundle.codecollection && (
-          <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
-            From{' '}
-            <Link to={`/collections/${codebundle.codecollection.slug}`}>
-              {codebundle.codecollection.name}
-            </Link>
-          </Typography>
-        )}
 
         <Typography variant="body1" sx={{ mb: 3 }}>
           {codebundle.description}
@@ -347,7 +339,13 @@ const CodeBundleDetail: React.FC = () => {
                 <Typography variant="h6" sx={{ mb: 2 }}>
                   Collection
                 </Typography>
-                <Link to={`/collections/${codebundle.codecollection.slug}`}>
+                <Link 
+                  to={`/collections/${codebundle.codecollection.slug}`}
+                  style={{ 
+                    color: '#2f80ed', 
+                    textDecoration: 'none'
+                  }}
+                >
                   <Typography variant="body1" color="primary">
                     {codebundle.codecollection.name}
                   </Typography>

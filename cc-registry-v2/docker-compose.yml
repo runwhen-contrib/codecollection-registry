@@ -116,13 +116,23 @@ services:
       - "3000:3000"
     environment:
       - REACT_APP_API_URL=http://localhost:8001/api/v1
-      - CHOKIDAR_USEPOLLING=true  # For hot reload in Docker
+      - CHOKIDAR_USEPOLLING=true
+      - GENERATE_SOURCEMAP=false
+      - FAST_REFRESH=false
+      - SKIP_PREFLIGHT_CHECK=true
+      - DISABLE_ESLINT_PLUGIN=true
+      - NODE_OPTIONS=--max-old-space-size=4096
+      - WDS_SOCKET_HOST=localhost
+      - WDS_SOCKET_PORT=3000
     volumes:
       - ./frontend:/app
       - /app/node_modules
     depends_on:
       - backend
     command: npm start
+    restart: unless-stopped
+    mem_limit: 4g
+    cpus: 2.0
 
 networks:
   default:

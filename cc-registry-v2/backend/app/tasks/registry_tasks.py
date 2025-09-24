@@ -22,6 +22,7 @@ from robot.parsing.model import TestCase
 
 from app.core.database import SessionLocal
 from app.models import CodeCollection, Codebundle, RawRepositoryData, CodeCollectionMetrics, SystemMetrics
+from app.models.version import CodeCollectionVersion, VersionCodebundle
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -273,7 +274,7 @@ def sync_all_collections_task(self):
 @celery_app.task(bind=True)
 def sync_single_collection_task(self, collection_id: int):
     """
-    Sync a single collection's repository and store raw files
+    Sync a single collection's repository, discover versions, and store raw files for each version
     """
     try:
         db = SessionLocal()
@@ -282,29 +283,29 @@ def sync_single_collection_task(self, collection_id: int):
         if not collection:
             raise ValueError(f"Collection with ID {collection_id} not found")
         
-        logger.info(f"Syncing collection: {collection.slug}")
+        logger.info(f"Syncing collection with version discovery: {collection.slug}")
         
         # Create temporary directory for cloning
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = os.path.join(temp_dir, collection.slug)
             
-            # Clone repository
+            # Clone repository (full clone to get all refs)
             logger.info(f"Cloning {collection.git_url} to {repo_path}")
-            repo = Repo.clone_from(collection.git_url, repo_path, branch=collection.git_ref)
+            repo = Repo.clone_from(collection.git_url, repo_path)
             
-            # Store repository files in database
-            files_stored = _store_repository_files(db, collection.slug, repo_path)
+            # Discover and sync all versions
+            versions_synced = _discover_and_sync_versions(db, collection, repo, repo_path)
             
             # Update collection sync timestamp
             collection.last_synced = datetime.utcnow()
             db.commit()
             
-            logger.info(f"Stored {files_stored} files for collection {collection.slug}")
+            logger.info(f"Synced {versions_synced['total_versions']} versions for collection {collection.slug}")
             
             return {
                 'status': 'success',
                 'collection_slug': collection.slug,
-                'files_stored': files_stored,
+                'versions_synced': versions_synced,
                 'synced_at': collection.last_synced.isoformat()
             }
             
@@ -315,13 +316,131 @@ def sync_single_collection_task(self, collection_id: int):
         db.close()
 
 
-def _store_repository_files(db, collection_slug: str, repo_path: str) -> int:
-    """Store all repository files in RawRepositoryData table"""
+def _discover_and_sync_versions(db, collection: CodeCollection, repo: Repo, repo_path: str) -> Dict[str, Any]:
+    """
+    Discover all versions (tags and main branch) and sync their files
+    """
+    versions_synced = {'tags': 0, 'main': 0, 'total_versions': 0, 'total_files': 0}
+    
+    # Process tags (releases)
+    tags = list(repo.tags)
+    logger.info(f"Found {len(tags)} tags for {collection.name}")
+    
+    for tag in tags:
+        try:
+            # Checkout the tag
+            repo.git.checkout(tag.name)
+            
+            # Create or update version record
+            version_data = {
+                'version_name': tag.name,
+                'git_ref': tag.commit.hexsha,
+                'display_name': tag.name,
+                'version_type': 'tag',
+                'version_date': datetime.fromtimestamp(tag.commit.committed_date),
+                'synced_at': datetime.utcnow(),
+                'is_prerelease': _is_prerelease_version(tag.name)
+            }
+            
+            version = _create_or_update_version(db, collection, version_data)
+            if version:
+                files_stored = _store_repository_files_for_version(db, collection.slug, repo_path, version.id)
+                versions_synced['tags'] += 1
+                versions_synced['total_files'] += files_stored
+                logger.info(f"Synced version {tag.name} with {files_stored} files")
+                
+        except Exception as e:
+            logger.error(f"Error processing tag {tag.name}: {str(e)}")
+            continue
+    
+    # Process main branch
+    try:
+        main_branch = collection.git_ref or 'main'
+        repo.git.checkout(main_branch)
+        
+        version_data = {
+            'version_name': 'main',
+            'git_ref': repo.head.commit.hexsha,
+            'display_name': 'Main Branch',
+            'version_type': 'main',
+            'version_date': datetime.fromtimestamp(repo.head.commit.committed_date),
+            'synced_at': datetime.utcnow(),
+            'is_latest': True  # Main is always considered latest
+        }
+        
+        version = _create_or_update_version(db, collection, version_data)
+        if version:
+            files_stored = _store_repository_files_for_version(db, collection.slug, repo_path, version.id)
+            versions_synced['main'] += 1
+            versions_synced['total_files'] += files_stored
+            logger.info(f"Synced main branch with {files_stored} files")
+            
+    except Exception as e:
+        logger.error(f"Error processing main branch: {str(e)}")
+    
+    # Mark the latest tag version
+    if tags:
+        latest_tag = max(tags, key=lambda t: t.commit.committed_date)
+        latest_version = db.query(CodeCollectionVersion).filter(
+            CodeCollectionVersion.codecollection_id == collection.id,
+            CodeCollectionVersion.version_name == latest_tag.name
+        ).first()
+        
+        if latest_version:
+            # Reset all other tag versions' is_latest flag
+            db.query(CodeCollectionVersion).filter(
+                CodeCollectionVersion.codecollection_id == collection.id,
+                CodeCollectionVersion.version_type == 'tag'
+            ).update({'is_latest': False})
+            
+            latest_version.is_latest = True
+            db.commit()
+    
+    versions_synced['total_versions'] = versions_synced['tags'] + versions_synced['main']
+    return versions_synced
+
+
+def _create_or_update_version(db, collection: CodeCollection, version_data: Dict[str, Any]) -> CodeCollectionVersion:
+    """Create or update a CodeCollectionVersion"""
+    existing_version = db.query(CodeCollectionVersion).filter(
+        CodeCollectionVersion.codecollection_id == collection.id,
+        CodeCollectionVersion.version_name == version_data['version_name']
+    ).first()
+    
+    if existing_version:
+        # Update existing version
+        for key, value in version_data.items():
+            setattr(existing_version, key, value)
+        existing_version.updated_at = datetime.utcnow()
+        version = existing_version
+    else:
+        # Create new version
+        version = CodeCollectionVersion(
+            codecollection_id=collection.id,
+            **version_data
+        )
+        db.add(version)
+    
+    db.commit()
+    db.refresh(version)
+    return version
+
+
+def _is_prerelease_version(version_name: str) -> bool:
+    """Check if a version is a prerelease based on naming conventions"""
+    prerelease_indicators = ['alpha', 'beta', 'rc', 'pre', 'dev', 'snapshot']
+    version_lower = version_name.lower()
+    return any(indicator in version_lower for indicator in prerelease_indicators)
+
+
+def _store_repository_files_for_version(db, collection_slug: str, repo_path: str, version_id: int) -> int:
+    """Store all repository files for a specific version"""
     files_stored = 0
     
-    # Clear existing files for this collection
+    # Clear existing files for this collection version
     db.query(RawRepositoryData).filter(
-        RawRepositoryData.collection_slug == collection_slug
+        RawRepositoryData.collection_slug == collection_slug,
+        RawRepositoryData.version_id == version_id
     ).delete()
     
     for root, dirs, files in os.walk(repo_path):
@@ -341,12 +460,13 @@ def _store_repository_files(db, collection_slug: str, repo_path: str) -> int:
                 file_ext = os.path.splitext(file)[1].lower()
                 file_type = 'robot' if file_ext == '.robot' else file_ext.lstrip('.')
                 
-                # Store in database
+                # Store in database with version reference
                 raw_data = RawRepositoryData(
                     collection_slug=collection_slug,
                     repository_path=repo_path,
                     file_path=relative_path,
                     file_content=content,
+                    version_id=version_id,
                     file_type=file_type,
                     is_processed=False
                 )
@@ -416,6 +536,7 @@ def parse_all_codebundles_task(self):
 def parse_collection_codebundles_task(self, collection_id: int):
     """
     Parse codebundles for a single collection using stored repository data
+    Now processes all versions of the collection
     """
     db = SessionLocal()
     try:
@@ -424,83 +545,103 @@ def parse_collection_codebundles_task(self, collection_id: int):
         if not collection:
             raise ValueError(f"Collection with ID {collection_id} not found")
         
-        logger.info(f"Parsing codebundles for collection: {collection.slug}")
+        logger.info(f"Parsing codebundles for all versions of collection: {collection.slug}")
         
-        # Get all robot files for this collection
-        robot_files = db.query(RawRepositoryData).filter(
-            RawRepositoryData.collection_slug == collection.slug,
-            RawRepositoryData.file_type == 'robot',
-            RawRepositoryData.is_processed == False
+        # Get all versions for this collection
+        versions = db.query(CodeCollectionVersion).filter(
+            CodeCollectionVersion.codecollection_id == collection.id,
+            CodeCollectionVersion.is_active == True
         ).all()
         
-        # Group files by codebundle directory
-        codebundle_files = {}
-        for robot_file in robot_files:
-            # Extract codebundle directory from path like "codebundles/aws-cloudwatch-metricquery/runbook.robot"
-            path_parts = robot_file.file_path.split('/')
-            if len(path_parts) >= 2 and path_parts[0] == 'codebundles':
-                codebundle_dir = path_parts[1]
-                if codebundle_dir not in codebundle_files:
-                    codebundle_files[codebundle_dir] = {'runbook': None, 'sli': None}
-                
-                if robot_file.file_path.endswith('runbook.robot'):
-                    codebundle_files[codebundle_dir]['runbook'] = robot_file
-                elif robot_file.file_path.endswith('sli.robot'):
-                    codebundle_files[codebundle_dir]['sli'] = robot_file
+        total_codebundles_created = 0
+        total_tasks_indexed = 0
+        total_slis_indexed = 0
         
-        codebundles_created = 0
-        tasks_indexed = 0
-        slis_indexed = 0
-        
-        for codebundle_dir, files in codebundle_files.items():
-            try:
-                runbook_file = files['runbook']
-                sli_file = files['sli']
-                
-                # Parse runbook file first (this creates the main codebundle)
-                codebundle_data = None
-                if runbook_file:
-                    codebundle_data = _parse_robot_file_content(runbook_file.file_content, runbook_file.file_path)
-                elif sli_file:
-                    # If there's no runbook file, create codebundle from SLI file but with empty tasks
-                    codebundle_data = _parse_robot_file_content(sli_file.file_content, sli_file.file_path)
-                    if codebundle_data:
-                        # Move the parsed tasks to SLIs and clear tasks
-                        codebundle_data['slis'] = codebundle_data.get('tasks', [])
-                        codebundle_data['sli_count'] = len(codebundle_data.get('tasks', []))
-                        codebundle_data['sli_path'] = sli_file.file_path
-                        codebundle_data['tasks'] = []
-                        codebundle_data['task_count'] = 0
-                        # Update runbook_path to be None since this is SLI-only
-                        codebundle_data['runbook_path'] = None
-                
-                # Parse SLI file and add SLIs to the codebundle data (if we have both files)
-                if sli_file and codebundle_data and runbook_file:
-                    sli_data = _parse_robot_file_content(sli_file.file_content, sli_file.file_path)
-                    if sli_data and sli_data.get('tasks'):
-                        # SLI tasks are stored in the 'tasks' field from parsing, but we want them as 'slis'
-                        codebundle_data['slis'] = sli_data['tasks']
-                        codebundle_data['sli_count'] = len(sli_data['tasks'])
-                        codebundle_data['sli_path'] = sli_file.file_path
-                
-                if codebundle_data:
-                    # Create or update codebundle
-                    codebundle = _create_or_update_codebundle(db, collection, codebundle_data, runbook_file.file_path if runbook_file else sli_file.file_path)
+        for version in versions:
+            logger.info(f"Processing version {version.version_name} for collection {collection.slug}")
+            
+            # Get all robot files for this collection version
+            robot_files = db.query(RawRepositoryData).filter(
+                RawRepositoryData.collection_slug == collection.slug,
+                RawRepositoryData.version_id == version.id,
+                RawRepositoryData.file_type == 'robot',
+                RawRepositoryData.is_processed == False
+            ).all()
+            
+            # Group files by codebundle directory for this version
+            codebundle_files = {}
+            for robot_file in robot_files:
+                # Extract codebundle directory from path like "codebundles/aws-cloudwatch-metricquery/runbook.robot"
+                path_parts = robot_file.file_path.split('/')
+                if len(path_parts) >= 2 and path_parts[0] == 'codebundles':
+                    codebundle_dir = path_parts[1]
+                    if codebundle_dir not in codebundle_files:
+                        codebundle_files[codebundle_dir] = {'runbook': None, 'sli': None}
                     
-                    if codebundle:
-                        codebundles_created += 1
-                        tasks_indexed += len(codebundle.tasks or [])
-                        slis_indexed += len(codebundle.slis or [])
+                    if robot_file.file_path.endswith('runbook.robot'):
+                        codebundle_files[codebundle_dir]['runbook'] = robot_file
+                    elif robot_file.file_path.endswith('sli.robot'):
+                        codebundle_files[codebundle_dir]['sli'] = robot_file
+            
+            codebundles_created = 0
+            tasks_indexed = 0
+            slis_indexed = 0
+            
+            for codebundle_dir, files in codebundle_files.items():
+                try:
+                    runbook_file = files['runbook']
+                    sli_file = files['sli']
+                    
+                    # Parse runbook file first (this creates the main codebundle)
+                    codebundle_data = None
+                    if runbook_file:
+                        codebundle_data = _parse_robot_file_content(runbook_file.file_content, runbook_file.file_path)
+                    elif sli_file:
+                        # If there's no runbook file, create codebundle from SLI file but with empty tasks
+                        codebundle_data = _parse_robot_file_content(sli_file.file_content, sli_file.file_path)
+                        if codebundle_data:
+                            # Move the parsed tasks to SLIs and clear tasks
+                            codebundle_data['slis'] = codebundle_data.get('tasks', [])
+                            codebundle_data['sli_count'] = len(codebundle_data.get('tasks', []))
+                            codebundle_data['sli_path'] = sli_file.file_path
+                            codebundle_data['tasks'] = []
+                            codebundle_data['task_count'] = 0
+                            # Update runbook_path to be None since this is SLI-only
+                            codebundle_data['runbook_path'] = None
+                    
+                    # Parse SLI file and add SLIs to the codebundle data (if we have both files)
+                    if sli_file and codebundle_data and runbook_file:
+                        sli_data = _parse_robot_file_content(sli_file.file_content, sli_file.file_path)
+                        if sli_data and sli_data.get('tasks'):
+                            # SLI tasks are stored in the 'tasks' field from parsing, but we want them as 'slis'
+                            codebundle_data['slis'] = sli_data['tasks']
+                            codebundle_data['sli_count'] = len(sli_data['tasks'])
+                            codebundle_data['sli_path'] = sli_file.file_path
+                    
+                    if codebundle_data:
+                        # Create or update version-specific codebundle
+                        version_codebundle = _create_or_update_version_codebundle(db, version, codebundle_data, runbook_file.file_path if runbook_file else sli_file.file_path)
                         
-                        # Mark files as processed
-                        if runbook_file:
-                            runbook_file.is_processed = True
-                        if sli_file:
-                            sli_file.is_processed = True
-                        
-            except Exception as e:
-                logger.error(f"Failed to parse codebundle {codebundle_dir}: {e}")
-                continue
+                        if version_codebundle:
+                            codebundles_created += 1
+                            tasks_indexed += len(version_codebundle.tasks or [])
+                            slis_indexed += len(version_codebundle.slis or [])
+                            
+                            # Mark files as processed
+                            if runbook_file:
+                                runbook_file.is_processed = True
+                            if sli_file:
+                                sli_file.is_processed = True
+                            
+                except Exception as e:
+                    logger.error(f"Failed to parse codebundle {codebundle_dir} for version {version.version_name}: {e}")
+                    continue
+            
+            total_codebundles_created += codebundles_created
+            total_tasks_indexed += tasks_indexed
+            total_slis_indexed += slis_indexed
+            
+            logger.info(f"Processed version {version.version_name}: {codebundles_created} codebundles, {tasks_indexed} tasks, {slis_indexed} SLIs")
         
         # Commit the transaction
         db.commit()
@@ -508,12 +649,13 @@ def parse_collection_codebundles_task(self, collection_id: int):
         result = {
             'status': 'success',
             'collection_slug': collection.slug,
-            'codebundles_created': codebundles_created,
-            'tasks_indexed': tasks_indexed,
-            'slis_indexed': slis_indexed
+            'versions_processed': len(versions),
+            'total_codebundles_created': total_codebundles_created,
+            'total_tasks_indexed': total_tasks_indexed,
+            'total_slis_indexed': total_slis_indexed
         }
         
-        logger.info(f"Parsed {codebundles_created} codebundles with {tasks_indexed} tasks and {slis_indexed} SLIs for {collection.slug}")
+        logger.info(f"Parsed {total_codebundles_created} codebundles across {len(versions)} versions with {total_tasks_indexed} tasks and {total_slis_indexed} SLIs for {collection.slug}")
         return result
         
     except Exception as e:
@@ -876,6 +1018,71 @@ def _create_or_update_codebundle(db, collection: CodeCollection, codebundle_data
         
     except Exception as e:
         logger.error(f"Failed to create/update codebundle: {e}")
+        return None
+
+
+def _create_or_update_version_codebundle(db, version: CodeCollectionVersion, codebundle_data: Dict[str, Any], file_path: str) -> Optional[VersionCodebundle]:
+    """Create or update a version-specific codebundle"""
+    try:
+        slug = codebundle_data['slug']
+        
+        # Check if version codebundle exists
+        existing = db.query(VersionCodebundle).filter(
+            VersionCodebundle.version_id == version.id,
+            VersionCodebundle.slug == slug
+        ).first()
+        
+        if existing:
+            version_codebundle = existing
+        else:
+            version_codebundle = VersionCodebundle(
+                version_id=version.id,
+                slug=slug
+            )
+            db.add(version_codebundle)
+        
+        # Update basic fields
+        version_codebundle.name = codebundle_data['name']
+        version_codebundle.display_name = codebundle_data['display_name']
+        version_codebundle.description = codebundle_data['description']
+        version_codebundle.doc = codebundle_data['doc']
+        version_codebundle.author = codebundle_data['author']
+        version_codebundle.tasks = codebundle_data['tasks']
+        version_codebundle.slis = codebundle_data.get('slis', [])
+        version_codebundle.support_tags = codebundle_data['support_tags']
+        version_codebundle.runbook_path = codebundle_data['runbook_path']
+        version_codebundle.sli_path = codebundle_data.get('sli_path')
+        version_codebundle.task_count = codebundle_data['task_count']
+        version_codebundle.sli_count = codebundle_data.get('sli_count', 0)
+        version_codebundle.synced_at = datetime.utcnow()
+        
+        # Generate task index (task name -> unique index)
+        task_index = {}
+        for task_name in codebundle_data['tasks']:
+            # Create unique index based on version + codebundle + task name
+            index_source = f"{version.codecollection.slug}:{version.version_name}:{slug}:{task_name}"
+            task_index[task_name] = hashlib.md5(index_source.encode()).hexdigest()[:8]
+        
+        version_codebundle.task_index = task_index
+        
+        # Parse discovery information from .runwhen directory
+        discovery_info = _parse_runwhen_discovery(db, version.codecollection.slug, codebundle_data['name'])
+        
+        # Update discovery fields
+        version_codebundle.is_discoverable = discovery_info['is_discoverable']
+        version_codebundle.discovery_platform = discovery_info['platform']
+        version_codebundle.discovery_resource_types = discovery_info['resource_types']
+        version_codebundle.discovery_match_patterns = discovery_info['match_patterns']
+        version_codebundle.discovery_templates = discovery_info['templates']
+        version_codebundle.discovery_output_items = discovery_info['output_items']
+        version_codebundle.discovery_level_of_detail = discovery_info['level_of_detail']
+        version_codebundle.runwhen_directory_path = discovery_info['runwhen_directory_path']
+        
+        # Don't commit here - let the main parsing task handle commits
+        return version_codebundle
+        
+    except Exception as e:
+        logger.error(f"Failed to create/update version codebundle: {e}")
         return None
 
 

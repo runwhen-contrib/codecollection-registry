@@ -15,20 +15,28 @@ import {
   ListItem,
   ListItemText,
   Avatar,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import {
   GitHub as GitHubIcon,
   Schedule as ScheduleIcon,
   Code as CodeIcon,
   Task as TaskIcon,
+  Tag as TagIcon,
 } from '@mui/icons-material';
-import { useParams, Link } from 'react-router-dom';
-import { apiService, CodeCollection, CodeBundle } from '../services/api';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { apiService, CodeCollection, CodeBundle, CodeCollectionVersion, VersionCodebundle } from '../services/api';
 
 const CodeCollectionDetail: React.FC = () => {
   const { collectionSlug } = useParams<{ collectionSlug: string }>();
+  const navigate = useNavigate();
   const [collection, setCollection] = useState<CodeCollection | null>(null);
-  const [codebundles, setCodebundles] = useState<CodeBundle[]>([]);
+  const [versions, setVersions] = useState<CodeCollectionVersion[]>([]);
+  const [selectedVersion, setSelectedVersion] = useState<string>('main');
+  const [codebundles, setCodebundles] = useState<CodeBundle[] | VersionCodebundle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,19 +45,22 @@ const CodeCollectionDetail: React.FC = () => {
       if (!collectionSlug) return;
       
       try {
-        // Get the specific collection and all codebundles
-        const [collectionData, codebundlesData] = await Promise.all([
+        // Get the specific collection and its versions
+        const [collectionData, versionsData] = await Promise.all([
           apiService.getCodeCollectionBySlug(collectionSlug),
-          apiService.getCodeBundles()
+          apiService.getCollectionVersions(collectionSlug)
         ]);
         
         setCollection(collectionData);
+        setVersions(versionsData);
         
-        // Filter codebundles for this collection
-        const collectionCodebundles = codebundlesData.filter(
-          cb => cb.codecollection?.slug === collectionSlug
-        );
-        setCodebundles(collectionCodebundles);
+        // Set default selected version (prefer latest, fallback to main, then first available)
+        if (versionsData.length > 0) {
+          const latestVersion = versionsData.find(v => v.is_latest && v.version_type === 'tag');
+          const mainVersion = versionsData.find(v => v.version_type === 'main');
+          const defaultVersion = latestVersion || mainVersion || versionsData[0];
+          setSelectedVersion(defaultVersion.version_name);
+        }
         
       } catch (err) {
         setError('Failed to load collection details');
@@ -61,6 +72,33 @@ const CodeCollectionDetail: React.FC = () => {
 
     fetchData();
   }, [collectionSlug]);
+
+  // Fetch codebundles when version changes
+  useEffect(() => {
+    const fetchCodebundles = async () => {
+      if (!collectionSlug || !selectedVersion) return;
+      
+      try {
+        if (selectedVersion === 'main' || versions.find(v => v.version_name === selectedVersion && v.version_type === 'main')) {
+          // For main version, get regular codebundles
+          const codebundlesData = await apiService.getCodeBundles();
+          const collectionCodebundles = codebundlesData.filter(
+            cb => cb.codecollection?.slug === collectionSlug
+          );
+          setCodebundles(collectionCodebundles);
+        } else {
+          // For specific versions, get version codebundles
+          const versionData = await apiService.getVersionCodebundles(collectionSlug, selectedVersion);
+          setCodebundles(versionData.codebundles || []);
+        }
+      } catch (err) {
+        console.error('Error fetching codebundles:', err);
+        setCodebundles([]);
+      }
+    };
+
+    fetchCodebundles();
+  }, [collectionSlug, selectedVersion, versions]);
 
   if (loading) {
     return (
@@ -116,6 +154,44 @@ const CodeCollectionDetail: React.FC = () => {
         <Typography variant="body1" sx={{ mb: 3, fontSize: '1.1rem' }}>
           {collection.description}
         </Typography>
+
+        {/* Version Selector */}
+        {versions.length > 0 && (
+          <Box sx={{ mb: 4 }}>
+            <FormControl sx={{ minWidth: 200 }}>
+              <InputLabel>Version</InputLabel>
+              <Select
+                value={selectedVersion}
+                label="Version"
+                onChange={(e) => setSelectedVersion(e.target.value)}
+                startAdornment={<TagIcon sx={{ mr: 1, color: 'action.active' }} />}
+              >
+                {versions.map((version) => (
+                  <MenuItem key={version.id} value={version.version_name}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                      <Typography>{version.version_name}</Typography>
+                      {version.is_latest && (
+                        <Chip label="Latest" size="small" color="primary" />
+                      )}
+                      {version.is_prerelease && (
+                        <Chip label="Pre-release" size="small" color="warning" />
+                      )}
+                      {version.version_type === 'main' && (
+                        <Chip label="Main" size="small" color="success" />
+                      )}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Showing codebundles for version: {selectedVersion}
+              {versions.find(v => v.version_name === selectedVersion)?.codebundle_count && 
+                ` (${versions.find(v => v.version_name === selectedVersion)?.codebundle_count} codebundles)`
+              }
+            </Typography>
+          </Box>
+        )}
 
         {/* Statistics Cards */}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 4 }}>

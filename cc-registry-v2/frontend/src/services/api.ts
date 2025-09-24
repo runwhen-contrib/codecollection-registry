@@ -66,6 +66,51 @@ export interface CodeCollection {
     codebundle_count: number;
     total_tasks: number;
   };
+  versions?: CodeCollectionVersion[];
+}
+
+export interface VersionCodebundle {
+  id: number;
+  name: string;
+  slug: string;
+  display_name: string | null;
+  description: string | null;
+  author: string | null;
+  support_tags: string[];
+  categories: string[];
+  task_count: number;
+  sli_count: number;
+  runbook_path: string | null;
+  runbook_source_url: string | null;
+  added_in_version: boolean;
+  modified_in_version: boolean;
+  removed_in_version: boolean;
+  discovery_info: any;
+}
+
+export interface CodeCollectionVersion {
+  id: number;
+  version_name: string;
+  git_ref: string;
+  display_name: string | null;
+  description: string | null;
+  version_type: string;
+  is_latest: boolean;
+  is_prerelease: boolean;
+  version_date: string | null;
+  synced_at: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  codebundle_count: number;
+  codebundles?: VersionCodebundle[];
+  codecollection?: {
+    id: number;
+    name: string;
+    slug: string;
+    description: string;
+    repository_url: string;
+  };
 }
 
 export interface DiscoveryInfo {
@@ -95,6 +140,12 @@ export interface CodeBundle {
   runbook_source_url: string;
   created_at: string;
   discovery: DiscoveryInfo;
+  // AI Enhancement fields
+  ai_enhanced_description?: string;
+  access_level?: 'read-only' | 'read-write' | 'unknown';
+  minimum_iam_requirements?: string[];
+  enhancement_status?: 'pending' | 'processing' | 'completed' | 'failed';
+  last_enhanced?: string;
   codecollection: {
     id: number;
     name: string;
@@ -324,12 +375,7 @@ export const apiService = {
     return response.data;
   },
 
-  async getTaskStatus(token: string, taskId: string) {
-    const response = await api.get(`/tasks/status/${taskId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
+  // Old getTaskStatus method removed - now using task management endpoint
 
   async getTaskHealth(token: string) {
     const response = await api.get('/tasks/health', {
@@ -381,6 +427,200 @@ export const apiService = {
       params: { days },
       headers: { Authorization: `Bearer ${token}` }
     });
+    return response.data;
+  },
+
+  // AI Configuration endpoints
+  async getAIConfigurations(token: string) {
+    const response = await api.get('/admin/ai/config', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async getActiveAIConfiguration(token: string) {
+    const response = await api.get('/admin/ai/config/active', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async createAIConfiguration(token: string, configData: any) {
+    const response = await api.post('/admin/ai/config', configData, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async updateAIConfiguration(token: string, configId: number, configData: any) {
+    const response = await api.put(`/admin/ai/config/${configId}`, configData, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async deleteAIConfiguration(token: string, configId: number) {
+    const response = await api.delete(`/admin/ai/config/${configId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async triggerAIEnhancement(token: string, enhancementRequest: any) {
+    const response = await api.post('/admin/ai/enhance', enhancementRequest, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async getEnhancementStatus(token: string, taskId: string) {
+    const response = await api.get(`/admin/ai/enhance/status/${taskId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async getAIStats(token: string) {
+    const response = await api.get('/admin/ai/stats', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  // Version management endpoints
+  async triggerSyncAllVersions(token: string) {
+    const response = await api.post('/admin/sync-all-versions', {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async triggerSyncCollectionVersions(token: string, collectionId: number) {
+    const response = await api.post(`/admin/sync-collection-versions/${collectionId}`, {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async getVersionsStatus(token: string) {
+    const response = await api.get('/admin/versions-status', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  // Version endpoints
+  async getCollectionVersions(
+    collectionSlug: string, 
+    includeInactive: boolean = false
+  ): Promise<CodeCollectionVersion[]> {
+    console.log('API: Getting versions for collection', collectionSlug);
+    const params = new URLSearchParams();
+    if (includeInactive) params.append('include_inactive', 'true');
+    
+    const response = await api.get(`/registry/collections/${collectionSlug}/versions?${params.toString()}`);
+    console.log('API: Versions response:', response.data);
+    return response.data;
+  },
+
+  async getVersionByName(
+    collectionSlug: string, 
+    versionName: string
+  ): Promise<CodeCollectionVersion> {
+    console.log('API: Getting version by name', collectionSlug, versionName);
+    
+    const response = await api.get(`/registry/collections/${collectionSlug}/versions/${versionName}`);
+    console.log('API: Version response:', response.data);
+    return response.data;
+  },
+
+  async getLatestVersion(
+    collectionSlug: string, 
+    versionType?: string
+  ): Promise<CodeCollectionVersion> {
+    console.log('API: Getting latest version for collection', collectionSlug);
+    const params = new URLSearchParams();
+    if (versionType) params.append('version_type', versionType);
+    
+    const response = await api.get(`/registry/collections/${collectionSlug}/latest-version?${params.toString()}`);
+    console.log('API: Latest version response:', response.data);
+    return response.data;
+  },
+
+  async getCollectionsWithVersions(
+    includeInactive: boolean = false
+  ): Promise<CodeCollection[]> {
+    console.log('API: Getting collections with versions');
+    const params = new URLSearchParams();
+    if (includeInactive) params.append('include_inactive', 'true');
+    
+    const response = await api.get(`/registry/collections-with-versions?${params.toString()}`);
+    console.log('API: Collections with versions response:', response.data);
+    return response.data;
+  },
+
+  async getVersionCodebundles(
+    collectionSlug: string, 
+    versionName: string,
+    limit?: number,
+    offset?: number
+  ): Promise<{version: CodeCollectionVersion, codebundles: VersionCodebundle[]}> {
+    console.log('API: Getting codebundles for version', collectionSlug, versionName);
+    const params = new URLSearchParams();
+    if (limit) params.append('limit', limit.toString());
+    if (offset) params.append('offset', offset.toString());
+    
+    const response = await api.get(`/registry/collections/${collectionSlug}/versions/${versionName}/codebundles?${params.toString()}`);
+    console.log('API: Version codebundles response:', response.data);
+    return response.data;
+  },
+
+  // Task Management endpoints
+  async getTaskHistory(
+    token: string,
+    limit: number = 50,
+    offset: number = 0,
+    taskType?: string,
+    status?: string
+  ) {
+    console.log('API: Getting task history');
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    params.append('offset', offset.toString());
+    if (taskType) params.append('task_type', taskType);
+    if (status) params.append('status', status);
+    
+    const response = await api.get(`/task-management/tasks?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    console.log('API: Task history response:', response.data);
+    return response.data;
+  },
+
+  async getRunningTasks(token: string) {
+    console.log('API: Getting running tasks');
+    const response = await api.get('/task-management/tasks/running', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    console.log('API: Running tasks response:', response.data);
+    return response.data;
+  },
+
+  async getTaskStatus(token: string, taskId: string) {
+    console.log('API: Getting task status for', taskId);
+    const response = await api.get(`/task-management/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    console.log('API: Task status response:', response.data);
+    return response.data;
+  },
+
+  async getTaskStats(token: string, days: number = 7) {
+    console.log('API: Getting task stats');
+    const response = await api.get(`/task-management/stats?days=${days}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    console.log('API: Task stats response:', response.data);
     return response.data;
   }
 };

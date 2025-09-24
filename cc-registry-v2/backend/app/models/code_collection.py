@@ -23,6 +23,7 @@ class CodeCollection(Base):
     
     # Relationships
     codebundles = relationship("Codebundle", back_populates="codecollection", cascade="all, delete-orphan")
+    versions = relationship("CodeCollectionVersion", back_populates="codecollection", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<CodeCollection(id={self.id}, name='{self.name}', slug='{self.slug}')>"

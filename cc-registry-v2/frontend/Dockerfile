@@ -2,11 +2,14 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Set memory limits for Node.js
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# Copy package files first for better caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install dependencies (including dev dependencies for React development)
+RUN npm ci --silent --no-audit --no-fund
 
 # Copy source code
 COPY . .

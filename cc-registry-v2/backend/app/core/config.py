@@ -20,8 +20,10 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://redis:6379/0"
     
-    # AI Integration (for future use)
-    CURSOR_API_KEY: Optional[str] = None
+    # AI Integration
+    OPENAI_API_KEY: Optional[str] = None
+    AI_MODEL: str = "gpt-4"
+    AI_ENHANCEMENT_ENABLED: bool = False
     
     # Environment
     ENVIRONMENT: str = "development"

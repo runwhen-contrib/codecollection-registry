@@ -38,6 +38,11 @@ class Codebundle(Base):
     enhancement_status = Column(String(50), default="pending")  # pending, processing, completed, failed
     last_enhanced = Column(DateTime)
     
+    # AI-enhanced fields
+    ai_enhanced_description = Column(Text)  # AI-generated improved description
+    access_level = Column(String(20), default="unknown")  # read-only, read-write, unknown
+    minimum_iam_requirements = Column(JSON, default=list)  # List of required IAM permissions/roles
+    
     # Generation metadata
     has_genrules = Column(Boolean, default=False)
     found_in_cheatsheet = Column(Boolean, default=False)
