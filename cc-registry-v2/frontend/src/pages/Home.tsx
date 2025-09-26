@@ -113,10 +113,10 @@ const Home: React.FC = () => {
       </Box>
       
 
-      {/* Top Troubleshooting Categories */}
+      {/* Top Codebundle Categories */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h2" sx={{ mb: 2 }}>
-          Top Troubleshooting Categories
+          Top CodeBundle Categories
         </Typography>
         <Box sx={{ width: '100%', height: '2px', backgroundColor: '#e0e0e0', mb: 3 }} />
         

@@ -16,7 +16,7 @@ import Admin from './pages/Admin';
 import TaskManager from './pages/TaskManager';
 import AIEnhancementAdmin from './components/AIEnhancementAdmin';
 import Login from './pages/Login';
-import Cart from './pages/Cart';
+import ConfigBuilder from './pages/ConfigBuilder';
 import Footer from './components/Footer';
 import { CartProvider } from './contexts/CartContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -37,7 +37,6 @@ function App() {
               <Route path="/collections/:collectionSlug/codebundles/:codebundleSlug" element={<CodeBundleDetail />} />
               <Route path="/all-tasks" element={<AllTasks />} />
               <Route path="/categories" element={<Categories />} />
-              <Route path="/cart" element={<Cart />} />
               <Route path="/test-api" element={<TestAPI />} />
               <Route path="/login" element={<Login />} />
               
@@ -65,6 +64,10 @@ function App() {
                     <AIEnhancementAdmin />
                   </ProtectedRoute>
                 } 
+              />
+              <Route 
+                path="/config-builder" 
+                element={<ConfigBuilder />} 
               />
             </Routes>
           </Box>

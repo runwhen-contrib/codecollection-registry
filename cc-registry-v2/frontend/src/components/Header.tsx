@@ -16,7 +16,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Search as SearchIcon,
   Menu as MenuIcon,
-  List as ListIcon,
+  DynamicForm as DynamicFormIcon,
   Login as LoginIcon,
   Logout as LogoutIcon,
   Person as PersonIcon,
@@ -119,6 +119,17 @@ const Header: React.FC = () => {
             >
               Categories
             </Button>
+            <Button
+              component={Link}
+              to="/config-builder"
+              color="inherit"
+              sx={{
+                color: 'white',
+                fontWeight: location.pathname === '/config-builder' ? 'bold' : 'normal',
+              }}
+            >
+              Config Builder
+            </Button>
             {isAuthenticated && (
               <>
                 <Button
@@ -160,7 +171,7 @@ const Header: React.FC = () => {
           <IconButton 
             color="inherit"
             component={Link}
-            to="/cart"
+            to="/config-builder"
             sx={{
               '&:hover': {
                 backgroundColor: 'rgba(255,255,255,0.1)',
@@ -168,7 +179,7 @@ const Header: React.FC = () => {
             }}
           >
             <Badge badgeContent={itemCount} color="error">
-              <ListIcon />
+              <DynamicFormIcon />
             </Badge>
           </IconButton>
           <IconButton color="inherit">
