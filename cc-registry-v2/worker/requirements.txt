@@ -29,6 +29,9 @@ robotframework==6.1.1
 # Task scheduling and background jobs
 flower==2.0.1
 
+# AI Integration
+openai>=1.0.0
+
 # Environment
 python-dotenv==1.0.0
 

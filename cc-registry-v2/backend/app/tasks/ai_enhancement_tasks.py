@@ -10,10 +10,20 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models import Codebundle, AIConfiguration
-from app.services.ai_service import get_ai_service
 from app.tasks.registry_tasks import celery_app
 
 logger = logging.getLogger(__name__)
+
+# Try to import AI service, but handle gracefully if not available
+try:
+    from app.services.ai_service import get_ai_service
+    AI_SERVICE_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"AI service not available: {e}")
+    AI_SERVICE_AVAILABLE = False
+    
+    def get_ai_service(db):
+        return None
 
 
 @celery_app.task(bind=True)
@@ -34,9 +44,14 @@ def enhance_codebundle_task(self, codebundle_id: int):
         db.commit()
         
         # Get AI service
+        if not AI_SERVICE_AVAILABLE:
+            codebundle.enhancement_status = "failed"
+            db.commit()
+            raise ValueError("AI service is not available - missing dependencies")
+            
         ai_service = get_ai_service(db)
         
-        if not ai_service.is_enabled():
+        if not ai_service or not ai_service.is_enabled():
             codebundle.enhancement_status = "failed"
             db.commit()
             raise ValueError("AI enhancement is not enabled or configured")
@@ -50,6 +65,12 @@ def enhance_codebundle_task(self, codebundle_id: int):
         codebundle.ai_enhanced_description = enhancement_result["enhanced_description"]
         codebundle.access_level = enhancement_result["access_level"]
         codebundle.minimum_iam_requirements = enhancement_result["iam_requirements"]
+        
+        # Store enhanced tasks in AI metadata for now
+        if enhancement_result.get("enhanced_tasks"):
+            if not codebundle.ai_enhanced_metadata:
+                codebundle.ai_enhanced_metadata = {}
+            codebundle.ai_enhanced_metadata["enhanced_tasks"] = enhancement_result["enhanced_tasks"]
         
         # Update AI metadata
         codebundle.ai_enhanced_metadata = enhancement_result["enhancement_metadata"]
@@ -177,9 +198,9 @@ def enhance_pending_codebundles_task(self, limit: Optional[int] = None):
     try:
         db = next(get_db())
         
-        # Get pending codebundles
+        # Get pending codebundles (including NULL values)
         query = db.query(Codebundle).filter(
-            Codebundle.enhancement_status == "pending",
+            (Codebundle.enhancement_status == "pending") | (Codebundle.enhancement_status.is_(None)),
             Codebundle.is_active == True
         )
         

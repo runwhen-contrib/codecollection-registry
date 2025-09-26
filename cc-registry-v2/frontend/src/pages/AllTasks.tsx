@@ -40,6 +40,7 @@ const AllTasks: React.FC = () => {
   const [supportTagSearch, setSupportTagSearch] = useState('');
   const [supportTagSearchInput, setSupportTagSearchInput] = useState('');
   const [selectedCollection, setSelectedCollection] = useState('');
+  const [taskSearch, setTaskSearch] = useState('');
   
   // Pagination
   const [page, setPage] = useState(1);
@@ -133,6 +134,7 @@ const AllTasks: React.FC = () => {
     setSupportTagSearch('');
     setSupportTagSearchInput('');
     setSelectedCollection('');
+    setTaskSearch('');
     setPage(1);
     fetchTasks('', [], '', 1);
   };
@@ -167,7 +169,17 @@ const AllTasks: React.FC = () => {
     runbook_source_url: string;
   }
 
-  const groupedTasks = tasks.reduce((groups, task) => {
+  // Filter tasks by search term (searches both task names and codebundle names)
+  const filteredTasks = tasks.filter(task => {
+    if (!taskSearch) return true;
+    const searchLower = taskSearch.toLowerCase();
+    return (
+      task.name.toLowerCase().includes(searchLower) ||
+      task.codebundle_name.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const groupedTasks = filteredTasks.reduce((groups, task) => {
     const key = `${task.collection_slug}/${task.codebundle_slug}`;
     if (!groups[key]) {
       groups[key] = {
@@ -204,145 +216,155 @@ const AllTasks: React.FC = () => {
         </Typography>
       </Box>
 
-      {/* Main Layout: Sidebar + Content */}
-      <Box sx={{ display: 'flex', gap: 3 }}>
-        {/* Left Sidebar - Filters */}
-        <Box sx={{ width: 300, flexShrink: 0 }}>
-          <Card sx={{ position: 'sticky', top: 20 }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                <FilterIcon sx={{ mr: 1 }} />
-                Filters
+      {/* Search Bar */}
+      <Box sx={{ mb: 2 }}>
+        <TextField
+          fullWidth
+          placeholder="Search tasks and codebundles..."
+          value={taskSearch}
+          onChange={(e) => setTaskSearch(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            )
+          }}
+          sx={{ maxWidth: 600 }}
+        />
+      </Box>
+
+      {/* Main Layout: Full Width Support Tags + Content */}
+      <Box sx={{ display: 'flex', gap: 1.5, height: 'calc(100vh - 200px)' }}>
+        {/* Left: Support Tags Filter - Full Height */}
+        <Box sx={{ width: 280, flexShrink: 0 }}>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ p: 1.5, display: 'flex', flexDirection: 'column', height: '100%', '&:last-child': { pb: 1.5 } }}>
+              <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600, mb: 1 }}>
+                <FilterIcon sx={{ mr: 1, fontSize: 18 }} />
+                Support Tags ({selectedSupportTags.length}/{filteredSupportTags.length})
               </Typography>
               
-
-              {/* Support Tags Filter */}
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Support Tags ({selectedSupportTags.length} selected • {filteredSupportTags.length} available)
-                </Typography>
-                
-                {/* Selected Tags */}
-                {selectedSupportTags.length > 0 && (
-                  <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selectedSupportTags.map((tag) => (
-                      <Chip
-                        key={tag}
-                        label={tag}
-                        size="small"
-                        onDelete={() => handleSupportTagRemove(tag)}
-                        deleteIcon={<CloseIcon />}
-                        color="primary"
-                        variant="filled"
-                      />
-                    ))}
-                  </Box>
-                )}
-                
-                {/* Tag Search */}
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder="Filter tags..."
-                  value={supportTagSearchInput}
-                  onChange={(e) => setSupportTagSearchInput(e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon fontSize="small" />
-                      </InputAdornment>
-                    )
-                  }}
-                />
-                
-                {/* Available Tags with Checkboxes */}
-                <Box sx={{ 
-                  mt: 1, 
-                  maxHeight: 300, 
-                  overflow: 'auto', 
-                  border: '1px solid #ddd', 
-                  borderRadius: 1,
-                  bgcolor: 'background.paper'
-                }}>
-                  {filteredSupportTags.slice(0, 50).map((tag) => (
-                    <Box
+              {/* Selected Tags */}
+              {selectedSupportTags.length > 0 && (
+                <Box sx={{ mb: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {selectedSupportTags.map((tag) => (
+                    <Chip
                       key={tag}
+                      label={tag}
+                      size="small"
+                      onDelete={() => handleSupportTagRemove(tag)}
+                      deleteIcon={<CloseIcon />}
+                      color="primary"
+                      variant="filled"
+                      sx={{ height: 20, fontSize: '0.65rem' }}
+                    />
+                  ))}
+                </Box>
+              )}
+              
+              {/* Tag Search */}
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Filter tags..."
+                value={supportTagSearchInput}
+                onChange={(e) => setSupportTagSearchInput(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  )
+                }}
+                sx={{ mb: 1 }}
+              />
+              
+              {/* Available Tags - Full Height List */}
+              <Box sx={{ 
+                flex: 1,
+                overflow: 'auto', 
+                border: '1px solid #ddd', 
+                borderRadius: 1,
+                bgcolor: 'background.paper'
+              }}>
+                {filteredSupportTags.map((tag, index) => (
+                  <Box
+                    key={tag}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      px: 1,
+                      py: 0.25,
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: 'action.hover' },
+                      borderBottom: index < filteredSupportTags.length - 1 ? '1px solid #eee' : 'none',
+                      bgcolor: selectedSupportTags.includes(tag) ? 'primary.50' : 'transparent'
+                    }}
+                    onClick={() => {
+                      if (selectedSupportTags.includes(tag)) {
+                        handleSupportTagRemove(tag);
+                      } else {
+                        handleSupportTagAdd(tag);
+                      }
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ 
+                      flex: 1,
+                      fontSize: '0.75rem',
+                      fontWeight: selectedSupportTags.includes(tag) ? 500 : 400,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>
+                      {tag}
+                    </Typography>
+                    <Box
                       sx={{
+                        width: 12,
+                        height: 12,
+                        border: '2px solid',
+                        borderColor: selectedSupportTags.includes(tag) ? 'primary.main' : 'grey.400',
+                        borderRadius: 0.5,
+                        bgcolor: selectedSupportTags.includes(tag) ? 'primary.main' : 'transparent',
                         display: 'flex',
                         alignItems: 'center',
-                        p: 1,
-                        cursor: 'pointer',
-                        '&:hover': { bgcolor: 'action.hover' },
-                        borderBottom: '1px solid #eee'
-                      }}
-                      onClick={() => {
-                        if (selectedSupportTags.includes(tag)) {
-                          handleSupportTagRemove(tag);
-                        } else {
-                          handleSupportTagAdd(tag);
-                        }
+                        justifyContent: 'center',
+                        flexShrink: 0
                       }}
                     >
-                      <Box
-                        sx={{
-                          width: 16,
-                          height: 16,
-                          border: '2px solid',
-                          borderColor: selectedSupportTags.includes(tag) ? 'primary.main' : 'grey.400',
-                          borderRadius: 0.5,
-                          bgcolor: selectedSupportTags.includes(tag) ? 'primary.main' : 'transparent',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          mr: 1,
-                          flexShrink: 0
-                        }}
-                      >
-                        {selectedSupportTags.includes(tag) && (
-                          <Box
-                            sx={{
-                              width: 8,
-                              height: 8,
-                              bgcolor: 'white',
-                              borderRadius: 0.25
-                            }}
-                          />
-                        )}
-                      </Box>
-                      <Typography variant="body2" sx={{ flex: 1 }}>
-                        {tag}
-                      </Typography>
+                      {selectedSupportTags.includes(tag) && (
+                        <Box
+                          sx={{
+                            width: 6,
+                            height: 6,
+                            bgcolor: 'white',
+                            borderRadius: 0.25
+                          }}
+                        />
+                      )}
                     </Box>
-                  ))}
-                  {filteredSupportTags.length > 50 && (
-                    <Box sx={{ p: 1, textAlign: 'center', color: 'text.secondary' }}>
-                      <Typography variant="caption">
-                        Showing first 50 of {filteredSupportTags.length} results
-                      </Typography>
-                    </Box>
-                  )}
-                  {filteredSupportTags.length === 0 && supportTagSearch.length >= 2 && (
-                    <Box sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
-                      <Typography variant="body2">
-                        No tags found matching "{supportTagSearch}"
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
+                  </Box>
+                ))}
+                {filteredSupportTags.length === 0 && supportTagSearch.length >= 2 && (
+                  <Box sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                      No tags found matching "{supportTagSearch}"
+                    </Typography>
+                  </Box>
+                )}
               </Box>
 
-              {/* Collection Filter */}
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  CodeCollection
-                </Typography>
-                <FormControl fullWidth size="small">
+              {/* Collection Filter & Clear Button */}
+              <Box sx={{ mt: 1 }}>
+                <FormControl fullWidth size="small" sx={{ mb: 1 }}>
                   <Select
                     value={selectedCollection}
                     onChange={(e) => handleCollectionChange(e.target.value)}
                     displayEmpty
+                    sx={{ fontSize: '0.8rem' }}
                   >
-                    <MenuItem value="">All CodeCollections</MenuItem>
+                    <MenuItem value="">All Collections</MenuItem>
                     {uniqueCollections.map((collection) => (
                       <MenuItem key={collection} value={collection}>
                         {collection}
@@ -350,12 +372,9 @@ const AllTasks: React.FC = () => {
                     ))}
                   </Select>
                 </FormControl>
-              </Box>
-
-              {/* Action Buttons */}
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button variant="outlined" onClick={clearFilters} fullWidth>
-                  Clear All Filters
+                
+                <Button variant="outlined" onClick={clearFilters} fullWidth size="small" sx={{ py: 0.25, fontSize: '0.7rem' }}>
+                  Clear Filters
                 </Button>
               </Box>
             </CardContent>
@@ -363,25 +382,26 @@ const AllTasks: React.FC = () => {
         </Box>
 
         {/* Right Content - Tasks List */}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          {/* Filter Bar Above List */}
-          <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.200' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-              <Typography variant="body2" color="text.secondary">
-                Showing {Object.keys(groupedTasks).length} CodeBundle{Object.keys(groupedTasks).length !== 1 ? 's' : ''} with {tasks.length} task{tasks.length !== 1 ? 's' : ''} total
-                {selectedSupportTags.length > 0 && ` • ${selectedSupportTags.length} tag${selectedSupportTags.length > 1 ? 's' : ''} selected`}
-                {selectedCollection && ` • CodeCollection: ${selectedCollection}`}
+        <Box sx={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
+          {/* Compact Filter Bar */}
+          <Box sx={{ mb: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.200' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                {Object.keys(groupedTasks).length} CodeBundle{Object.keys(groupedTasks).length !== 1 ? 's' : ''} • {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
+                {selectedSupportTags.length > 0 && ` • ${selectedSupportTags.length} tag${selectedSupportTags.length > 1 ? 's' : ''}`}
+                {selectedCollection && ` • ${selectedCollection}`}
               </Typography>
               
               {/* Quick Clear Filters */}
               {(selectedSupportTags.length > 0 || selectedCollection) && (
                 <Button
                   size="small"
-                  variant="outlined"
+                  variant="text"
                   onClick={clearFilters}
                   startIcon={<ClearIcon />}
+                  sx={{ fontSize: '0.7rem', minHeight: 'auto', py: 0.25, px: 0.5 }}
                 >
-                  Clear Filters
+                  Clear
                 </Button>
               )}
             </Box>
@@ -405,39 +425,43 @@ const AllTasks: React.FC = () => {
           {!loading && !error && (
             <>
               {Object.keys(groupedTasks).length > 0 ? (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   {Object.entries(groupedTasks).map(([key, group]) => (
-                    <Card key={key} sx={{ '&:hover': { boxShadow: 4 } }}>
-                      <CardContent>
+                    <Card key={key} sx={{ '&:hover': { boxShadow: 2 } }}>
+                      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                         {/* CodeBundle Header */}
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, pb: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
                           <Box sx={{ flex: 1 }}>
-                            <Typography variant="h5" component="h2" gutterBottom>
+                            <Typography variant="h6" component="h2" sx={{ mb: 0.5, fontSize: '1.1rem', fontWeight: 600 }}>
                               {group.codebundle.name}
                             </Typography>
-                            
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                              {group.codebundle.collection_name} • {group.tasks.filter(t => t.type === 'TaskSet').length} tasks • {group.tasks.filter(t => t.type === 'SLI').length} SLIs
+                            </Typography>
                           </Box>
                           
-                          <Box sx={{ ml: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Box sx={{ ml: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                             <Button
                               variant="outlined"
                               size="small"
                               startIcon={<LaunchIcon />}
                               href={`/collections/${group.codebundle.collection_slug}/codebundles/${group.codebundle.slug}`}
+                              sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
                             >
-                              View CodeBundle
+                              View
                             </Button>
                             
                             {group.codebundle.runbook_source_url && (
                               <Button
                                 variant="text"
                                 size="small"
-                                startIcon={<LaunchIcon />}
+                                startIcon={<GitHubIcon />}
                                 href={group.codebundle.runbook_source_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
                               >
-                                View Source
+                                Source
                               </Button>
                             )}
                             
@@ -446,6 +470,7 @@ const AllTasks: React.FC = () => {
                               size="small"
                               color={isInCart(group.codebundle.id) ? "error" : "primary"}
                               startIcon={isInCart(group.codebundle.id) ? <RemoveIcon /> : <AddIcon />}
+                              sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
                               onClick={() => {
                                 if (isInCart(group.codebundle.id)) {
                                   removeFromCart(group.codebundle.id);
@@ -497,18 +522,19 @@ const AllTasks: React.FC = () => {
                         <Box>
                           {/* TaskSet Tasks */}
                           {group.tasks.filter(task => task.type === 'TaskSet').length > 0 && (
-                            <Box sx={{ mb: 3 }}>
-                              <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                                TaskSet
+                            <Box sx={{ mb: 1.5 }}>
+                              <Typography variant="subtitle2" sx={{ color: 'primary.main', fontWeight: 600, mb: 0.5, fontSize: '0.85rem' }}>
+                                TaskSet ({group.tasks.filter(task => task.type === 'TaskSet').length})
                               </Typography>
-                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                                 {group.tasks.filter(task => task.type === 'TaskSet').map((task) => (
                                   <Box
                                     key={task.id}
                                     sx={{
-                                      p: 2,
+                                      px: 1.5,
+                                      py: 0.75,
                                       bgcolor: 'grey.50',
-                                      borderRadius: 1,
+                                      borderRadius: 0.5,
                                       border: '1px solid',
                                       borderColor: 'grey.200',
                                       display: 'flex',
@@ -520,7 +546,7 @@ const AllTasks: React.FC = () => {
                                       }
                                     }}
                                   >
-                                    <Typography variant="body1">
+                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 500 }}>
                                       {task.name}
                                     </Typography>
                                   </Box>
@@ -532,17 +558,18 @@ const AllTasks: React.FC = () => {
                           {/* SLI Tasks */}
                           {group.tasks.filter(task => task.type === 'SLI').length > 0 && (
                             <Box>
-                              <Typography variant="h6" gutterBottom sx={{ color: 'secondary.main', fontWeight: 'bold' }}>
-                                SLI
+                              <Typography variant="subtitle2" sx={{ color: 'secondary.main', fontWeight: 600, mb: 0.5, fontSize: '0.85rem' }}>
+                                SLI ({group.tasks.filter(task => task.type === 'SLI').length})
                               </Typography>
-                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                                 {group.tasks.filter(task => task.type === 'SLI').map((task) => (
                                   <Box
                                     key={task.id}
                                     sx={{
-                                      p: 2,
+                                      px: 1.5,
+                                      py: 0.75,
                                       bgcolor: 'grey.50',
-                                      borderRadius: 1,
+                                      borderRadius: 0.5,
                                       border: '1px solid',
                                       borderColor: 'grey.200',
                                       display: 'flex',
@@ -554,7 +581,7 @@ const AllTasks: React.FC = () => {
                                       }
                                     }}
                                   >
-                                    <Typography variant="body1">
+                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 500 }}>
                                       {task.name}
                                     </Typography>
                                   </Box>

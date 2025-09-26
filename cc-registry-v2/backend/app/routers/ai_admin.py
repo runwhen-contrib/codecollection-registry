@@ -17,6 +17,7 @@ from app.tasks.ai_enhancement_tasks import (
     enhance_pending_codebundles_task
 )
 from celery.result import AsyncResult
+from app.services.task_monitoring_service import task_monitor
 
 # Simple token-based auth for now
 security = HTTPBearer()
@@ -40,6 +41,10 @@ class AIConfigCreate(BaseModel):
     max_requests_per_hour: int = 100
     max_concurrent_requests: int = 5
     enhancement_prompt_template: Optional[str] = None
+    # Azure OpenAI specific fields
+    azure_endpoint: Optional[str] = None
+    azure_deployment_name: Optional[str] = None
+    api_version: Optional[str] = "2024-02-15-preview"
 
 
 class AIConfigUpdate(BaseModel):
@@ -50,6 +55,10 @@ class AIConfigUpdate(BaseModel):
     max_requests_per_hour: Optional[int] = None
     max_concurrent_requests: Optional[int] = None
     enhancement_prompt_template: Optional[str] = None
+    # Azure OpenAI specific fields
+    azure_endpoint: Optional[str] = None
+    azure_deployment_name: Optional[str] = None
+    api_version: Optional[str] = None
 
 
 class AIConfigResponse(BaseModel):
@@ -63,6 +72,10 @@ class AIConfigResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    # Azure OpenAI specific fields
+    azure_endpoint: Optional[str] = None
+    azure_deployment_name: Optional[str] = None
+    api_version: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -118,6 +131,10 @@ async def create_ai_configuration(
         max_requests_per_hour=config_data.max_requests_per_hour,
         max_concurrent_requests=config_data.max_concurrent_requests,
         enhancement_prompt_template=config_data.enhancement_prompt_template,
+        # Azure OpenAI specific fields
+        azure_endpoint=config_data.azure_endpoint,
+        azure_deployment_name=config_data.azure_deployment_name,
+        api_version=config_data.api_version,
         created_by=token,  # In production, use actual user ID
         is_active=config_data.enhancement_enabled
     )
@@ -177,6 +194,42 @@ async def delete_ai_configuration(
     return {"message": "AI configuration deleted successfully"}
 
 
+@router.post("/reset")
+async def reset_ai_enhancements(
+    token: str = Depends(verify_admin_token),
+    db: Session = Depends(get_db)
+):
+    """Reset all AI enhancement data - sets all CodeBundles back to pending status"""
+    try:
+        # Reset all CodeBundles to pending status and clear AI data
+        updated_count = db.query(Codebundle).filter(
+            Codebundle.is_active == True
+        ).update({
+            Codebundle.enhancement_status: "pending",
+            Codebundle.ai_enhanced_description: None,
+            Codebundle.access_level: None,
+            Codebundle.minimum_iam_requirements: None,
+            Codebundle.ai_enhanced_metadata: None,
+            Codebundle.last_enhanced: None
+        })
+        
+        db.commit()
+        
+        return {
+            "status": "success",
+            "message": f"Reset AI enhancement data for {updated_count} CodeBundles",
+            "reset_count": updated_count
+        }
+        
+    except Exception as e:
+        logger.error(f"Error resetting AI enhancements: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to reset AI enhancements: {str(e)}"
+        )
+
+
 @router.post("/enhance")
 async def trigger_ai_enhancement(
     request: EnhancementRequest,
@@ -203,16 +256,52 @@ async def trigger_ai_enhancement(
         # Enhance all pending CodeBundles
         task_result = enhance_pending_codebundles_task.delay(request.limit)
         
+        # Create task record for monitoring
+        task_monitor.create_task_record(
+            task_id=task_result.id,
+            task_name="AI Enhancement - Pending CodeBundles",
+            task_type="ai_enhancement",
+            parameters={"enhance_pending": True, "limit": request.limit},
+            triggered_by=token
+        )
+        
     elif request.collection_slug:
         # Enhance all CodeBundles in a collection
         task_result = enhance_collection_codebundles_task.delay(request.collection_slug)
+        
+        # Create task record for monitoring
+        task_monitor.create_task_record(
+            task_id=task_result.id,
+            task_name=f"AI Enhancement - Collection {request.collection_slug}",
+            task_type="ai_enhancement",
+            parameters={"collection_slug": request.collection_slug},
+            triggered_by=token
+        )
         
     elif request.codebundle_ids:
         # Enhance specific CodeBundles
         if len(request.codebundle_ids) == 1:
             task_result = enhance_codebundle_task.delay(request.codebundle_ids[0])
+            
+            # Create task record for monitoring
+            task_monitor.create_task_record(
+                task_id=task_result.id,
+                task_name=f"AI Enhancement - CodeBundle {request.codebundle_ids[0]}",
+                task_type="ai_enhancement",
+                parameters={"codebundle_ids": request.codebundle_ids},
+                triggered_by=token
+            )
         else:
             task_result = enhance_multiple_codebundles_task.delay(request.codebundle_ids)
+            
+            # Create task record for monitoring
+            task_monitor.create_task_record(
+                task_id=task_result.id,
+                task_name=f"AI Enhancement - {len(request.codebundle_ids)} CodeBundles",
+                task_type="ai_enhancement",
+                parameters={"codebundle_ids": request.codebundle_ids},
+                triggered_by=token
+            )
     
     else:
         raise HTTPException(
@@ -276,7 +365,7 @@ async def get_enhancement_stats(
     total_codebundles = db.query(Codebundle).filter(Codebundle.is_active == True).count()
     
     pending = db.query(Codebundle).filter(
-        Codebundle.enhancement_status == "pending",
+        (Codebundle.enhancement_status == "pending") | (Codebundle.enhancement_status.is_(None)),
         Codebundle.is_active == True
     ).count()
     

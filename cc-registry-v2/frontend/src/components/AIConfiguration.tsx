@@ -34,6 +34,7 @@ import {
   PlayArrow as PlayIcon,
   Refresh as RefreshIcon 
 } from '@mui/icons-material';
+import { apiService } from '../services/api';
 
 interface AIConfig {
   id: number;
@@ -46,6 +47,10 @@ interface AIConfig {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  // Azure OpenAI specific fields
+  azure_endpoint?: string;
+  azure_deployment_name?: string;
+  api_version?: string;
 }
 
 interface AIStats {
@@ -102,6 +107,10 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
     auto_enhance_new_bundles: false,
     max_requests_per_hour: 100,
     max_concurrent_requests: 5,
+    // Azure OpenAI specific fields
+    azure_endpoint: '',
+    azure_deployment_name: '',
+    api_version: '2024-02-15-preview'
   });
 
   useEffect(() => {
@@ -112,13 +121,7 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
   const loadConfigs = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/v1/admin/ai/config', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!response.ok) throw new Error('Failed to load AI configurations');
-      
-      const data = await response.json();
+      const data = await apiService.getAIConfigurations(token);
       setConfigs(data);
     } catch (err) {
       setError(`Failed to load configurations: ${err}`);
@@ -129,13 +132,7 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
 
   const loadStats = async () => {
     try {
-      const response = await fetch('/api/v1/admin/ai/stats', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!response.ok) throw new Error('Failed to load AI stats');
-      
-      const data = await response.json();
+      const data = await apiService.getAIStats(token);
       setStats(data);
     } catch (err) {
       console.error('Failed to load AI stats:', err);
@@ -145,24 +142,15 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
   const handleSaveConfig = async () => {
     try {
       setLoading(true);
-      const url = editingConfig 
-        ? `/api/v1/admin/ai/config/${editingConfig.id}`
-        : '/api/v1/admin/ai/config';
       
-      const method = editingConfig ? 'PUT' : 'POST';
+      if (editingConfig) {
+        await apiService.updateAIConfiguration(token, editingConfig.id, formData);
+        setSuccess('Configuration updated successfully');
+      } else {
+        await apiService.createAIConfiguration(token, formData);
+        setSuccess('Configuration created successfully');
+      }
       
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-      
-      if (!response.ok) throw new Error('Failed to save configuration');
-      
-      setSuccess(editingConfig ? 'Configuration updated successfully' : 'Configuration created successfully');
       setConfigDialogOpen(false);
       setEditingConfig(null);
       resetForm();
@@ -180,13 +168,7 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
     
     try {
       setLoading(true);
-      const response = await fetch(`/api/v1/admin/ai/config/${configId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!response.ok) throw new Error('Failed to delete configuration');
-      
+      await apiService.deleteAIConfiguration(token, configId);
       setSuccess('Configuration deleted successfully');
       await loadConfigs();
       
@@ -199,18 +181,7 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
 
   const handleEnhancePending = async () => {
     try {
-      const response = await fetch('/api/v1/admin/ai/enhance', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ enhance_pending: true })
-      });
-      
-      if (!response.ok) throw new Error('Failed to start enhancement');
-      
-      const result = await response.json();
+      const result = await apiService.triggerAIEnhancement(token, { enhance_pending: true });
       setEnhancementTask({ task_id: result.task_id, state: 'PENDING' });
       setEnhancementDialogOpen(true);
       
@@ -222,16 +193,42 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
     }
   };
 
+  const handleResetEnhancements = async () => {
+    if (!window.confirm('Are you sure you want to reset ALL AI enhancement data? This will set all CodeBundles back to pending status and clear all AI-generated content.')) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/admin/ai/reset`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      setSuccess(`Successfully reset AI enhancement data for ${result.reset_count} CodeBundles`);
+      
+      // Refresh stats to show updated counts
+      loadStats();
+      
+    } catch (err) {
+      setError(`Failed to reset enhancements: ${err}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const pollEnhancementStatus = async (taskId: string) => {
     const poll = async () => {
       try {
-        const response = await fetch(`/api/v1/admin/ai/enhance/status/${taskId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (!response.ok) return;
-        
-        const status = await response.json();
+        const status = await apiService.getEnhancementStatus(token, taskId);
         setEnhancementTask(status);
         
         if (status.state === 'SUCCESS' || status.state === 'FAILURE') {
@@ -259,6 +256,10 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
       auto_enhance_new_bundles: false,
       max_requests_per_hour: 100,
       max_concurrent_requests: 5,
+      // Azure OpenAI specific fields
+      azure_endpoint: '',
+      azure_deployment_name: '',
+      api_version: '2024-02-15-preview'
     });
   };
 
@@ -272,6 +273,10 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
       auto_enhance_new_bundles: config.auto_enhance_new_bundles,
       max_requests_per_hour: config.max_requests_per_hour,
       max_concurrent_requests: config.max_concurrent_requests,
+      // Azure OpenAI specific fields
+      azure_endpoint: config.azure_endpoint || '',
+      azure_deployment_name: config.azure_deployment_name || '',
+      api_version: config.api_version || '2024-02-15-preview'
     });
     setConfigDialogOpen(true);
   };
@@ -355,6 +360,15 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
           disabled={!configs.some(c => c.is_active && c.enhancement_enabled)}
         >
           Enhance Pending
+        </Button>
+        <Button
+          variant="outlined"
+          color="warning"
+          startIcon={<DeleteIcon />}
+          onClick={handleResetEnhancements}
+          disabled={loading}
+        >
+          Reset All Enhancements
         </Button>
         <Button
           variant="outlined"
@@ -450,6 +464,7 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
               SelectProps={{ native: true }}
             >
               <option value="openai">OpenAI</option>
+              <option value="azure-openai">Azure OpenAI</option>
               <option value="anthropic">Anthropic</option>
             </TextField>
             
@@ -467,6 +482,37 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
               value={formData.model_name}
               onChange={(e) => setFormData({ ...formData, model_name: e.target.value })}
             />
+            
+            {/* Azure OpenAI specific fields */}
+            {formData.service_provider === 'azure-openai' && (
+              <>
+                <TextField
+                  label="Azure Endpoint"
+                  value={formData.azure_endpoint}
+                  onChange={(e) => setFormData({ ...formData, azure_endpoint: e.target.value })}
+                  placeholder="https://your-resource.openai.azure.com"
+                  required
+                  helperText="Your Azure OpenAI resource endpoint URL"
+                />
+                
+                <TextField
+                  label="Deployment Name"
+                  value={formData.azure_deployment_name}
+                  onChange={(e) => setFormData({ ...formData, azure_deployment_name: e.target.value })}
+                  placeholder="gpt-4"
+                  required
+                  helperText="The deployment name in your Azure OpenAI resource"
+                />
+                
+                <TextField
+                  label="API Version"
+                  value={formData.api_version}
+                  onChange={(e) => setFormData({ ...formData, api_version: e.target.value })}
+                  placeholder="2024-02-15-preview"
+                  helperText="Azure OpenAI API version"
+                />
+              </>
+            )}
             
             <FormControlLabel
               control={

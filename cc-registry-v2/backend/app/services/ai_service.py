@@ -7,11 +7,13 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
-from openai import OpenAI
+from openai import OpenAI, AzureOpenAI
 from sqlalchemy.orm import Session
+import requests
 
 from app.core.config import settings
 from app.models import AIConfiguration, Codebundle
+from app.services.ai_prompts import AIPrompts
 
 logger = logging.getLogger(__name__)
 
@@ -38,19 +40,41 @@ class AIEnhancementService:
             self.config.enhancement_enabled
         )
     
+    def _get_ai_client(self):
+        """Get the appropriate AI client based on service provider"""
+        if self.config.service_provider == "azure-openai":
+            if not self.config.azure_endpoint or not self.config.azure_deployment_name:
+                raise ValueError("Azure OpenAI requires azure_endpoint and azure_deployment_name")
+            
+            return AzureOpenAI(
+                api_key=self.config.api_key,
+                api_version=self.config.api_version or "2024-02-15-preview",
+                azure_endpoint=self.config.azure_endpoint
+            )
+        else:
+            # Default to OpenAI
+            return OpenAI(api_key=self.config.api_key)
+    
+    def _get_model_name(self) -> str:
+        """Get the model name to use for API calls"""
+        if self.config.service_provider == "azure-openai":
+            return self.config.azure_deployment_name or self.config.model_name
+        else:
+            return self.config.model_name
+    
     def enhance_codebundle(self, codebundle: Codebundle) -> Dict[str, any]:
         """
         Enhance a CodeBundle with AI-generated description and access classification
         
         Returns:
-            Dict containing enhanced_description, access_level, and iam_requirements
+            Dict containing enhanced_description, access_level, iam_requirements, and enhanced_tasks
         """
         if not self.is_enabled():
             raise ValueError("AI enhancement is not enabled or configured")
         
         try:
-            # Set up OpenAI client
-            client = OpenAI(api_key=self.config.api_key)
+            # Set up AI client based on service provider
+            client = self._get_ai_client()
             
             # Prepare context for AI
             context = self._prepare_codebundle_context(codebundle)
@@ -61,10 +85,17 @@ class AIEnhancementService:
             # Classify access level and determine IAM requirements
             access_level, iam_requirements = self._classify_access_and_iam(context, client)
             
+            # Enhance individual tasks if available in ai_enhanced_metadata
+            enhanced_tasks = []
+            detailed_tasks = codebundle.ai_enhanced_metadata.get("detailed_tasks", []) if codebundle.ai_enhanced_metadata else []
+            if detailed_tasks:
+                enhanced_tasks = self._enhance_individual_tasks(detailed_tasks, context, client)
+            
             return {
                 "enhanced_description": enhanced_description,
                 "access_level": access_level,
                 "iam_requirements": iam_requirements,
+                "enhanced_tasks": enhanced_tasks,
                 "enhancement_metadata": {
                     "model_used": self.config.model_name,
                     "enhanced_at": datetime.utcnow().isoformat(),
@@ -94,15 +125,54 @@ class AIEnhancementService:
     
     def _generate_enhanced_description(self, context: Dict[str, any], client: OpenAI) -> str:
         """Generate an enhanced description using AI"""
-        prompt = self._build_description_prompt(context)
-        
         try:
+            # Use the centralized prompt system
+            prompt = AIPrompts.get_codebundle_prompt(context)
+            system_prompt = AIPrompts.get_system_prompt('codebundle_enhancement')
+            
             response = client.chat.completions.create(
-                model=self.config.model_name,
+                model=self._get_model_name(),
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert in cloud infrastructure and DevOps automation. Your task is to create clear, comprehensive descriptions for automation scripts (CodeBundles) that help users understand what the script does, when to use it, and what value it provides."
+                        "content": system_prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                max_tokens=800,
+                temperature=0.3
+            )
+            
+            # Parse the JSON response to extract just the enhanced_description
+            full_response = json.loads(response.choices[0].message.content.strip())
+            if AIPrompts.validate_response_format(full_response, 'codebundle_enhancement'):
+                return full_response.get('enhanced_description', context.get('description', 'Enhanced description not available'))
+            else:
+                logger.warning("AI response format validation failed for description enhancement")
+                fallback = AIPrompts.get_fallback_response('codebundle_enhancement', context)
+                return fallback['enhanced_description']
+            
+        except Exception as e:
+            logger.error(f"Error generating enhanced description: {e}")
+            fallback = AIPrompts.get_fallback_response('codebundle_enhancement', context)
+            return fallback['enhanced_description']
+    
+    def _classify_access_and_iam(self, context: Dict[str, any], client: OpenAI) -> Tuple[str, List[str]]:
+        """Classify access level and determine IAM requirements"""
+        try:
+            # Use the centralized prompt system
+            prompt = AIPrompts.get_codebundle_prompt(context)
+            system_prompt = AIPrompts.get_system_prompt('codebundle_enhancement')
+            
+            response = client.chat.completions.create(
+                model=self._get_model_name(),
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt
                     },
                     {
                         "role": "user",
@@ -110,101 +180,89 @@ class AIEnhancementService:
                     }
                 ],
                 max_tokens=500,
-                temperature=0.3
-            )
-            
-            return response.choices[0].message.content.strip()
-            
-        except Exception as e:
-            logger.error(f"Error generating enhanced description: {e}")
-            raise
-    
-    def _classify_access_and_iam(self, context: Dict[str, any], client: OpenAI) -> Tuple[str, List[str]]:
-        """Classify access level and determine IAM requirements"""
-        prompt = self._build_access_classification_prompt(context)
-        
-        try:
-            response = client.chat.completions.create(
-                model=self.config.model_name,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """You are an expert in cloud security and IAM permissions. Analyze automation scripts to determine:
-1. Access level: 'read-only' or 'read-write' based on the operations performed
-2. Minimum IAM requirements: List specific permissions, roles, or policies needed
-
-Return your response as JSON with keys: access_level, iam_requirements"""
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                max_tokens=300,
                 temperature=0.1
             )
             
+            # Parse JSON response
             result = json.loads(response.choices[0].message.content.strip())
-            return result.get("access_level", "unknown"), result.get("iam_requirements", [])
+            if AIPrompts.validate_response_format(result, 'codebundle_enhancement'):
+                access_level = result.get("access_level", "unknown")
+                iam_requirements = result.get("iam_requirements", [])
+                return access_level, iam_requirements
+            else:
+                logger.warning("AI response format validation failed for access classification")
+                fallback = AIPrompts.get_fallback_response('codebundle_enhancement', context)
+                return fallback['access_level'], fallback['iam_requirements']
             
         except Exception as e:
             logger.error(f"Error classifying access and IAM: {e}")
-            return "unknown", []
+            fallback = AIPrompts.get_fallback_response('codebundle_enhancement', context)
+            return fallback['access_level'], fallback['iam_requirements']
     
-    def _build_description_prompt(self, context: Dict[str, any]) -> str:
-        """Build prompt for description enhancement"""
-        return f"""
-Please create an enhanced description for this CodeBundle:
 
-Name: {context['name']}
-Display Name: {context['display_name']}
-Current Description: {context['description']}
-Documentation: {context['doc']}
-Author: {context['author']}
-Platform: {context['platform']}
-Resource Types: {context['resource_types']}
-Support Tags: {context['support_tags']}
-Tasks: {context['tasks']}
-Collection: {context['codecollection_name']}
 
-Create a clear, comprehensive description (2-3 sentences) that explains:
-1. What this CodeBundle does
-2. When/why someone would use it
-3. What value or problem it solves
-
-Make it accessible to both technical and non-technical users.
-"""
+    def _enhance_individual_tasks(self, detailed_tasks: List[Dict], context: Dict[str, any], client: OpenAI) -> List[Dict]:
+        """Enhance individual tasks with AI-generated purpose and function descriptions"""
+        enhanced_tasks = []
+        
+        for task in detailed_tasks:
+            try:
+                # Use centralized prompt system
+                task_prompt = AIPrompts.get_task_prompt(task, context)
+                system_prompt = AIPrompts.get_system_prompt('task_enhancement')
+                
+                response = client.chat.completions.create(
+                    model=self._get_model_name(),
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": system_prompt
+                        },
+                        {
+                            "role": "user",
+                            "content": task_prompt
+                        }
+                    ],
+                    max_tokens=600,
+                    temperature=0.3
+                )
+                
+                enhancement = json.loads(response.choices[0].message.content.strip())
+                
+                # Validate response format
+                if AIPrompts.validate_response_format(enhancement, 'task_enhancement'):
+                    enhanced_task = {
+                        **task,  # Keep original task data
+                        "ai_purpose": enhancement.get("purpose", ""),
+                        "ai_function": enhancement.get("function", ""),
+                        "ai_requirements": enhancement.get("requirements", [])
+                    }
+                else:
+                    logger.warning(f"AI response format validation failed for task '{task.get('name', 'unknown')}'")
+                    fallback = AIPrompts.get_fallback_response('task_enhancement', task)
+                    enhanced_task = {
+                        **task,  # Keep original task data
+                        "ai_purpose": fallback.get("purpose", ""),
+                        "ai_function": fallback.get("function", ""),
+                        "ai_requirements": fallback.get("requirements", [])
+                    }
+                
+                enhanced_tasks.append(enhanced_task)
+                
+            except Exception as e:
+                logger.warning(f"Failed to enhance task '{task.get('name', 'unknown')}': {e}")
+                # Use fallback response
+                fallback = AIPrompts.get_fallback_response('task_enhancement', task)
+                enhanced_task = {
+                    **task,  # Keep original task data
+                    "ai_purpose": fallback.get("purpose", ""),
+                    "ai_function": fallback.get("function", ""),
+                    "ai_requirements": fallback.get("requirements", [])
+                }
+                enhanced_tasks.append(enhanced_task)
+        
+        return enhanced_tasks
     
-    def _build_access_classification_prompt(self, context: Dict[str, any]) -> str:
-        """Build prompt for access classification"""
-        return f"""
-Analyze this CodeBundle to determine access requirements:
-
-Name: {context['name']}
-Tasks: {context['tasks']}
-Platform: {context['platform']}
-Resource Types: {context['resource_types']}
-Support Tags: {context['support_tags']}
-Documentation: {context['doc']}
-
-Based on the task names and operations, determine:
-
-1. Access Level: 
-   - "read-only" if it only reads/monitors/checks status
-   - "read-write" if it modifies, creates, deletes, or changes resources
-
-2. IAM Requirements: List the minimum permissions needed, such as:
-   - AWS: Specific IAM policies or actions (e.g., "ec2:DescribeInstances", "s3:GetObject")
-   - Kubernetes: RBAC permissions (e.g., "pods:get", "deployments:list")
-   - Azure: Role assignments or permissions
-   - GCP: IAM roles or permissions
-
-Return as JSON format:
-{{
-  "access_level": "read-only" or "read-write",
-  "iam_requirements": ["permission1", "permission2", ...]
-}}
-"""
 
 
 def get_ai_service(db_session: Session) -> AIEnhancementService:

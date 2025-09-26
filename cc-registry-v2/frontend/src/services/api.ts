@@ -146,6 +146,22 @@ export interface CodeBundle {
   minimum_iam_requirements?: string[];
   enhancement_status?: 'pending' | 'processing' | 'completed' | 'failed';
   last_enhanced?: string;
+  ai_enhanced_metadata?: {
+    enhanced_tasks?: Array<{
+      name: string;
+      description: string;
+      documentation: string;
+      tags: string[];
+      steps: string[];
+      ai_purpose?: string;
+      ai_function?: string;
+      ai_requirements?: string[];
+    }>;
+    model_used?: string;
+    enhanced_at?: string;
+    service_provider?: string;
+    [key: string]: any;
+  };
   codecollection: {
     id: number;
     name: string;
@@ -482,6 +498,37 @@ export const apiService = {
 
   async getAIStats(token: string) {
     const response = await api.get('/admin/ai/stats', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  // Admin Inventory endpoints
+  async getInventoryStats(token: string) {
+    const response = await api.get('/admin/inventory/stats', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async getInventoryCodebundles(token: string, params: any = {}) {
+    const response = await api.get('/admin/inventory/codebundles', {
+      headers: { Authorization: `Bearer ${token}` },
+      params
+    });
+    return response.data;
+  },
+
+  async getInventoryCollections(token: string, params: any = {}) {
+    const response = await api.get('/admin/inventory/collections', {
+      headers: { Authorization: `Bearer ${token}` },
+      params
+    });
+    return response.data;
+  },
+
+  async getInventoryCodebundle(token: string, codebundleId: number) {
+    const response = await api.get(`/admin/inventory/codebundles/${codebundleId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data;

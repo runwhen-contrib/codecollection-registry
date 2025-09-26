@@ -801,12 +801,44 @@ def _parse_robot_file_content(content: str, file_path: str) -> Optional[Dict[str
             
             # Extract tasks/test cases (both TestCase and Task objects)
             tasks = []
+            detailed_tasks = []
             if hasattr(model, 'sections'):
                 for section in model.sections:
                     if hasattr(section, 'body'):
                         for item in section.body:
                             if isinstance(item, TestCase):
+                                # Extract basic task name for backward compatibility
                                 tasks.append(item.name)
+                                
+                                # Extract detailed task information
+                                task_info = {
+                                    'name': item.name,
+                                    'description': '',
+                                    'documentation': '',
+                                    'tags': [],
+                                    'steps': []
+                                }
+                                
+                                # Extract task documentation
+                                if hasattr(item, 'doc') and item.doc:
+                                    task_info['documentation'] = str(item.doc)
+                                    # Use first line as description
+                                    doc_lines = str(item.doc).split('\n')
+                                    task_info['description'] = doc_lines[0].strip() if doc_lines else ''
+                                
+                                # Extract task tags
+                                if hasattr(item, 'tags') and item.tags:
+                                    task_info['tags'] = [str(tag) for tag in item.tags]
+                                
+                                # Extract task steps/keywords
+                                if hasattr(item, 'body') and item.body:
+                                    for step in item.body:
+                                        if hasattr(step, 'keyword'):
+                                            step_name = str(step.keyword) if step.keyword else ''
+                                            if step_name and not step_name.startswith('['):  # Skip settings like [Documentation]
+                                                task_info['steps'].append(step_name)
+                                
+                                detailed_tasks.append(task_info)
             
             # Extract metadata from settings
             author = ""
@@ -849,7 +881,8 @@ def _parse_robot_file_content(content: str, file_path: str) -> Optional[Dict[str
                 'description': doc.split('\n')[0] if doc else f"Codebundle for {name.replace('-', ' ').replace('_', ' ').title()}",
                 'doc': doc,
                 'author': author,
-                'tasks': tasks,
+                'tasks': tasks,  # Keep for backward compatibility
+                'detailed_tasks': detailed_tasks,  # New detailed task information
                 'support_tags': tags,
                 'runbook_path': file_path,
                 'task_count': len(tasks)

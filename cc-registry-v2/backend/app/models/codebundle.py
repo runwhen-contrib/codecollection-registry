@@ -27,7 +27,7 @@ class Codebundle(Base):
     runbook_source_url = Column(String(500))
     
     # Task and SLI data
-    tasks = Column(JSON, default=list)  # List of task names
+    tasks = Column(JSON, default=list)  # List of task names (backward compatibility)
     slis = Column(JSON, default=list)    # List of SLI names
     task_count = Column(Integer, default=0)
     sli_count = Column(Integer, default=0)

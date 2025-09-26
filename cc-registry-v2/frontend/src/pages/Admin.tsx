@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { apiService } from '../services/api';
 import AIConfiguration from '../components/AIConfiguration';
+import AdminInventory from './AdminInventory';
 
 const Admin: React.FC = () => {
   const [token, setToken] = useState('admin-dev-token');
@@ -93,6 +94,7 @@ const Admin: React.FC = () => {
       <Tabs value={currentTab} onChange={handleTabChange} sx={{ mb: 3 }}>
         <Tab label="Data Management" />
         <Tab label="AI Configuration" />
+        <Tab label="Database Inventory" />
       </Tabs>
 
       {currentTab === 0 && (
@@ -236,6 +238,10 @@ const Admin: React.FC = () => {
 
       {currentTab === 1 && (
         <AIConfiguration token={token} />
+      )}
+
+      {currentTab === 2 && (
+        <AdminInventory />
       )}
     </Container>
   );

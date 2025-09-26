@@ -13,6 +13,10 @@ import {
   ListItemText,
   Divider,
   Button,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  GridLegacy as Grid,
 } from '@mui/material';
 import { 
   GitHub as GitHubIcon, 
@@ -20,7 +24,11 @@ import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Add as AddIcon,
-  Remove as RemoveIcon
+  Remove as RemoveIcon,
+  ExpandMore as ExpandMoreIcon,
+  AutoAwesome as AutoAwesomeIcon,
+  Security as SecurityIcon,
+  Description as DescriptionIcon
 } from '@mui/icons-material';
 import { useParams, Link } from 'react-router-dom';
 import { apiService, CodeBundle } from '../services/api';
@@ -197,6 +205,207 @@ const CodeBundleDetail: React.FC = () => {
                     </React.Fragment>
                   ))}
                 </List>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Additional Details */}
+          {(codebundle.ai_enhanced_description || 
+            codebundle.access_level !== 'unknown' || 
+            (codebundle.minimum_iam_requirements && codebundle.minimum_iam_requirements.length > 0) ||
+            (codebundle.ai_enhanced_metadata?.enhanced_tasks && codebundle.ai_enhanced_metadata.enhanced_tasks.length > 0)) && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                  <AutoAwesomeIcon sx={{ mr: 1, color: 'primary.main' }} />
+                  <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                    Additional Details
+                  </Typography>
+                  <Chip 
+                    label={codebundle.enhancement_status || 'pending'} 
+                    size="small" 
+                    color={
+                      codebundle.enhancement_status === 'completed' ? 'success' :
+                      codebundle.enhancement_status === 'processing' ? 'warning' :
+                      codebundle.enhancement_status === 'failed' ? 'error' : 'default'
+                    }
+                    sx={{ ml: 2 }}
+                  />
+                </Box>
+
+                {/* Enhanced Description */}
+                {codebundle.ai_enhanced_description && (
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <DescriptionIcon sx={{ mr: 1, fontSize: '1.2rem' }} />
+                        <Typography variant="subtitle1">Enhanced Description</Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                        {codebundle.ai_enhanced_description}
+                      </Typography>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                {/* Security & Access */}
+                {(codebundle.access_level !== 'unknown' || 
+                  (codebundle.minimum_iam_requirements && codebundle.minimum_iam_requirements.length > 0)) && (
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <SecurityIcon sx={{ mr: 1, fontSize: '1.2rem' }} />
+                        <Typography variant="subtitle1">Security & Access</Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {codebundle.access_level !== 'unknown' && (
+                          <Box>
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                              <strong>Access Level:</strong>
+                            </Typography>
+                            <Chip 
+                              label={codebundle.access_level} 
+                              size="small"
+                              color={
+                                codebundle.access_level === 'read-only' ? 'success' :
+                                codebundle.access_level === 'read-write' ? 'warning' : 'default'
+                              }
+                            />
+                          </Box>
+                        )}
+                        {codebundle.minimum_iam_requirements && codebundle.minimum_iam_requirements.length > 0 && (
+                          <Box>
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                              <strong>Minimum IAM Requirements:</strong>
+                            </Typography>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              {codebundle.minimum_iam_requirements.map((requirement, index) => (
+                                <Chip 
+                                  key={index}
+                                  label={requirement} 
+                                  size="small"
+                                  variant="outlined"
+                                />
+                              ))}
+                            </Box>
+                          </Box>
+                        )}
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                {/* Enhanced Task Details */}
+                {codebundle.ai_enhanced_metadata?.enhanced_tasks && 
+                 codebundle.ai_enhanced_metadata.enhanced_tasks.length > 0 && (
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="subtitle1">
+                        Enhanced Task Details ({codebundle.ai_enhanced_metadata.enhanced_tasks.length})
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {codebundle.ai_enhanced_metadata.enhanced_tasks.map((task, index) => (
+                          <Card key={index} variant="outlined">
+                            <CardContent sx={{ p: 2 }}>
+                              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                {task.name}
+                              </Typography>
+                              
+                              {task.ai_purpose && (
+                                <Box sx={{ mb: 1 }}>
+                                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
+                                    Purpose:
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    {task.ai_purpose}
+                                  </Typography>
+                                </Box>
+                              )}
+                              
+                              {task.ai_function && (
+                                <Box sx={{ mb: 1 }}>
+                                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
+                                    Function:
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    {task.ai_function}
+                                  </Typography>
+                                </Box>
+                              )}
+                              
+                              {task.ai_requirements && task.ai_requirements.length > 0 && (
+                                <Box sx={{ mb: 1 }}>
+                                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
+                                    Requirements:
+                                  </Typography>
+                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                                    {task.ai_requirements.map((req, reqIndex) => (
+                                      <Chip 
+                                        key={reqIndex}
+                                        label={req} 
+                                        size="small"
+                                        variant="outlined"
+                                        color="secondary"
+                                      />
+                                    ))}
+                                  </Box>
+                                </Box>
+                              )}
+                              
+                              {task.tags && task.tags.length > 0 && (
+                                <Box>
+                                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
+                                    Tags:
+                                  </Typography>
+                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                                    {task.tags.map((tag, tagIndex) => (
+                                      <Chip 
+                                        key={tagIndex}
+                                        label={tag} 
+                                        size="small"
+                                        variant="outlined"
+                                      />
+                                    ))}
+                                  </Box>
+                                </Box>
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                {/* Enhancement Metadata */}
+                {codebundle.ai_enhanced_metadata && (
+                  codebundle.ai_enhanced_metadata.model_used || 
+                  codebundle.ai_enhanced_metadata.enhanced_at ||
+                  codebundle.last_enhanced
+                ) && (
+                  <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {codebundle.ai_enhanced_metadata.enhanced_at && (
+                        <>Enhanced: {new Date(codebundle.ai_enhanced_metadata.enhanced_at).toLocaleString()}</>
+                      )}
+                      {!codebundle.ai_enhanced_metadata.enhanced_at && codebundle.last_enhanced && (
+                        <>Enhanced: {new Date(codebundle.last_enhanced).toLocaleString()}</>
+                      )}
+                      {codebundle.ai_enhanced_metadata.model_used && (
+                        <> • Model: {codebundle.ai_enhanced_metadata.model_used}</>
+                      )}
+                      {codebundle.ai_enhanced_metadata.service_provider && (
+                        <> • Provider: {codebundle.ai_enhanced_metadata.service_provider}</>
+                      )}
+                    </Typography>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           )}
@@ -389,6 +598,7 @@ const CodeBundleDetail: React.FC = () => {
             </Card>
           )}
         </Box>
+
       </Box>
     </Container>
   );

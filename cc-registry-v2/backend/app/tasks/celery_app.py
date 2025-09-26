@@ -12,7 +12,8 @@ celery_app = Celery(
     include=[
         "app.tasks.data_tasks",
         "app.tasks.sync_tasks",
-        "app.tasks.registry_tasks"
+        "app.tasks.registry_tasks",
+        "app.tasks.ai_enhancement_tasks"
     ]
 )
 

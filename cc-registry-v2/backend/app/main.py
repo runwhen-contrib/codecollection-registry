@@ -85,12 +85,13 @@ async def health_check():
     }
 
 # Include routers
-from app.routers import admin, tasks, raw_data, admin_crud, ai_admin, versions, task_management
+from app.routers import admin, tasks, raw_data, admin_crud, ai_admin, versions, task_management, admin_inventory
 app.include_router(admin.router)
 app.include_router(tasks.router)
 app.include_router(raw_data.router)
 app.include_router(admin_crud.router)
 app.include_router(ai_admin.router)
+app.include_router(admin_inventory.router)
 app.include_router(versions.router, prefix="/api/v1/registry")
 app.include_router(task_management.router)
 
@@ -378,20 +379,34 @@ async def list_codebundles():
                     "author": cb.author,
                     "support_tags": cb.support_tags,
                     "tasks": cb.tasks,
+                    "slis": cb.slis,
                     "task_count": cb.task_count,
+                    "sli_count": cb.sli_count,
+                    "runbook_source_url": cb.runbook_source_url,
                     "created_at": cb.created_at,
+                    # AI Enhancement fields
+                    "enhancement_status": cb.enhancement_status or "pending",
+                    "ai_enhanced_description": cb.ai_enhanced_description,
+                    "access_level": cb.access_level or "unknown",
+                    "minimum_iam_requirements": cb.minimum_iam_requirements or [],
+                    "ai_enhanced_metadata": cb.ai_enhanced_metadata or {},
+                    "last_enhanced": cb.last_enhanced,
                     # Discovery information
                     "discovery": {
                         "is_discoverable": cb.is_discoverable,
                         "platform": cb.discovery_platform,
                         "resource_types": cb.discovery_resource_types,
+                        "match_patterns": cb.discovery_match_patterns,
                         "templates": cb.discovery_templates,
-                        "level_of_detail": cb.discovery_level_of_detail
+                        "output_items": cb.discovery_output_items,
+                        "level_of_detail": cb.discovery_level_of_detail,
+                        "runwhen_directory_path": cb.runwhen_directory_path
                     },
                     "codecollection": {
                         "id": collection.id,
                         "name": collection.name,
-                        "slug": collection.slug
+                        "slug": collection.slug,
+                        "git_url": collection.git_url
                     } if collection else None
                 })
             
@@ -454,6 +469,13 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
                 "runbook_source_url": codebundle.runbook_source_url,
                 "created_at": codebundle.created_at,
                 "updated_at": codebundle.updated_at,
+                # AI Enhancement fields
+                "enhancement_status": codebundle.enhancement_status or "pending",
+                "ai_enhanced_description": codebundle.ai_enhanced_description,
+                "access_level": codebundle.access_level or "unknown",
+                "minimum_iam_requirements": codebundle.minimum_iam_requirements or [],
+                "ai_enhanced_metadata": codebundle.ai_enhanced_metadata or {},
+                "last_enhanced": codebundle.last_enhanced,
                 # Discovery information
                 "discovery": {
                     "is_discoverable": codebundle.is_discoverable,

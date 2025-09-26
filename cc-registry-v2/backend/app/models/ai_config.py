@@ -9,9 +9,14 @@ class AIConfiguration(Base):
     id = Column(Integer, primary_key=True, index=True)
     
     # AI Service Configuration
-    service_provider = Column(String(50), default="openai")  # openai, anthropic, etc.
-    api_key = Column(String(500))  # Encrypted API key
+    service_provider = Column(String(50), default="openai")  # openai, azure-openai, anthropic, etc.
+    api_key = Column(String(500))  # API key or token
     model_name = Column(String(100), default="gpt-4")
+    
+    # Azure OpenAI specific settings
+    azure_endpoint = Column(String(500))  # Azure OpenAI endpoint URL
+    azure_deployment_name = Column(String(100))  # Deployment name in Azure
+    api_version = Column(String(20), default="2024-02-15-preview")  # Azure API version
     
     # Enhancement Settings
     enhancement_enabled = Column(Boolean, default=False)
