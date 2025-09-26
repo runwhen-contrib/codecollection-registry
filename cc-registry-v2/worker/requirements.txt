@@ -31,6 +31,7 @@ flower==2.0.1
 
 # AI Integration
 openai>=1.0.0
+requests>=2.25.0
 
 # Environment
 python-dotenv==1.0.0

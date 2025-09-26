@@ -91,6 +91,34 @@ const Admin: React.FC = () => {
         Admin Panel
       </Typography>
 
+      {/* Quick Navigation */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Quick Navigation
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Button 
+              variant="outlined" 
+              onClick={() => window.open('/admin/ai-enhancement', '_blank')}
+              sx={{ minWidth: 200 }}
+            >
+              🤖 AI Enhancement Admin
+            </Button>
+            <Button 
+              variant="outlined" 
+              onClick={() => window.open('/tasks', '_blank')}
+              sx={{ minWidth: 200 }}
+            >
+              📋 Task Manager
+            </Button>
+          </Box>
+          <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+            Access specialized admin interfaces for AI enhancement and task management
+          </Typography>
+        </CardContent>
+      </Card>
+
       <Tabs value={currentTab} onChange={handleTabChange} sx={{ mb: 3 }}>
         <Tab label="Data Management" />
         <Tab label="AI Configuration" />

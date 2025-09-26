@@ -16,13 +16,13 @@ logger = logging.getLogger(__name__)
 
 # Try to import AI service, but handle gracefully if not available
 try:
-    from app.services.ai_service import get_ai_service
+    from app.services.enhanced_ai_service import get_enhanced_ai_service
     AI_SERVICE_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"AI service not available: {e}")
+    logger.warning(f"Enhanced AI service not available: {e}")
     AI_SERVICE_AVAILABLE = False
     
-    def get_ai_service(db):
+    def get_enhanced_ai_service(db):
         return None
 
 
@@ -49,17 +49,17 @@ def enhance_codebundle_task(self, codebundle_id: int):
             db.commit()
             raise ValueError("AI service is not available - missing dependencies")
             
-        ai_service = get_ai_service(db)
+        ai_service = get_enhanced_ai_service(db)
         
         if not ai_service or not ai_service.is_enabled():
             codebundle.enhancement_status = "failed"
             db.commit()
             raise ValueError("AI enhancement is not enabled or configured")
         
-        # Perform enhancement
+        # Perform enhancement with full logging
         self.update_state(state='PROGRESS', meta={'status': 'Enhancing with AI...'})
         
-        enhancement_result = ai_service.enhance_codebundle(codebundle)
+        enhancement_result = ai_service.enhance_codebundle_with_logging(codebundle)
         
         # Update codebundle with enhanced data
         codebundle.ai_enhanced_description = enhancement_result["enhanced_description"]
@@ -121,29 +121,115 @@ def enhance_multiple_codebundles_task(self, codebundle_ids: List[int]):
         results = []
         
         for i, codebundle_id in enumerate(codebundle_ids):
+            self.update_state(
+                state='PROGRESS', 
+                meta={
+                    'current': i + 1,
+                    'total': total_bundles,
+                    'status': f'Processing CodeBundle {codebundle_id}...'
+                }
+            )
+            
             try:
-                self.update_state(
-                    state='PROGRESS', 
-                    meta={
-                        'current': i + 1,
-                        'total': total_bundles,
-                        'status': f'Processing CodeBundle {codebundle_id}...'
-                    }
-                )
+                # Get the codebundle
+                codebundle = db.query(Codebundle).filter(Codebundle.id == codebundle_id).first()
+                if not codebundle:
+                    failed += 1
+                    results.append({
+                        'status': 'failed',
+                        'codebundle_id': codebundle_id,
+                        'error': f"CodeBundle with id {codebundle_id} not found"
+                    })
+                    continue
                 
-                # Run individual enhancement
-                result = enhance_codebundle_task.apply(args=[codebundle_id])
-                results.append(result.get())
+                # Update status to processing
+                codebundle.enhancement_status = "processing"
+                db.commit()
+                
+                # Check AI service availability
+                if not AI_SERVICE_AVAILABLE:
+                    codebundle.enhancement_status = "failed"
+                    db.commit()
+                    failed += 1
+                    results.append({
+                        'status': 'failed',
+                        'codebundle_id': codebundle_id,
+                        'error': "AI service is not available - missing dependencies"
+                    })
+                    continue
+                    
+                ai_service = get_enhanced_ai_service(db)
+                
+                if not ai_service or not ai_service.is_enabled():
+                    codebundle.enhancement_status = "failed"
+                    db.commit()
+                    failed += 1
+                    results.append({
+                        'status': 'failed',
+                        'codebundle_id': codebundle_id,
+                        'error': "AI enhancement is not enabled or configured"
+                    })
+                    continue
+                
+                # Perform enhancement with full logging
+                enhancement_result = ai_service.enhance_codebundle_with_logging(codebundle)
+                
+                # Update codebundle with enhanced data
+                codebundle.ai_enhanced_description = enhancement_result["enhanced_description"]
+                codebundle.access_level = enhancement_result["access_level"]
+                codebundle.minimum_iam_requirements = enhancement_result["iam_requirements"]
+                
+                # Store enhanced tasks in AI metadata
+                if enhancement_result.get("enhanced_tasks"):
+                    if not codebundle.ai_enhanced_metadata:
+                        codebundle.ai_enhanced_metadata = {}
+                    codebundle.ai_enhanced_metadata["enhanced_tasks"] = enhancement_result["enhanced_tasks"]
+                
+                # Update AI metadata
+                codebundle.ai_enhanced_metadata = enhancement_result["enhancement_metadata"]
+                codebundle.enhancement_status = "completed"
+                codebundle.last_enhanced = datetime.utcnow()
+                
+                db.commit()
+                
                 completed += 1
+                results.append({
+                    'status': 'success',
+                    'codebundle_id': codebundle_id,
+                    'codebundle_slug': codebundle.slug
+                })
+                
+                logger.info(f"Successfully enhanced CodeBundle {codebundle.slug}")
                 
             except Exception as e:
                 logger.error(f"Failed to enhance CodeBundle {codebundle_id}: {e}")
+                
+                # Update status to failed
+                try:
+                    codebundle = db.query(Codebundle).filter(Codebundle.id == codebundle_id).first()
+                    if codebundle:
+                        codebundle.enhancement_status = "failed"
+                        db.commit()
+                except Exception as db_error:
+                    logger.error(f"Error updating failed status: {db_error}")
+                
                 failed += 1
                 results.append({
                     'status': 'failed',
                     'codebundle_id': codebundle_id,
                     'error': str(e)
                 })
+        
+        self.update_state(
+            state='SUCCESS', 
+            meta={
+                'current': total_bundles,
+                'total': total_bundles,
+                'status': 'Completed',
+                'completed': completed,
+                'failed': failed
+            }
+        )
         
         return {
             'status': 'completed',
@@ -179,10 +265,97 @@ def enhance_collection_codebundles_task(self, collection_slug: str):
                 'message': f'No active CodeBundles found in collection {collection_slug}'
             }
         
-        codebundle_ids = [cb.id for cb in codebundles]
+        # Process codebundles directly in this task (no nested tasks)
+        completed = 0
+        failed = 0
+        results = []
         
-        # Run batch enhancement
-        return enhance_multiple_codebundles_task.apply(args=[codebundle_ids]).get()
+        for codebundle in codebundles:
+            try:
+                # Update status to processing
+                codebundle.enhancement_status = "processing"
+                db.commit()
+                
+                # Check AI service availability
+                if not AI_SERVICE_AVAILABLE:
+                    codebundle.enhancement_status = "failed"
+                    db.commit()
+                    failed += 1
+                    results.append({
+                        'status': 'failed',
+                        'codebundle_id': codebundle.id,
+                        'error': "AI service is not available - missing dependencies"
+                    })
+                    continue
+                    
+                ai_service = get_enhanced_ai_service(db)
+                
+                if not ai_service or not ai_service.is_enabled():
+                    codebundle.enhancement_status = "failed"
+                    db.commit()
+                    failed += 1
+                    results.append({
+                        'status': 'failed',
+                        'codebundle_id': codebundle.id,
+                        'error': "AI enhancement is not enabled or configured"
+                    })
+                    continue
+                
+                # Perform enhancement with full logging
+                enhancement_result = ai_service.enhance_codebundle_with_logging(codebundle)
+                
+                # Update codebundle with enhanced data
+                codebundle.ai_enhanced_description = enhancement_result["enhanced_description"]
+                codebundle.access_level = enhancement_result["access_level"]
+                codebundle.minimum_iam_requirements = enhancement_result["iam_requirements"]
+                
+                # Store enhanced tasks in AI metadata
+                if enhancement_result.get("enhanced_tasks"):
+                    if not codebundle.ai_enhanced_metadata:
+                        codebundle.ai_enhanced_metadata = {}
+                    codebundle.ai_enhanced_metadata["enhanced_tasks"] = enhancement_result["enhanced_tasks"]
+                
+                # Update AI metadata
+                codebundle.ai_enhanced_metadata = enhancement_result["enhancement_metadata"]
+                codebundle.enhancement_status = "completed"
+                codebundle.last_enhanced = datetime.utcnow()
+                
+                db.commit()
+                
+                completed += 1
+                results.append({
+                    'status': 'success',
+                    'codebundle_id': codebundle.id,
+                    'codebundle_slug': codebundle.slug
+                })
+                
+                logger.info(f"Successfully enhanced CodeBundle {codebundle.slug}")
+                
+            except Exception as e:
+                logger.error(f"Failed to enhance CodeBundle {codebundle.id}: {e}")
+                
+                # Update status to failed
+                try:
+                    codebundle.enhancement_status = "failed"
+                    db.commit()
+                except Exception as db_error:
+                    logger.error(f"Error updating failed status: {db_error}")
+                
+                failed += 1
+                results.append({
+                    'status': 'failed',
+                    'codebundle_id': codebundle.id,
+                    'error': str(e)
+                })
+        
+        return {
+            'status': 'completed',
+            'collection_slug': collection_slug,
+            'total_processed': len(codebundles),
+            'completed': completed,
+            'failed': failed,
+            'results': results
+        }
         
     except Exception as e:
         logger.error(f"Error enhancing collection {collection_slug}: {e}")
@@ -215,13 +388,100 @@ def enhance_pending_codebundles_task(self, limit: Optional[int] = None):
                 'message': 'No pending CodeBundles found'
             }
         
-        codebundle_ids = [cb.id for cb in codebundles]
+        # Process codebundles directly in this task (no nested tasks)
+        completed = 0
+        failed = 0
+        results = []
         
-        # Run batch enhancement
-        return enhance_multiple_codebundles_task.apply(args=[codebundle_ids]).get()
+        for codebundle in codebundles:
+            try:
+                # Update status to processing
+                codebundle.enhancement_status = "processing"
+                db.commit()
+                
+                # Check AI service availability
+                if not AI_SERVICE_AVAILABLE:
+                    codebundle.enhancement_status = "failed"
+                    db.commit()
+                    failed += 1
+                    results.append({
+                        'status': 'failed',
+                        'codebundle_id': codebundle.id,
+                        'error': "AI service is not available - missing dependencies"
+                    })
+                    continue
+                    
+                ai_service = get_enhanced_ai_service(db)
+                
+                if not ai_service or not ai_service.is_enabled():
+                    codebundle.enhancement_status = "failed"
+                    db.commit()
+                    failed += 1
+                    results.append({
+                        'status': 'failed',
+                        'codebundle_id': codebundle.id,
+                        'error': "AI enhancement is not enabled or configured"
+                    })
+                    continue
+                
+                # Perform enhancement with full logging
+                enhancement_result = ai_service.enhance_codebundle_with_logging(codebundle)
+                
+                # Update codebundle with enhanced data
+                codebundle.ai_enhanced_description = enhancement_result["enhanced_description"]
+                codebundle.access_level = enhancement_result["access_level"]
+                codebundle.minimum_iam_requirements = enhancement_result["iam_requirements"]
+                
+                # Store enhanced tasks in AI metadata
+                if enhancement_result.get("enhanced_tasks"):
+                    if not codebundle.ai_enhanced_metadata:
+                        codebundle.ai_enhanced_metadata = {}
+                    codebundle.ai_enhanced_metadata["enhanced_tasks"] = enhancement_result["enhanced_tasks"]
+                
+                # Update AI metadata
+                codebundle.ai_enhanced_metadata = enhancement_result["enhancement_metadata"]
+                codebundle.enhancement_status = "completed"
+                codebundle.last_enhanced = datetime.utcnow()
+                
+                db.commit()
+                
+                completed += 1
+                results.append({
+                    'status': 'success',
+                    'codebundle_id': codebundle.id,
+                    'codebundle_slug': codebundle.slug
+                })
+                
+                logger.info(f"Successfully enhanced CodeBundle {codebundle.slug}")
+                
+            except Exception as e:
+                logger.error(f"Failed to enhance CodeBundle {codebundle.id}: {e}")
+                
+                # Update status to failed
+                try:
+                    codebundle.enhancement_status = "failed"
+                    db.commit()
+                except Exception as db_error:
+                    logger.error(f"Error updating failed status: {db_error}")
+                
+                failed += 1
+                results.append({
+                    'status': 'failed',
+                    'codebundle_id': codebundle.id,
+                    'error': str(e)
+                })
+        
+        return {
+            'status': 'completed',
+            'total_processed': len(codebundles),
+            'completed': completed,
+            'failed': failed,
+            'results': results
+        }
         
     except Exception as e:
         logger.error(f"Error enhancing pending CodeBundles: {e}")
         self.update_state(state='FAILURE', meta={'error': str(e)})
         raise
+
 

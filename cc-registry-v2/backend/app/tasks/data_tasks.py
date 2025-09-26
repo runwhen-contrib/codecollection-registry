@@ -248,26 +248,28 @@ def parse_stored_data_task(self):
 
 @celery_app.task(bind=True)
 def populate_registry_task(self, collection_slugs: List[str] = None):
-    """Orchestrate full registry population"""
+    """Orchestrate full registry population using Celery chains"""
     try:
-        # Step 1: Store YAML data
-        yaml_result = store_yaml_data_task.apply_async()
-        yaml_result.get()  # Wait for completion
+        # Use Celery chain to sequence tasks without .get()
+        from celery import chain
         
-        # Step 2: Clone repositories
-        clone_result = clone_repositories_task.apply_async(args=[collection_slugs])
-        clone_result.get()  # Wait for completion
+        # Create a chain of tasks that will execute sequentially
+        workflow = chain(
+            store_yaml_data_task.s(),
+            clone_repositories_task.s(collection_slugs),
+            parse_stored_data_task.s()
+        )
         
-        # Step 3: Parse stored data
-        parse_result = parse_stored_data_task.apply_async()
-        parse_result.get()  # Wait for completion
+        # Apply the chain and return the result
+        result = workflow.apply_async()
         
         return {
             'status': 'success',
-            'message': 'Registry population completed successfully',
-            'steps_completed': ['yaml_storage', 'repository_cloning', 'data_parsing']
+            'message': 'Registry population workflow started',
+            'workflow_id': result.id,
+            'steps_planned': ['yaml_storage', 'repository_cloning', 'data_parsing']
         }
         
     except Exception as e:
-        logger.error(f"Failed to populate registry: {e}")
+        logger.error(f"Failed to start registry population workflow: {e}")
         raise

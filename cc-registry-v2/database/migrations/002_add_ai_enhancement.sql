@@ -33,3 +33,4 @@ CREATE INDEX idx_codebundles_access_level ON codebundles(access_level);
 -- Create index on enhancement status for monitoring
 CREATE INDEX idx_codebundles_enhancement_status ON codebundles(enhancement_status);
 
+

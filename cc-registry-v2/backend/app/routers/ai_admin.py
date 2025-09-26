@@ -411,3 +411,4 @@ async def get_enhancement_stats(
         "completion_rate": round((completed / total_codebundles * 100), 2) if total_codebundles > 0 else 0
     }
 
+

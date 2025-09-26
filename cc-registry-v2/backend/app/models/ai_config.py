@@ -36,3 +36,4 @@ class AIConfiguration(Base):
     def __repr__(self):
         return f"<AIConfiguration(id={self.id}, provider='{self.service_provider}', active={self.is_active})>"
 
+

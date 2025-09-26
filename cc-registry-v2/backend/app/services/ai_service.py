@@ -109,19 +109,93 @@ class AIEnhancementService:
     
     def _prepare_codebundle_context(self, codebundle: Codebundle) -> Dict[str, any]:
         """Prepare context information for AI processing"""
+        # Get actual robot file content if available
+        robot_content = self._get_robot_file_content(codebundle)
+        
+        # Filter out placeholder tasks
+        actual_tasks = []
+        if codebundle.tasks:
+            for task in codebundle.tasks:
+                if not (isinstance(task, str) and ('${' in task or task.strip() == '')):
+                    actual_tasks.append(task)
+        
+        # If we have robot content, extract real task names
+        if robot_content and not actual_tasks:
+            actual_tasks = self._extract_task_names_from_robot(robot_content)
+        
         return {
             "name": codebundle.name,
             "display_name": codebundle.display_name,
             "description": codebundle.description,
             "doc": codebundle.doc,
             "author": codebundle.author,
-            "support_tags": codebundle.support_tags,
-            "tasks": codebundle.tasks,
-            "task_count": codebundle.task_count,
-            "platform": codebundle.discovery_platform,
-            "resource_types": codebundle.discovery_resource_types,
-            "codecollection_name": codebundle.codecollection.name if codebundle.codecollection else None
+            "support_tags": codebundle.support_tags or [],
+            "tasks": actual_tasks,
+            "task_count": len(actual_tasks),
+            "platform": codebundle.discovery_platform or "Generic",
+            "resource_types": codebundle.discovery_resource_types or [],
+            "codecollection_name": codebundle.codecollection.name if codebundle.codecollection else "Unknown",
+            "robot_content": robot_content[:1000] if robot_content else None  # First 1000 chars for context
         }
+    
+    def _get_robot_file_content(self, codebundle: Codebundle) -> Optional[str]:
+        """Get the actual robot file content from the database"""
+        try:
+            from app.models import RawRepositoryData
+            
+            # Look for the robot file in raw repository data
+            robot_file = self.db.query(RawRepositoryData).filter(
+                RawRepositoryData.collection_slug == codebundle.codecollection.slug,
+                RawRepositoryData.file_path.like(f'%{codebundle.slug}%'),
+                RawRepositoryData.file_type == 'robot'
+            ).first()
+            
+            if robot_file:
+                return robot_file.content
+            
+            # Fallback: try to find by runbook path
+            if codebundle.runbook_path:
+                robot_file = self.db.query(RawRepositoryData).filter(
+                    RawRepositoryData.collection_slug == codebundle.codecollection.slug,
+                    RawRepositoryData.file_path == codebundle.runbook_path
+                ).first()
+                
+                if robot_file:
+                    return robot_file.content
+                    
+        except Exception as e:
+            logger.warning(f"Could not retrieve robot file content for {codebundle.slug}: {e}")
+            
+        return None
+    
+    def _extract_task_names_from_robot(self, robot_content: str) -> List[str]:
+        """Extract actual task names from robot file content"""
+        tasks = []
+        try:
+            lines = robot_content.split('\n')
+            in_test_cases = False
+            
+            for line in lines:
+                line = line.strip()
+                
+                # Check for test cases section
+                if line.lower().startswith('*** test cases ***'):
+                    in_test_cases = True
+                    continue
+                elif line.startswith('***') and in_test_cases:
+                    in_test_cases = False
+                    continue
+                
+                # Extract test case names (tasks)
+                if in_test_cases and line and not line.startswith('[') and not line.startswith('#'):
+                    # This looks like a test case name
+                    if not line.startswith(' ') and not line.startswith('\t'):
+                        tasks.append(line)
+                        
+        except Exception as e:
+            logger.warning(f"Error extracting task names from robot content: {e}")
+            
+        return tasks
     
     def _generate_enhanced_description(self, context: Dict[str, any], client: OpenAI) -> str:
         """Generate an enhanced description using AI"""

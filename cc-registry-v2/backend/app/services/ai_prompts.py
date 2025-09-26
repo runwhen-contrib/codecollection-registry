@@ -44,6 +44,9 @@ CodeBundle Information:
 - Tasks: {tasks}
 - Support Tags: {support_tags}
 - Author: {author}
+- Collection: {codecollection_name}
+
+{robot_content_section}
 
 Provide detailed analysis:
 
@@ -188,6 +191,19 @@ Focus on providing actionable, security-conscious information that helps users u
         Returns:
             Complete prompt string ready for AI model
         """
+        # Prepare robot content section
+        robot_content_section = ""
+        if codebundle_context.get('robot_content'):
+            robot_content_section = f"""
+Robot Framework Content (first 1000 characters):
+```
+{codebundle_context.get('robot_content', '')}
+```
+
+This gives you actual implementation details to analyze for more accurate enhancement."""
+        else:
+            robot_content_section = "Robot Framework content not available - analyze based on available metadata."
+
         base_prompt = cls.CODEBUNDLE_ENHANCEMENT_TEMPLATE.format(
             name=codebundle_context.get('name', 'Unknown'),
             description=codebundle_context.get('description', 'No description available'),
@@ -195,12 +211,15 @@ Focus on providing actionable, security-conscious information that helps users u
             resource_types=', '.join(codebundle_context.get('resource_types', [])),
             tasks=', '.join(codebundle_context.get('tasks', [])),
             support_tags=', '.join(codebundle_context.get('support_tags', [])),
-            author=codebundle_context.get('author', 'Unknown')
+            author=codebundle_context.get('author', 'Unknown'),
+            codecollection_name=codebundle_context.get('codecollection_name', 'Unknown'),
+            robot_content_section=robot_content_section
         )
         
         # Add platform-specific context if available
-        platform = codebundle_context.get('platform', '').lower()
-        if platform in cls.ENHANCEMENT_VARIATIONS:
+        platform = codebundle_context.get('platform', '') or ''
+        platform = platform.lower() if platform else ''
+        if platform and platform in cls.ENHANCEMENT_VARIATIONS:
             variation = cls.ENHANCEMENT_VARIATIONS[platform]
             base_prompt += variation['context_suffix']
             base_prompt += f"\n\nExample IAM requirements for {platform.upper()}: {', '.join(variation['iam_examples'])}"
@@ -231,8 +250,9 @@ Focus on providing actionable, security-conscious information that helps users u
         )
         
         # Add platform-specific context if available
-        platform = codebundle_context.get('platform', '').lower()
-        if platform in cls.ENHANCEMENT_VARIATIONS:
+        platform = codebundle_context.get('platform', '') or ''
+        platform = platform.lower() if platform else ''
+        if platform and platform in cls.ENHANCEMENT_VARIATIONS:
             variation = cls.ENHANCEMENT_VARIATIONS[platform]
             base_prompt += variation['context_suffix']
         

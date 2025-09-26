@@ -307,16 +307,22 @@ def sync_single_collection_task(self, collection_slug: str):
     try:
         logger.info(f"Starting single collection sync task {self.request.id} for {collection_slug}")
         
-        # Sync just this collection
-        result = sync_collections_task.delay([collection_slug]).get()
+        # Use Celery chain to sequence tasks without .get()
+        from celery import chain
         
-        # Parse codebundles for this collection
-        parse_result = parse_collection_codebundles_task.delay(collection_slug).get()
+        # Create a chain of tasks that will execute sequentially
+        workflow = chain(
+            sync_collections_task.s([collection_slug]),
+            parse_collection_codebundles_task.s(collection_slug)
+        )
+        
+        # Apply the chain
+        result = workflow.apply_async()
         
         return {
             'status': 'success',
-            'collection_synced': result.get('collections_processed', 0),
-            'codebundles_parsed': parse_result.get('codebundles_processed', 0)
+            'message': f'Started workflow for collection {collection_slug}',
+            'workflow_id': result.id
         }
         
     except Exception as e:

@@ -14,6 +14,7 @@ import Categories from './pages/Categories';
 import TestAPI from './pages/TestAPI';
 import Admin from './pages/Admin';
 import TaskManager from './pages/TaskManager';
+import AIEnhancementAdmin from './components/AIEnhancementAdmin';
 import Login from './pages/Login';
 import Cart from './pages/Cart';
 import Footer from './components/Footer';
@@ -54,6 +55,14 @@ function App() {
                 element={
                   <ProtectedRoute requiredRole="admin">
                     <TaskManager />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/ai-enhancement" 
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <AIEnhancementAdmin />
                   </ProtectedRoute>
                 } 
               />

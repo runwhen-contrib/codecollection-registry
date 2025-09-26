@@ -503,6 +503,13 @@ export const apiService = {
     return response.data;
   },
 
+  async resetAIEnhancements(token: string) {
+    const response = await api.post('/admin/ai/reset', {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
   // Admin Inventory endpoints
   async getInventoryStats(token: string) {
     const response = await api.get('/admin/inventory/stats', {

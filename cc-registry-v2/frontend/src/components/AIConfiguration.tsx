@@ -200,19 +200,7 @@ const AIConfiguration: React.FC<AIConfigurationProps> = ({ token }) => {
     
     try {
       setLoading(true);
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/admin/ai/reset`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
+      const result = await apiService.resetAIEnhancements(token);
       setSuccess(`Successfully reset AI enhancement data for ${result.reset_count} CodeBundles`);
       
       // Refresh stats to show updated counts
