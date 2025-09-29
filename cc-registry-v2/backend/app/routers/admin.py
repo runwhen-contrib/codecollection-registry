@@ -76,20 +76,58 @@ async def clear_all_data(token: str = Depends(verify_admin_token)):
     """Clear all data from the database (use with caution!)"""
     try:
         from app.core.database import SessionLocal
-        from app.models import CodeCollection, Codebundle
+        from app.models import (
+            CodeCollection, Codebundle, CodeCollectionVersion, VersionCodebundle,
+            CodeCollectionMetrics, SystemMetrics, RawRepositoryData, RawYamlData, 
+            HelmChart, HelmChartVersion, HelmChartTemplate, AIConfiguration, 
+            AIEnhancementLog, TaskExecution
+        )
         
         db = SessionLocal()
         try:
             # Delete in reverse order to respect foreign key constraints
+            # Start with the most dependent tables first
+            
+            # AI and task execution tables
+            db.query(AIEnhancementLog).delete()
+            db.query(TaskExecution).delete()
+            
+            # Helm chart related tables
+            db.query(HelmChartTemplate).delete()
+            db.query(HelmChartVersion).delete()
+            db.query(HelmChart).delete()
+            
+            # Raw data tables
+            db.query(RawRepositoryData).delete()
+            db.query(RawYamlData).delete()
+            
+            # Version-related tables
+            db.query(VersionCodebundle).delete()
+            db.query(CodeCollectionVersion).delete()
+            
+            # Metrics tables
+            db.query(CodeCollectionMetrics).delete()
+            db.query(SystemMetrics).delete()
+            
+            # AI configuration
+            db.query(AIConfiguration).delete()
+            
+            # Main tables
             db.query(Codebundle).delete()
             db.query(CodeCollection).delete()
+            
             db.commit()
             
             return {
                 "message": "All data cleared successfully",
                 "collections_deleted": True,
                 "codebundles_deleted": True,
-                "tasks_deleted": True
+                "versions_deleted": True,
+                "metrics_deleted": True,
+                "raw_data_deleted": True,
+                "helm_charts_deleted": True,
+                "ai_data_deleted": True,
+                "task_executions_deleted": True
             }
         finally:
             db.close()

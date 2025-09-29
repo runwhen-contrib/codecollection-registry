@@ -622,6 +622,14 @@ def parse_collection_codebundles_task(self, collection_id: int):
                         # Create or update version-specific codebundle
                         version_codebundle = _create_or_update_version_codebundle(db, version, codebundle_data, runbook_file.file_path if runbook_file else sli_file.file_path)
                         
+                        # Also create or update main codebundle (for API compatibility)
+                        logger.info(f"Creating main codebundle for {codebundle_data['slug']}")
+                        main_codebundle = _create_or_update_codebundle(db, collection, codebundle_data, runbook_file.file_path if runbook_file else sli_file.file_path)
+                        if main_codebundle:
+                            logger.info(f"Successfully created/updated main codebundle: {main_codebundle.slug}")
+                        else:
+                            logger.error(f"Failed to create main codebundle for {codebundle_data['slug']}")
+                        
                         if version_codebundle:
                             codebundles_created += 1
                             tasks_indexed += len(version_codebundle.tasks or [])
@@ -867,12 +875,7 @@ def _parse_robot_file_content(content: str, file_path: str) -> Optional[Dict[str
                                         # Clean and filter - remove empty items
                                         clean_supports = [item for item in support_items if item]
                                         tags.extend(clean_supports)
-                            elif hasattr(setting, 'type') and setting.type == 'FORCE TAGS':
-                                if len(setting.tokens) >= 2:
-                                    # Clean and filter tags - remove empty/whitespace-only tags
-                                    raw_tags = [token.value for token in setting.tokens[1:]]
-                                    clean_tags = [tag.strip() for tag in raw_tags if tag and tag.strip()]
-                                    tags.extend(clean_tags)
+                            # Note: Removed FORCE TAGS parsing - we only want Support Tags from Metadata section
             
             return {
                 'name': name,

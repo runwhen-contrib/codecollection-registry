@@ -72,7 +72,7 @@ class DataPopulationService:
     
     def _read_codecollections_yaml(self) -> Dict[str, Any]:
         """Read the original codecollections.yaml file"""
-        yaml_path = "/workspaces/codecollection-registry/codecollections.yaml"
+        yaml_path = "/app/codecollections.yaml"
         if not os.path.exists(yaml_path):
             raise FileNotFoundError(f"codecollections.yaml not found at {yaml_path}")
         
