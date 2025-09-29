@@ -190,6 +190,56 @@ export interface Task {
   git_ref?: string;
 }
 
+export interface HelmChart {
+  id: number;
+  name: string;
+  description: string;
+  repository_url: string;
+  home_url?: string;
+  source_urls: string[];
+  maintainers: any[];
+  keywords: string[];
+  last_synced_at?: string;
+  version_count: number;
+  latest_version?: {
+    version: string;
+    app_version?: string;
+    created_date?: string;
+  };
+}
+
+export interface HelmChartVersion {
+  id: number;
+  version: string;
+  app_version?: string;
+  description?: string;
+  created_date?: string;
+  digest?: string;
+  is_latest: boolean;
+  is_prerelease: boolean;
+  is_deprecated: boolean;
+  synced_at?: string;
+  values_schema?: any;
+  default_values?: any;
+  chart?: {
+    id: number;
+    name: string;
+    description: string;
+    repository_url: string;
+  };
+}
+
+export interface HelmChartTemplate {
+  id: number;
+  name: string;
+  description: string;
+  category: string;
+  template_values: any;
+  required_fields: string[];
+  is_default: boolean;
+  sort_order: number;
+}
+
 export interface TasksResponse {
   tasks: Task[];
   total_count: number;
@@ -675,6 +725,91 @@ export const apiService = {
       headers: { Authorization: `Bearer ${token}` }
     });
     console.log('API: Task stats response:', response.data);
+    return response.data;
+  },
+
+  // Helm Chart endpoints
+  async getHelmCharts(includeInactive: boolean = false): Promise<HelmChart[]> {
+    console.log('API: Getting helm charts');
+    const params = new URLSearchParams();
+    if (includeInactive) params.append('include_inactive', 'true');
+    
+    const response = await api.get(`/helm-charts?${params.toString()}`);
+    console.log('API: Helm charts response:', response.data);
+    return response.data;
+  },
+
+  async getHelmChart(chartName: string): Promise<HelmChart & { versions: HelmChartVersion[] }> {
+    console.log('API: Getting helm chart', chartName);
+    const response = await api.get(`/helm-charts/${chartName}`);
+    console.log('API: Helm chart response:', response.data);
+    return response.data;
+  },
+
+  async getHelmChartVersion(
+    chartName: string, 
+    version: string, 
+    includeSchema: boolean = true, 
+    includeDefaults: boolean = true
+  ): Promise<HelmChartVersion> {
+    console.log('API: Getting helm chart version', chartName, version);
+    const params = new URLSearchParams();
+    if (!includeSchema) params.append('include_schema', 'false');
+    if (!includeDefaults) params.append('include_defaults', 'false');
+    
+    const response = await api.get(`/helm-charts/${chartName}/versions/${version}?${params.toString()}`);
+    console.log('API: Helm chart version response:', response.data);
+    return response.data;
+  },
+
+  async getLatestHelmChartVersion(
+    chartName: string, 
+    includePrerelease: boolean = false,
+    includeSchema: boolean = true, 
+    includeDefaults: boolean = true
+  ): Promise<HelmChartVersion> {
+    console.log('API: Getting latest helm chart version', chartName);
+    const params = new URLSearchParams();
+    if (includePrerelease) params.append('include_prerelease', 'true');
+    if (!includeSchema) params.append('include_schema', 'false');
+    if (!includeDefaults) params.append('include_defaults', 'false');
+    
+    const response = await api.get(`/helm-charts/${chartName}/latest?${params.toString()}`);
+    console.log('API: Latest helm chart version response:', response.data);
+    return response.data;
+  },
+
+  async getHelmChartTemplates(
+    chartName: string, 
+    version: string, 
+    category?: string
+  ): Promise<HelmChartTemplate[]> {
+    console.log('API: Getting helm chart templates', chartName, version);
+    const params = new URLSearchParams();
+    if (category) params.append('category', category);
+    
+    const response = await api.get(`/helm-charts/${chartName}/versions/${version}/templates?${params.toString()}`);
+    console.log('API: Helm chart templates response:', response.data);
+    return response.data;
+  },
+
+  async validateHelmValues(
+    chartName: string, 
+    values: any, 
+    version?: string
+  ): Promise<{
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+    chart_version: string;
+    validated_at: string;
+  }> {
+    console.log('API: Validating helm values', chartName, version);
+    const params = new URLSearchParams();
+    if (version) params.append('version', version);
+    
+    const response = await api.post(`/helm-charts/${chartName}/validate-values?${params.toString()}`, values);
+    console.log('API: Helm values validation response:', response.data);
     return response.data;
   }
 };

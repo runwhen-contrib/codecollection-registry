@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -23,6 +23,11 @@ import {
   TextField,
   Switch,
   FormControlLabel,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  CircularProgress,
 } from '@mui/material';
 import Editor from '@monaco-editor/react';
 import {
@@ -40,11 +45,18 @@ import {
   PlayArrow as PlayArrowIcon,
   ArrowForward as ArrowForwardIcon,
   ArrowBack as ArrowBackIcon,
+  Workspaces as WorkspaceIcon,
+  Build as BuildIcon,
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { useCart } from '../contexts/CartContext';
+import { apiService, HelmChart, HelmChartVersion, HelmChartTemplate } from '../services/api';
+import WorkspaceBuilder from './WorkspaceBuilder';
 
 interface HelmValues {
+  // Chart Version Selection
+  selectedChartVersion: string;
+  
   // Global Settings
   workspaceName: string;
   platformType: string;
@@ -162,7 +174,19 @@ const ConfigBuilder: React.FC = () => {
   const [showYamlEditor, setShowYamlEditor] = useState(true);
   const [wizardStep, setWizardStep] = useState(0);
   const [wizardStarted, setWizardStarted] = useState(false);
+  const [selectedWizard, setSelectedWizard] = useState<'helm' | 'workspace' | null>(null);
+  
+  // Helm chart version management
+  const [helmChart, setHelmChart] = useState<HelmChart | null>(null);
+  const [helmChartVersions, setHelmChartVersions] = useState<HelmChartVersion[]>([]);
+  const [selectedChartVersion, setSelectedChartVersion] = useState<HelmChartVersion | null>(null);
+  const [chartTemplates, setChartTemplates] = useState<HelmChartTemplate[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [versionError, setVersionError] = useState<string | null>(null);
   const [helmValues, setHelmValues] = useState<HelmValues>({
+    // Chart Version Selection
+    selectedChartVersion: '',
+    
     // Global Settings
     workspaceName: '',
     platformType: 'kubernetes',
@@ -267,6 +291,93 @@ const ConfigBuilder: React.FC = () => {
     ingressTLSEnabled: false,
     ingressTLSSecretName: 'chart-example-tls',
   });
+
+  // Load helm chart versions on component mount
+  useEffect(() => {
+    const loadHelmChartVersions = async () => {
+      setLoadingVersions(true);
+      setVersionError(null);
+      
+      try {
+        // Load the runwhen-local chart and its versions
+        const chartData = await apiService.getHelmChart('runwhen-local');
+        setHelmChart(chartData);
+        setHelmChartVersions(chartData.versions || []);
+        
+        // Set the latest version as default
+        const latestVersion = chartData.versions?.find(v => v.is_latest) || chartData.versions?.[0];
+        if (latestVersion) {
+          setSelectedChartVersion(latestVersion);
+          setHelmValues(prev => ({
+            ...prev,
+            selectedChartVersion: latestVersion.version
+          }));
+          
+          // Load templates for the latest version
+          try {
+            const templates = await apiService.getHelmChartTemplates('runwhen-local', latestVersion.version);
+            setChartTemplates(templates);
+          } catch (error) {
+            console.warn('Could not load chart templates:', error);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading helm chart versions:', error);
+        setVersionError('Failed to load helm chart versions. Using default configuration.');
+        // Continue with default values
+      } finally {
+        setLoadingVersions(false);
+      }
+    };
+
+    loadHelmChartVersions();
+  }, []);
+
+  // Handle version selection change
+  const handleVersionChange = async (versionString: string) => {
+    const version = helmChartVersions.find(v => v.version === versionString);
+    if (!version) return;
+
+    setSelectedChartVersion(version);
+    setHelmValues(prev => ({
+      ...prev,
+      selectedChartVersion: versionString
+    }));
+
+    // Load version-specific data
+    try {
+      const versionData = await apiService.getHelmChartVersion('runwhen-local', versionString);
+      
+      // Update helm values with defaults from this version
+      if (versionData.default_values) {
+        setHelmValues(prev => ({
+          ...prev,
+          ...mergeDefaultValues(prev, versionData.default_values)
+        }));
+      }
+
+      // Load templates for this version
+      const templates = await apiService.getHelmChartTemplates('runwhen-local', versionString);
+      setChartTemplates(templates);
+    } catch (error) {
+      console.error('Error loading version data:', error);
+    }
+  };
+
+  // Helper function to merge default values without overriding user changes
+  const mergeDefaultValues = (currentValues: HelmValues, defaultValues: any): Partial<HelmValues> => {
+    const updates: Partial<HelmValues> = {};
+    
+    // Only update values that are still at their initial state
+    if (!currentValues.runwhenLocalImage && defaultValues.runwhenLocal?.image?.repository) {
+      updates.runwhenLocalImage = defaultValues.runwhenLocal.image.repository;
+    }
+    if (currentValues.runwhenLocalTag === 'latest' && defaultValues.runwhenLocal?.image?.tag) {
+      updates.runwhenLocalTag = defaultValues.runwhenLocal.image.tag;
+    }
+    
+    return updates;
+  };
 
   const handleCopyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -603,27 +714,142 @@ codeCollections:${repositoryConfigs.map(repo => `
 
     return `# RunWhen Local Helm Chart Values
 # Generated by CodeCollection Registry Configuration Builder
+# Chart Version: ${helmValues.selectedChartVersion || 'latest'}
+# Generated at: ${new Date().toISOString()}
 # This file is client-side only and not stored
 
 ${yamlString}`;
   };
 
-  if (items.length === 0 && !wizardStarted) {
+  // Show wizard selection if no wizard is selected yet
+  if (!selectedWizard) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <DynamicFormIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
+          <Typography variant="h4" gutterBottom>
+            Configuration Builder
+          </Typography>
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 6, maxWidth: 800, mx: 'auto' }}>
+            Choose your configuration approach: Create a complete Helm deployment configuration 
+            or build a simple workspace configuration file.
+          </Typography>
+
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 4, maxWidth: 1000, mx: 'auto' }}>
+            {/* Helm Configuration Wizard */}
+            <Card sx={{ flex: 1, cursor: 'pointer', '&:hover': { boxShadow: 6 } }} onClick={() => setSelectedWizard('helm')}>
+              <CardContent sx={{ p: 4, textAlign: 'center' }}>
+                <BuildIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+                <Typography variant="h5" gutterBottom>
+                  Helm Configuration Wizard
+                </Typography>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                  Complete Helm deployment configuration including networking, security, resources, and advanced settings.
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 3 }}>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    ✅ Full values.yaml generation
+                  </Typography>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    ✅ Version-aware configuration
+                  </Typography>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    ✅ Network & security settings
+                  </Typography>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    ✅ Resource limits & scheduling
+                  </Typography>
+                </Box>
+                <Button variant="contained" fullWidth>
+                  Start Helm Wizard
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Workspace Builder */}
+            <Card sx={{ flex: 1, cursor: 'pointer', '&:hover': { boxShadow: 6 } }} onClick={() => setSelectedWizard('workspace')}>
+              <CardContent sx={{ p: 4, textAlign: 'center' }}>
+                <WorkspaceIcon sx={{ fontSize: 48, color: 'secondary.main', mb: 2 }} />
+                <Typography variant="h5" gutterBottom>
+                  Workspace Builder
+                </Typography>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                  Simple workspace configuration focusing on basic settings and code collections.
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 3 }}>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    ✅ workspaceInfo.yaml generation
+                  </Typography>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    ✅ Quick & simple setup
+                  </Typography>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    ✅ Workspace & location settings
+                  </Typography>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    ✅ Code collection management
+                  </Typography>
+                </Box>
+                <Button variant="outlined" fullWidth>
+                  Start Workspace Builder
+                </Button>
+              </CardContent>
+            </Card>
+          </Box>
+
+          {items.length === 0 && (
+            <Box sx={{ mt: 6 }}>
+              <Alert severity="info" sx={{ maxWidth: 600, mx: 'auto' }}>
+                <Typography variant="body2">
+                  <strong>No CodeBundles selected:</strong> You can still create configurations, 
+                  but consider browsing and adding CodeBundles to your cart for a more complete setup.
+                </Typography>
+              </Alert>
+              <Button
+                component={Link}
+                to="/codebundles"
+                variant="text"
+                sx={{ mt: 2 }}
+                startIcon={<CodeIcon />}
+              >
+                Browse CodeBundles
+              </Button>
+            </Box>
+          )}
+        </Box>
+      </Container>
+    );
+  }
+
+  // Show WorkspaceBuilder if workspace wizard is selected
+  if (selectedWizard === 'workspace') {
+    return <WorkspaceBuilder />;
+  }
+
+  // Continue with Helm wizard if helm is selected
+  if (items.length === 0 && !wizardStarted && selectedWizard === 'helm') {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <DynamicFormIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
           <Typography variant="h4" gutterBottom color="text.secondary">
-            Configuration Builder
+            Helm Configuration Wizard
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-            Build your RunWhen configuration with our guided wizard
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 4 }}>
+            Add some CodeBundles to your cart to get started with Helm configuration generation.
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
             <Button
+              variant="outlined"
+              onClick={() => setSelectedWizard(null)}
+              startIcon={<ArrowBackIcon />}
+            >
+              Back to Wizard Selection
+            </Button>
+            <Button
               component={Link}
               to="/codebundles"
-              variant="outlined"
+              variant="contained"
               size="large"
               startIcon={<CodeIcon />}
             >
@@ -635,7 +861,7 @@ ${yamlString}`;
               startIcon={<PlayArrowIcon />}
               onClick={() => setWizardStarted(true)}
             >
-              Start Configuration Wizard
+              Start Helm Wizard
             </Button>
           </Box>
         </Box>
@@ -653,42 +879,168 @@ ${yamlString}`;
         </Typography>
       </Alert>
 
+      {/* Helm Chart Version Selection */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Helm Chart Configuration
+          </Typography>
+          
+          {versionError && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {versionError}
+            </Alert>
+          )}
+          
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            <FormControl sx={{ minWidth: 200 }}>
+              <InputLabel>Chart Version</InputLabel>
+              <Select
+                value={helmValues.selectedChartVersion}
+                label="Chart Version"
+                onChange={(e) => handleVersionChange(e.target.value)}
+                disabled={loadingVersions || helmChartVersions.length === 0}
+              >
+                {helmChartVersions.map((version) => (
+                  <MenuItem key={version.id} value={version.version}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                      <Typography>{version.version}</Typography>
+                      {version.is_latest && (
+                        <Chip label="Latest" size="small" color="primary" />
+                      )}
+                      {version.is_prerelease && (
+                        <Chip label="Pre-release" size="small" color="warning" />
+                      )}
+                      {version.is_deprecated && (
+                        <Chip label="Deprecated" size="small" color="error" />
+                      )}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
+            {loadingVersions && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={20} />
+                <Typography variant="body2" color="text.secondary">
+                  Loading versions...
+                </Typography>
+              </Box>
+            )}
+            
+            {selectedChartVersion && (
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {selectedChartVersion.app_version && (
+                  <Chip 
+                    label={`App: ${selectedChartVersion.app_version}`} 
+                    size="small" 
+                    variant="outlined" 
+                  />
+                )}
+                {selectedChartVersion.created_date && (
+                  <Chip 
+                    label={`Released: ${new Date(selectedChartVersion.created_date).toLocaleDateString()}`} 
+                    size="small" 
+                    variant="outlined" 
+                  />
+                )}
+              </Box>
+            )}
+          </Box>
+          
+          {/* Configuration Templates */}
+          {chartTemplates.length > 0 && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Quick Start Templates
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {chartTemplates.map((template) => (
+                  <Button
+                    key={template.id}
+                    variant={template.is_default ? "contained" : "outlined"}
+                    size="small"
+                    onClick={() => {
+                      // Apply template values
+                      setHelmValues(prev => ({
+                        ...prev,
+                        ...template.template_values
+                      }));
+                    }}
+                  >
+                    {template.name}
+                  </Button>
+                ))}
+              </Box>
+            </Box>
+          )}
+          
+          {selectedChartVersion?.description && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              {selectedChartVersion.description}
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Wizard Step Navigation */}
-      {(wizardStarted || items.length > 0) && (
+      {(wizardStarted || items.length > 0) && selectedWizard === 'helm' && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <DynamicFormIcon color="primary" />
                 <Typography variant="h6">
-                  Configuration Wizard
+                  Helm Configuration Wizard
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Step {wizardStep + 1} of 8
+                  Step {wizardStep + 1} of 9
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<ArrowBackIcon />}
-                  onClick={() => setWizardStep(Math.max(0, wizardStep - 1))}
-                  disabled={wizardStep === 0}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="contained"
-                  endIcon={<ArrowForwardIcon />}
-                  onClick={() => setWizardStep(Math.min(7, wizardStep + 1))}
-                  disabled={wizardStep === 7}
-                >
-                  Next
-                </Button>
+                {wizardStep === 0 && (
+                  <Button
+                    variant="text"
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => setSelectedWizard(null)}
+                  >
+                    Back to Wizard Selection
+                  </Button>
+                )}
+                {wizardStep > 0 && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => setWizardStep(Math.max(0, wizardStep - 1))}
+                  >
+                    Previous
+                  </Button>
+                )}
+                {wizardStep < 8 && (
+                  <Button
+                    variant="contained"
+                    endIcon={wizardStep === 7 ? <SettingsIcon /> : <ArrowForwardIcon />}
+                    onClick={() => setWizardStep(Math.min(8, wizardStep + 1))}
+                  >
+                    {wizardStep === 7 ? 'Generate Configuration' : 'Next'}
+                  </Button>
+                )}
+                {wizardStep === 8 && (
+                  <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={<DownloadIcon />}
+                    onClick={() => handleDownload(generateHelmValues(), 'values.yaml')}
+                  >
+                    Download & Finish
+                  </Button>
+                )}
               </Box>
             </Box>
             <Box sx={{ mt: 2 }}>
               <Box sx={{ display: 'flex', gap: 1 }}>
-                {[0, 1, 2, 3, 4, 5, 6, 7].map((step) => (
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((step) => (
                   <Box
                     key={step}
                     sx={{
@@ -705,7 +1057,7 @@ ${yamlString}`;
         </Card>
       )}
 
-      {items.length > 0 && (
+      {items.length > 0 && selectedWizard === 'helm' && (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mb: 3 }}>
           <Button
             variant="outlined"
@@ -726,7 +1078,7 @@ ${yamlString}`;
       )}
 
       {/* Wizard Step Content */}
-      {(wizardStarted || items.length > 0) && (
+      {(wizardStarted || items.length > 0) && selectedWizard === 'helm' && (
         <>
           {wizardStep === 0 && (
             <Card sx={{ mb: 3 }}>
@@ -1500,10 +1852,99 @@ ${yamlString}`;
               </CardContent>
             </Card>
           )}
+
+          {wizardStep === 8 && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h5" gutterBottom>
+                  Step 9: Generated Configuration
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  Your Helm values.yaml file is ready! Copy or download it to deploy RunWhen Local.
+                </Typography>
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <SettingsIcon color="primary" />
+                    <Typography variant="h6">
+                      values.yaml for Helm Chart v{helmValues.selectedChartVersion || 'latest'}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<ContentCopyIcon />}
+                      onClick={() => handleCopyToClipboard(generateHelmValues())}
+                    >
+                      Copy values.yaml
+                    </Button>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      startIcon={<DownloadIcon />}
+                      onClick={() => handleDownload(generateHelmValues(), 'values.yaml')}
+                    >
+                      Download
+                    </Button>
+                  </Box>
+                </Box>
+
+                <Alert severity="success" sx={{ mb: 3 }}>
+                  <Typography variant="body2">
+                    <strong>Configuration Complete!</strong> Your values.yaml file has been generated based on your selections. 
+                    Use this file with the RunWhen Local Helm chart to deploy your troubleshooting platform.
+                  </Typography>
+                </Alert>
+
+                <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                  <Editor
+                    height="400px"
+                    defaultLanguage="yaml"
+                    value={generateHelmValues()}
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      fontSize: 14,
+                      lineNumbers: 'on',
+                      renderWhitespace: 'boundary',
+                      wordWrap: 'on',
+                      theme: 'vs-light',
+                      automaticLayout: true,
+                      folding: true,
+                      lineDecorationsWidth: 10,
+                      lineNumbersMinChars: 3,
+                      glyphMargin: false
+                    }}
+                    loading={
+                      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Loading YAML editor...
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </Box>
+
+                <Box sx={{ mt: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Next Steps:
+                  </Typography>
+                  <Typography variant="body2" component="div">
+                    1. Save the values.yaml file to your local machine<br/>
+                    2. Add the RunWhen Helm repository: <code>helm repo add runwhen-contrib https://runwhen-contrib.github.io/helm-charts</code><br/>
+                    3. Install RunWhen Local: <code>helm install runwhen-local runwhen-contrib/runwhen-local -f values.yaml</code><br/>
+                    4. Monitor the deployment: <code>kubectl get pods -l app.kubernetes.io/name=runwhen-local</code>
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
 
-      {items.length > 0 && (
+      {items.length > 0 && selectedWizard === null && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {/* Repository Configuration */}
           <Box>
@@ -1982,8 +2423,8 @@ ${yamlString}`;
           </Card>
         </Box>
 
-        {/* Helm Values YAML - Always show when wizard is started */}
-        {(wizardStarted || items.length > 0) && (
+        {/* Helm Values YAML - Only show when wizard is started and helm is selected */}
+        {(wizardStarted || items.length > 0) && selectedWizard === 'helm' && (
           <Box sx={{ mt: 4 }}>
             <Card>
             <CardContent>

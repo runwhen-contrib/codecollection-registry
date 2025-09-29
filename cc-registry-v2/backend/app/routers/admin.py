@@ -4,7 +4,10 @@ from typing import Dict, Any
 import logging
 
 from app.services.data_migration_service import DataPopulationService
+from app.services.helm_sync import sync_runwhen_local_chart
 from app.core.config import settings
+from app.core.database import get_db
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -95,6 +98,27 @@ async def clear_all_data(token: str = Depends(verify_admin_token)):
         logger.error(f"Error clearing data: {e}")
         raise HTTPException(status_code=500, detail=f"Clear data failed: {str(e)}")
 
+@router.post("/sync-helm-charts")
+async def sync_helm_charts(
+    token: str = Depends(verify_admin_token),
+    db: Session = Depends(get_db)
+):
+    """Sync helm chart versions from repository"""
+    try:
+        logger.info("Starting helm chart sync triggered by admin")
+        
+        result = sync_runwhen_local_chart(db)
+        
+        logger.info(f"Helm chart sync completed: {result}")
+        return {
+            "status": "success",
+            "message": "Helm chart versions synced successfully",
+            "details": result
+        }
+        
+    except Exception as e:
+        logger.error(f"Helm chart sync failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Helm chart sync failed: {str(e)}")
 
 @router.get("/releases/status")
 async def get_releases_status(token: str = Depends(verify_admin_token)):
