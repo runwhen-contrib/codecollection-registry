@@ -40,22 +40,6 @@ celery_app.conf.update(
     worker_disable_rate_limits=True,
 )
 
-# Scheduled tasks
-celery_app.conf.beat_schedule = {
-    'sync-collections-daily': {
-        'task': 'app.tasks.data_population_tasks.sync_collections_task',
-        'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM
-    },
-    'enhance-codebundles-weekly': {
-        'task': 'app.tasks.data_enhancement_tasks.enhance_all_codebundles_task',
-        'schedule': crontab(hour=3, minute=0, day_of_week=1),  # Weekly on Monday at 3 AM
-    },
-    'update-statistics-hourly': {
-        'task': 'app.tasks.data_population_tasks.update_collection_statistics_task',
-        'schedule': crontab(minute=0),  # Every hour
-    },
-}
-
 @celery_app.task(bind=True)
 def populate_registry_task(self, collection_slugs: List[str] = None):
     """

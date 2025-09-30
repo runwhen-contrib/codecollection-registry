@@ -273,11 +273,20 @@ async def get_all_tasks(
                 if codebundle.support_tags:
                     clean_support_tags = [tag.strip() for tag in codebundle.support_tags if tag and tag.strip()]
                 
-                # Add TaskSet tasks
+                # Add TaskSet tasks (handle both old string format and new object format)
                 if codebundle.tasks:
-                    for task_name in codebundle.tasks:
-                        # Get unique task ID from task_index
-                        task_id = codebundle.task_index.get(task_name, f"{codebundle.id}_task_{hash(task_name) % 10000}")
+                    for task in codebundle.tasks:
+                        # Handle both old string format and new object format
+                        if isinstance(task, str):
+                            # Old format - just task name
+                            task_name = task
+                            task_id = codebundle.task_index.get(task_name, f"{codebundle.id}_task_{hash(task_name) % 10000}")
+                        elif isinstance(task, dict):
+                            # New format - task object
+                            task_name = task.get('name', 'Unknown Task')
+                            task_id = task.get('id', f"{codebundle.id}_task_{hash(task_name) % 10000}")
+                        else:
+                            continue
                         
                         all_tasks.append({
                             "id": task_id,
@@ -298,9 +307,19 @@ async def get_all_tasks(
                             "git_ref": codebundle.codecollection.git_ref
                         })
                 
-                # Add SLI tasks
+                # Add SLI tasks (handle both old string format and new object format)
                 if codebundle.slis:
-                    for sli_name in codebundle.slis:
+                    for sli in codebundle.slis:
+                        # Handle both old string format and new object format
+                        if isinstance(sli, str):
+                            # Old format - just SLI name
+                            sli_name = sli
+                        elif isinstance(sli, dict):
+                            # New format - SLI object
+                            sli_name = sli.get('name', 'Unknown SLI')
+                        else:
+                            continue
+                            
                         # Generate unique SLI ID
                         sli_id = f"{codebundle.id}_sli_{hash(sli_name) % 10000}"
                         

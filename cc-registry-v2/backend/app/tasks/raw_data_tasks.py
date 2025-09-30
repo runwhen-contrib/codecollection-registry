@@ -17,9 +17,8 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Initialize Celery
-celery_app = Celery('raw_data_tasks')
-celery_app.config_from_object(settings)
+# Import shared Celery app
+from app.tasks.celery_app import celery_app
 
 @celery_app.task(bind=True)
 def store_yaml_data_task(self, yaml_data: Dict[str, Any] = None):

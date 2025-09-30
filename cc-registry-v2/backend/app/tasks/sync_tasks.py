@@ -131,16 +131,4 @@ def health_check_task(self):
     finally:
         db.close()
 
-# Periodic tasks configuration
-from celery.schedules import crontab
-
-celery_app.conf.beat_schedule = {
-    'scheduled-sync': {
-        'task': 'app.tasks.sync_tasks.scheduled_sync_task',
-        'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM
-    },
-    'health-check': {
-        'task': 'app.tasks.sync_tasks.health_check_task', 
-        'schedule': 300.0,  # Every 5 minutes
-    },
-}
+# Periodic tasks configuration is now in app.tasks.celery_app

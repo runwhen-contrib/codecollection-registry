@@ -49,30 +49,6 @@ celery_app.conf.update(
     worker_disable_rate_limits=True,
 )
 
-# Scheduled tasks
-celery_app.conf.beat_schedule = {
-    'validate-yaml-seed-daily': {
-        'task': 'app.tasks.registry_tasks.validate_yaml_seed_task',
-        'schedule': crontab(hour=1, minute=0),  # Daily at 1 AM
-    },
-    'sync-collections-daily': {
-        'task': 'app.tasks.registry_tasks.sync_all_collections_task',
-        'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM
-    },
-    'parse-codebundles-daily': {
-        'task': 'app.tasks.registry_tasks.parse_all_codebundles_task',
-        'schedule': crontab(hour=3, minute=0),  # Daily at 3 AM
-    },
-    'enhance-codebundles-weekly': {
-        'task': 'app.tasks.registry_tasks.enhance_all_codebundles_task',
-        'schedule': crontab(hour=4, minute=0, day_of_week=1),  # Weekly on Monday at 4 AM
-    },
-    'generate-metrics-hourly': {
-        'task': 'app.tasks.registry_tasks.generate_metrics_task',
-        'schedule': crontab(minute=0),  # Every hour
-    },
-}
-
 
 @celery_app.task(bind=True)
 def seed_database_from_yaml_task(self, yaml_file_path: str = "/app/codecollections.yaml"):
@@ -595,10 +571,10 @@ def parse_collection_codebundles_task(self, collection_id: int):
                     # Parse runbook file first (this creates the main codebundle)
                     codebundle_data = None
                     if runbook_file:
-                        codebundle_data = _parse_robot_file_content(runbook_file.file_content, runbook_file.file_path)
+                        codebundle_data = _parse_robot_file_content(runbook_file.file_content, runbook_file.file_path, collection.slug)
                     elif sli_file:
                         # If there's no runbook file, create codebundle from SLI file but with empty tasks
-                        codebundle_data = _parse_robot_file_content(sli_file.file_content, sli_file.file_path)
+                        codebundle_data = _parse_robot_file_content(sli_file.file_content, sli_file.file_path, collection.slug)
                         if codebundle_data:
                             # Move the parsed tasks to SLIs and clear tasks
                             codebundle_data['slis'] = codebundle_data.get('tasks', [])
@@ -611,7 +587,7 @@ def parse_collection_codebundles_task(self, collection_id: int):
                     
                     # Parse SLI file and add SLIs to the codebundle data (if we have both files)
                     if sli_file and codebundle_data and runbook_file:
-                        sli_data = _parse_robot_file_content(sli_file.file_content, sli_file.file_path)
+                        sli_data = _parse_robot_file_content(sli_file.file_content, sli_file.file_path, collection.slug)
                         if sli_data and sli_data.get('tasks'):
                             # SLI tasks are stored in the 'tasks' field from parsing, but we want them as 'slis'
                             codebundle_data['slis'] = sli_data['tasks']
@@ -777,7 +753,7 @@ def _create_display_name(name: str) -> str:
     return ' '.join(display_words)
 
 
-def _parse_robot_file_content(content: str, file_path: str) -> Optional[Dict[str, Any]]:
+def _parse_robot_file_content(content: str, file_path: str, collection_slug: str = None) -> Optional[Dict[str, Any]]:
     """Parse Robot Framework file content and extract codebundle data"""
     try:
         # Create temporary file for robot parser
@@ -793,14 +769,31 @@ def _parse_robot_file_content(content: str, file_path: str) -> Optional[Dict[str
             # file_path example: "codebundles/azure-appservice-functionapp-health/runbook.robot"
             path_parts = file_path.split('/')
             if len(path_parts) >= 2 and path_parts[0] == 'codebundles':
-                # Use the codebundle directory name as the slug
+                # Use the codebundle directory name
                 codebundle_dir = path_parts[1]
                 name = codebundle_dir
-                slug = codebundle_dir.lower().replace(' ', '-').replace('_', '-')
+                # Create slug with collection-codebundle format for uniqueness
+                if collection_slug:
+                    slug = f"{collection_slug}-{codebundle_dir}".lower().replace(' ', '-').replace('_', '-')
+                else:
+                    slug = codebundle_dir.lower().replace(' ', '-').replace('_', '-')
             else:
                 # Fallback to filename if path doesn't match expected structure
                 name = os.path.splitext(os.path.basename(file_path))[0]
-                slug = name.lower().replace(' ', '-').replace('_', '-')
+                if collection_slug:
+                    slug = f"{collection_slug}-{name}".lower().replace(' ', '-').replace('_', '-')
+                else:
+                    slug = name.lower().replace(' ', '-').replace('_', '-')
+            
+            # Extract metadata for display name and author
+            display_name = None
+            author = ""
+            if hasattr(model, 'metadata') and model.metadata:
+                for key, value in model.metadata.items():
+                    if key.lower() in ["display name", "name"]:
+                        display_name = value
+                    elif key.lower() == "author":
+                        author = value
             
             # Extract documentation
             doc = ""
@@ -815,37 +808,17 @@ def _parse_robot_file_content(content: str, file_path: str) -> Optional[Dict[str
                     if hasattr(section, 'body'):
                         for item in section.body:
                             if isinstance(item, TestCase):
-                                # Extract basic task name for backward compatibility
-                                tasks.append(item.name)
-                                
-                                # Extract detailed task information
+                                # Extract detailed task information (like original generate_registry.py)
                                 task_info = {
+                                    'id': getattr(item, 'id', ''),
                                     'name': item.name,
-                                    'description': '',
-                                    'documentation': '',
-                                    'tags': [],
-                                    'steps': []
+                                    'doc': str(item.doc) if hasattr(item, 'doc') and item.doc else '',
+                                    'tags': [str(tag) for tag in getattr(item, 'tags', []) if str(tag) not in ["skipped"]],
+                                    'keywords': getattr(item, 'body', [])
                                 }
                                 
-                                # Extract task documentation
-                                if hasattr(item, 'doc') and item.doc:
-                                    task_info['documentation'] = str(item.doc)
-                                    # Use first line as description
-                                    doc_lines = str(item.doc).split('\n')
-                                    task_info['description'] = doc_lines[0].strip() if doc_lines else ''
-                                
-                                # Extract task tags
-                                if hasattr(item, 'tags') and item.tags:
-                                    task_info['tags'] = [str(tag) for tag in item.tags]
-                                
-                                # Extract task steps/keywords
-                                if hasattr(item, 'body') and item.body:
-                                    for step in item.body:
-                                        if hasattr(step, 'keyword'):
-                                            step_name = str(step.keyword) if step.keyword else ''
-                                            if step_name and not step_name.startswith('['):  # Skip settings like [Documentation]
-                                                task_info['steps'].append(step_name)
-                                
+                                # Add to both task lists
+                                tasks.append(task_info)  # Store full task objects like original
                                 detailed_tasks.append(task_info)
             
             # Extract metadata from settings
@@ -880,8 +853,8 @@ def _parse_robot_file_content(content: str, file_path: str) -> Optional[Dict[str
             return {
                 'name': name,
                 'slug': slug,
-                'display_name': _create_display_name(name),
-                'description': doc.split('\n')[0] if doc else f"Codebundle for {name.replace('-', ' ').replace('_', ' ').title()}",
+                'display_name': display_name if display_name else _create_display_name(name),
+                'description': doc.split('\n')[0] if doc else f"Codebundle for {_create_display_name(name)}",
                 'doc': doc,
                 'author': author,
                 'tasks': tasks,  # Keep for backward compatibility

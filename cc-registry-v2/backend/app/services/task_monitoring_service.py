@@ -20,11 +20,8 @@ class TaskMonitoringService:
     """Service to monitor and persist Celery task execution"""
     
     def __init__(self):
-        self.celery_app = Celery(
-            'task_monitor',
-            broker=settings.REDIS_URL,
-            backend=settings.REDIS_URL,
-        )
+        from app.tasks.celery_app import celery_app
+        self.celery_app = celery_app
     
     def create_task_record(
         self, 

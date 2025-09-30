@@ -15,7 +15,7 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 # Get the same Celery app instance
-from app.tasks.data_population_tasks import celery_app
+from app.tasks.celery_app import celery_app
 
 class TaskMonitor:
     """Monitor and track task execution"""

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models import Codebundle, AIConfiguration
-from app.tasks.registry_tasks import celery_app
+from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
