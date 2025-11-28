@@ -8,7 +8,7 @@ docker rmi $(docker images -q) -f
 docker rmi $(docker images | awk '{print $3}')
 docker volume rm $(docker volume ls | awk '{print $2}')
 echo "rebuild image" 
-docker build -t cc-registry:test -f Dockerfile .
-echo "Running cc-registry container"
-docker run --name cc-registry -p 8081:8081 -d cc-registry:test
+docker build -t cc-index:test -f Dockerfile .
+echo "Running cc-index container"
+docker run --name cc-index -p 8081:8081 -d cc-index:test --attach 
 
