@@ -10,5 +10,5 @@ docker volume rm $(docker volume ls | awk '{print $2}')
 echo "rebuild image" 
 docker build -t cc-index:test -f Dockerfile .
 echo "Running cc-index container"
-docker run --name cc-index -p 8081:8081 -d cc-index:test
+docker run --name cc-index -p 8081:8081 -d cc-index:test --attach 
 
