@@ -19,6 +19,5 @@ create_system_user_if_missing
 
 
 python3 generate_registry.py
-python3 generate_registry.py
 
 mkdocs serve -f cc-registry/mkdocs.yml --dev-addr=0.0.0.0:8081
