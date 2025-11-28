@@ -446,6 +446,8 @@ def generate_index(all_support_tags_freq, all_codecollection_stats, top_latest_f
         index_file.write(index_output)
     index_file.close()
 
+    # Ensure the overrides directory exists before writing home.html
+    os.makedirs(os.path.dirname(home_path), exist_ok=True)
     with open(home_path, 'w') as home_file:
         home_file.write(home_output)
     home_file.close()
@@ -590,6 +592,7 @@ def main():
     """
     data = read_yaml(yaml_file_path)
     all_files_with_dates = []
+    all_codebundle_tasks = []
     clean_path(clone_dir)
     clean_path(f"{mkdocs_root}/{docs_dir}/CodeCollection")
     # Recreate the base directories after cleaning
