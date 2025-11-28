@@ -58,7 +58,7 @@ def parse_robot_file(fpath):
         if k.lower() in ["display name", "name"]:
             ret["display_name"] = v
         if k.lower() in ["supports"]:
-            support_tags = re.split('\s*,\s*|\s+', v.strip().upper())
+            support_tags = re.split(r'\s*,\s*|\s+', v.strip().upper())
             ret["support_tags"] = support_tags
             all_support_tags.extend(support_tags)
     
@@ -142,6 +142,8 @@ def generate_cc_list(data):
     for codecollection in data['codecollections']: 
         # print(codecollection)
         cc_index_file_path=f'{mkdocs_root}/{docs_dir}/CodeCollection/{codecollection["slug"]}/index.md'
+        # Ensure the directory exists before writing
+        os.makedirs(os.path.dirname(cc_index_file_path), exist_ok=True)
         cc_index_content = cc_index_jinja_template.render(
             codecollection=codecollection,
             codecollection_stats=all_codecollection_stats[codecollection['slug']]
@@ -168,8 +170,7 @@ def clean_path(path):
             # It's a file, remove it
             os.remove(path)
             print(f"File '{path}' has been removed.")
-    else:
-        print(f"The path '{path}' does not exist.")
+    # If path doesn't exist, silently continue (nothing to clean)
 
 def count_directories_at_depth_one(path):
     # List everything in the given path
@@ -347,8 +348,9 @@ def generate_codebundle_content(collection, clone_path):
             task["task_name_generalized"] = task_name_generalized
             task["name_snake_case"] = re.sub(r'\W+', '_', task_name_generalized.lower())
             for command in meta["commands"]:
-                if command["name"] == task["name_snake_case"]:
-                    task["meta_explanation"] = command["explanation"]
+                # Check if command has a "name" key before accessing it
+                if command.get("name") == task["name_snake_case"]:
+                    task["meta_explanation"] = command.get("explanation", "")
                     # Use .get() with a default of None or an empty string if you prefer
                     useful_scenarios = command.get("when_is_it_useful", None)
                     if useful_scenarios:
@@ -590,7 +592,9 @@ def main():
     all_files_with_dates = []
     clean_path(clone_dir)
     clean_path(f"{mkdocs_root}/{docs_dir}/CodeCollection")
-    all_codebundle_tasks = []
+    # Recreate the base directories after cleaning
+    os.makedirs(clone_dir, exist_ok=True)
+    os.makedirs(f"{mkdocs_root}/{docs_dir}/CodeCollection", exist_ok=True)
 
     for collection in data.get('codecollections', []):
         print(f"Cloning {collection['name']}...")
