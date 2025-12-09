@@ -40,7 +40,7 @@ const CodeBundles: React.FC = () => {
           }),
           apiService.getCodeCollections(),
         ]);
-        setCodebundles(codebundlesData);
+        setCodebundles(codebundlesData.codebundles);
         setCollections(collectionsData);
       } catch (err) {
         setError('Failed to load codebundles');

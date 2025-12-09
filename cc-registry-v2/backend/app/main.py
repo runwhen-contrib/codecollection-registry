@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
@@ -85,7 +85,7 @@ async def health_check():
     }
 
 # Include routers
-from app.routers import admin, tasks, raw_data, admin_crud, ai_admin, ai_enhancement_admin, task_execution_admin, versions, task_management, admin_inventory, helm_charts
+from app.routers import admin, tasks, raw_data, admin_crud, ai_admin, ai_enhancement_admin, task_execution_admin, versions, task_management, admin_inventory, helm_charts, chat, simple_chat
 app.include_router(admin.router)
 app.include_router(tasks.router)
 app.include_router(raw_data.router)
@@ -97,6 +97,8 @@ app.include_router(admin_inventory.router)
 app.include_router(versions.router, prefix="/api/v1/registry")
 app.include_router(task_management.router)
 app.include_router(helm_charts.router, prefix="/api/v1", tags=["helm-charts"])
+app.include_router(chat.router)
+app.include_router(simple_chat.router)
 
 @app.get("/api/v1/registry/collections")
 async def list_collections():
@@ -376,15 +378,19 @@ async def get_all_tasks(
         )
 
 @app.get("/api/v1/codebundles")
-async def list_codebundles():
-    """List all codebundles"""
+async def list_codebundles(limit: int = Query(50, description="Number of codebundles to return"), offset: int = Query(0, description="Offset for pagination")):
+    """List codebundles with pagination"""
     try:
         from app.core.database import SessionLocal
         from app.models import Codebundle, CodeCollection
         
         db = SessionLocal()
         try:
-            codebundles = db.query(Codebundle).filter(Codebundle.is_active == True).all()
+            # Get total count
+            total_count = db.query(Codebundle).filter(Codebundle.is_active == True).count()
+            
+            # Get paginated results
+            codebundles = db.query(Codebundle).filter(Codebundle.is_active == True).offset(offset).limit(limit).all()
             
             result = []
             for cb in codebundles:
@@ -432,12 +438,20 @@ async def list_codebundles():
                     } if collection else None
                 })
             
-            return result
+            return {
+                "codebundles": result,
+                "total_count": total_count,
+                "pagination": {
+                    "limit": limit,
+                    "offset": offset,
+                    "has_more": total_count > offset + limit
+                }
+            }
         finally:
             db.close()
     except Exception as e:
         logger.error(f"Error listing codebundles: {e}")
-        return []
+        return {"codebundles": [], "total_count": 0, "pagination": {"limit": limit, "offset": offset, "has_more": False}}
 
 @app.get("/api/v1/collections/{collection_slug}/codebundles/{codebundle_slug}")
 async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):

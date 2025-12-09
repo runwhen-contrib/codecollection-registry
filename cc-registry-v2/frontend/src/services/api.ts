@@ -310,7 +310,7 @@ export const apiService = {
     collection_id?: number;
     search?: string;
     tags?: string;
-  }): Promise<CodeBundle[]> {
+  }): Promise<{codebundles: CodeBundle[], total_count: number, pagination: {limit: number, offset: number, has_more: boolean}}> {
     console.log('API: Getting codebundles from', `${API_BASE_URL}/codebundles`, 'with params:', params);
     const response = await api.get('/codebundles', { params });
     console.log('API: Codebundles response:', response.data);
@@ -810,6 +810,90 @@ export const apiService = {
     
     const response = await api.post(`/helm-charts/${chartName}/validate-values?${params.toString()}`, values);
     console.log('API: Helm values validation response:', response.data);
+    return response.data;
+  }
+};
+
+// Chat API interfaces and functions
+export interface ChatQuery {
+  question: string;
+  context_limit?: number;
+  include_enhanced_descriptions?: boolean;
+}
+
+export interface ChatResponse {
+  answer: string;
+  relevant_tasks: Array<{
+    id: number;
+    codebundle_name: string;
+    codebundle_slug: string;
+    collection_name: string;
+    collection_slug: string;
+    description: string;
+    support_tags: string[];
+    tasks: string[];
+    slis: string[];
+    author: string;
+    access_level: string;
+    minimum_iam_requirements: string[];
+    runbook_source_url: string;
+    relevance_score: number;
+    platform: string;
+    resource_types: string[];
+  }>;
+  confidence_score?: number;
+  sources_used: string[];
+  query_metadata: {
+    query_processed_at: string;
+    context_tasks_count: number;
+    ai_model: string;
+  };
+}
+
+export interface ChatHealth {
+  status: string;
+  ai_enabled: boolean;
+  ai_provider?: string;
+  model?: string;
+}
+
+export interface ExampleQueries {
+  examples: Array<{
+    category: string;
+    queries: string[];
+  }>;
+}
+
+export const chatApi = {
+  // Query the chat system
+  async query(queryData: ChatQuery): Promise<ChatResponse> {
+    console.log('API: Sending chat query', queryData);
+    const response = await api.post('/chat/query', queryData);
+    console.log('API: Chat query response:', response.data);
+    return response.data;
+  },
+
+  // Simple chat query (fallback)
+  async simpleQuery(question: string): Promise<{answer: string, relevant_codebundles: any[]}> {
+    console.log('API: Sending simple chat query', question);
+    const response = await api.post('/simple-chat/query', { question });
+    console.log('API: Simple chat query response:', response.data);
+    return response.data;
+  },
+
+  // Check chat service health
+  async health(): Promise<ChatHealth> {
+    console.log('API: Checking chat health');
+    const response = await api.get('/chat/health');
+    console.log('API: Chat health response:', response.data);
+    return response.data;
+  },
+
+  // Get example queries
+  async getExamples(): Promise<ExampleQueries> {
+    console.log('API: Getting example queries');
+    const response = await api.get('/chat/examples');
+    console.log('API: Example queries response:', response.data);
     return response.data;
   }
 };

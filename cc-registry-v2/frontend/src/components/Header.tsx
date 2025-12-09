@@ -121,6 +121,21 @@ const Header: React.FC = () => {
             </Button>
             <Button
               component={Link}
+              to="/chat"
+              color="inherit"
+              sx={{
+                color: 'white',
+                fontWeight: location.pathname === '/chat' ? 'bold' : 'normal',
+                backgroundColor: 'rgba(76, 175, 80, 0.2)',
+                '&:hover': {
+                  backgroundColor: 'rgba(76, 175, 80, 0.3)',
+                }
+              }}
+            >
+              🤖 Chat
+            </Button>
+            <Button
+              component={Link}
               to="/config-builder"
               color="inherit"
               sx={{

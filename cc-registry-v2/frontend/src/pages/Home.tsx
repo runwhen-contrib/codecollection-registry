@@ -26,7 +26,7 @@ const Home: React.FC = () => {
         console.log('Fetching data from API...');
         const [collectionsData, codebundlesData] = await Promise.all([
           apiService.getCodeCollections(),
-          apiService.getCodeBundles({ limit: 6 }),
+          apiService.getCodeBundles({ limit: 6 }).then(response => response.codebundles),
         ]);
         console.log('Collections data:', collectionsData);
         console.log('Codebundles data:', codebundlesData);

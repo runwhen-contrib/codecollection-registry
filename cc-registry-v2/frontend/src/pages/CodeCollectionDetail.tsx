@@ -81,7 +81,8 @@ const CodeCollectionDetail: React.FC = () => {
       try {
         if (selectedVersion === 'main' || versions.find(v => v.version_name === selectedVersion && v.version_type === 'main')) {
           // For main version, get regular codebundles
-          const codebundlesData = await apiService.getCodeBundles();
+          const codebundlesResponse = await apiService.getCodeBundles();
+          const codebundlesData = codebundlesResponse.codebundles;
           const collectionCodebundles = codebundlesData.filter(
             cb => cb.codecollection?.slug === collectionSlug
           );

@@ -226,14 +226,29 @@ def parse_stored_data_task(self):
             codebundles_created = 0
             for raw_file in raw_files:
                 if raw_file.file_type == 'robot':
-                    # Parse Robot Framework file
-                    codebundles = _parse_robot_file(raw_file)
+                    # Parse Robot Framework file using the WORKING parser
+                    from app.tasks.fixed_parser import parse_robot_file_content
+                    codebundle_data = parse_robot_file_content(
+                        raw_file.file_content, 
+                        raw_file.file_path, 
+                        raw_file.collection_slug
+                    )
+                    codebundles = [codebundle_data] if codebundle_data else []
                     
                     for codebundle_data in codebundles:
+                        # Get the collection ID from slug
+                        collection = db.query(CodeCollection).filter(
+                            CodeCollection.slug == raw_file.collection_slug
+                        ).first()
+                        
+                        if not collection:
+                            logger.warning(f"Collection not found for slug: {raw_file.collection_slug}")
+                            continue
+                        
                         # Create or update codebundle
                         codebundle = db.query(Codebundle).filter(
                             Codebundle.slug == codebundle_data['slug'],
-                            Codebundle.codecollection_id == raw_file.collection_slug
+                            Codebundle.codecollection_id == collection.id
                         ).first()
                         
                         if not codebundle:
@@ -247,10 +262,23 @@ def parse_stored_data_task(self):
                                 support_tags=codebundle_data.get('support_tags', []),
                                 tasks=codebundle_data.get('tasks', []),
                                 slis=codebundle_data.get('slis', []),
-                                codecollection_id=raw_file.collection_slug
+                                task_count=codebundle_data.get('task_count', 0),
+                                runbook_path=codebundle_data.get('runbook_path', ''),
+                                codecollection_id=collection.id
                             )
                             db.add(codebundle)
                             codebundles_created += 1
+                        else:
+                            # Update existing codebundle with new data
+                            codebundle.display_name = codebundle_data.get('display_name', codebundle_data['name'])
+                            codebundle.description = codebundle_data.get('description', '')
+                            codebundle.doc = codebundle_data.get('doc', '')
+                            codebundle.author = codebundle_data.get('author', '')
+                            codebundle.support_tags = codebundle_data.get('support_tags', [])
+                            codebundle.tasks = codebundle_data.get('tasks', [])
+                            codebundle.slis = codebundle_data.get('slis', [])
+                            codebundle.task_count = codebundle_data.get('task_count', 0)
+                            codebundle.runbook_path = codebundle_data.get('runbook_path', '')
                     
                     # Mark file as processed
                     raw_file.is_processed = True

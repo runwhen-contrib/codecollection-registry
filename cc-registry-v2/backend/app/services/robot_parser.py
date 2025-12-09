@@ -35,81 +35,24 @@ class RobotFrameworkParser:
         }
     
     def parse_robot_file(self, raw_file: RawRepositoryData) -> List[Dict[str, Any]]:
-        """Parse a Robot Framework file and extract codebundle data"""
+        """Parse a Robot Framework file using the WORKING parser from generate_registry.py"""
         try:
-            content = raw_file.file_content
-            lines = content.split('\n')
+            # Use the fixed parser that actually works
+            from app.tasks.fixed_parser import parse_robot_file_content
             
-            codebundles = []
-            current_codebundle = None
+            codebundle_data = parse_robot_file_content(
+                raw_file.file_content, 
+                raw_file.file_path, 
+                raw_file.collection_slug
+            )
             
-            for line_num, line in enumerate(lines, 1):
-                line = line.strip()
+            if codebundle_data:
+                return [codebundle_data]
+            else:
+                return []
                 
-                # Skip empty lines and comments
-                if not line or line.startswith('#'):
-                    continue
-                
-                # Detect sections
-                if line.startswith('***') and line.endswith('***'):
-                    section = line.replace('*', '').strip().lower()
-                    self.current_section = section
-                    continue
-                
-                # Parse test cases
-                if self.current_section == 'test cases':
-                    if self._is_test_case_name(line):
-                        # Save previous test case
-                        if current_codebundle:
-                            codebundles.append(current_codebundle)
-                        
-                        # Start new test case
-                        current_codebundle = self._create_codebundle_from_test_name(
-                            line, raw_file.collection_slug, line_num
-                        )
-                
-                # Parse keywords
-                elif self.current_section == 'keywords':
-                    if self._is_keyword_name(line):
-                        # This is a keyword definition
-                        if current_codebundle:
-                            keyword = self._parse_keyword_name(line)
-                            if keyword:
-                                current_codebundle['tasks'].append(keyword)
-                
-                # Parse documentation
-                elif line.startswith('[Documentation]'):
-                    if current_codebundle:
-                        doc_lines = self._extract_documentation(lines, line_num)
-                        current_codebundle['description'] = ' '.join(doc_lines)
-                        current_codebundle['doc'] = '\n'.join(doc_lines)
-                
-                # Parse tags
-                elif line.startswith('[Tags]'):
-                    if current_codebundle:
-                        tags = self._extract_tags(line)
-                        current_codebundle['support_tags'].extend(tags)
-                
-                # Parse test steps
-                elif current_codebundle and self.current_section == 'test cases':
-                    if line and not line.startswith('['):
-                        # This is a test step
-                        step = self._parse_test_step(line)
-                        if step:
-                            current_codebundle['tasks'].append(step)
-            
-            # Add the last codebundle
-            if current_codebundle:
-                # Classify access level before adding
-                current_codebundle['access_level'] = self._classify_access_level(current_codebundle)
-                current_codebundle['iam_requirements'] = self._extract_iam_requirements(current_codebundle)
-                codebundles.append(current_codebundle)
-            
-            logger.info(f"Parsed {len(codebundles)} codebundles from {raw_file.file_path}")
-            return codebundles
-            
         except Exception as e:
-            logger.error(f"Error parsing Robot file {raw_file.file_path}: {e}")
+            logger.error(f"Failed to parse robot file {raw_file.file_path}: {e}")
             return []
     
     def _is_test_case_name(self, line: str) -> bool:

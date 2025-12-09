@@ -19,9 +19,10 @@ logger = logging.getLogger(__name__)
 
 # Initialize Celery
 celery_app = Celery(
-    'registry_tasks',
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
+    "registry_tasks",
+    broker=settings.CELERY_BROKER_URL,
+    backend=settings.CELERY_RESULT_BACKEND,
+    include=["app.tasks.registry_tasks"]
 )
 
 def _create_display_name(name: str) -> str:

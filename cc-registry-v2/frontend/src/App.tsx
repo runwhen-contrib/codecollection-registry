@@ -17,6 +17,7 @@ import TaskManager from './pages/TaskManager';
 import AIEnhancementAdmin from './components/AIEnhancementAdmin';
 import Login from './pages/Login';
 import ConfigBuilder from './pages/ConfigBuilder';
+import Chat from './pages/Chat';
 import Footer from './components/Footer';
 import { CartProvider } from './contexts/CartContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -37,6 +38,7 @@ function App() {
               <Route path="/collections/:collectionSlug/codebundles/:codebundleSlug" element={<CodeBundleDetail />} />
               <Route path="/all-tasks" element={<AllTasks />} />
               <Route path="/categories" element={<Categories />} />
+              <Route path="/chat" element={<Chat />} />
               <Route path="/test-api" element={<TestAPI />} />
               <Route path="/login" element={<Login />} />
               

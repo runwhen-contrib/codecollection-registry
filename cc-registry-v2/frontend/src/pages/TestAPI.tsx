@@ -27,7 +27,8 @@ const TestAPI: React.FC = () => {
       console.log('Collections:', collectionsData);
       
       // Test codebundles endpoint
-      const codebundlesData = await apiService.getCodeBundles();
+      const codebundlesResponse = await apiService.getCodeBundles();
+      const codebundlesData = codebundlesResponse.codebundles;
       setCodebundles(codebundlesData);
       console.log('Codebundles:', codebundlesData);
       
