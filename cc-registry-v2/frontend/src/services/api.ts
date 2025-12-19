@@ -133,8 +133,8 @@ export interface CodeBundle {
   doc: string;
   author: string;
   support_tags: string[];
-  tasks: string[] | null;
-  slis: string[] | null;
+  tasks: Array<{name: string; doc: string; tags: string[]} | string> | null;
+  slis: Array<{name: string; doc: string; tags: string[]} | string> | null;
   task_count: number;
   sli_count: number;
   runbook_source_url: string;
@@ -864,6 +864,29 @@ export interface ExampleQueries {
   }>;
 }
 
+export interface TaskRequestIssue {
+  user_query: string;
+  task_description: string;
+  use_case: string;
+  platform?: string;
+  priority?: string;
+  user_email?: string;
+}
+
+export interface IssueResponse {
+  issue_url: string;
+  issue_number: number;
+  message: string;
+}
+
+export interface IssueTemplate {
+  user_query: string;
+  task_description: string;
+  use_case: string;
+  platform: string;
+  priority: string;
+}
+
 export const chatApi = {
   // Query the chat system
   async query(queryData: ChatQuery): Promise<ChatResponse> {
@@ -894,6 +917,26 @@ export const chatApi = {
     console.log('API: Getting example queries');
     const response = await api.get('/chat/examples');
     console.log('API: Example queries response:', response.data);
+    return response.data;
+  }
+};
+
+export const githubApi = {
+  // Get issue template for a query
+  async getIssueTemplate(userQuery: string): Promise<IssueTemplate> {
+    console.log('API: Getting GitHub issue template for:', userQuery);
+    const response = await api.get('/github/issue-template', { 
+      params: { user_query: userQuery } 
+    });
+    console.log('API: Issue template response:', response.data);
+    return response.data;
+  },
+
+  // Create GitHub issue for task request
+  async createTaskRequest(issueData: TaskRequestIssue): Promise<IssueResponse> {
+    console.log('API: Creating GitHub issue:', issueData);
+    const response = await api.post('/github/create-task-request', issueData);
+    console.log('API: GitHub issue created:', response.data);
     return response.data;
   }
 };

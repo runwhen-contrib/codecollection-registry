@@ -8,10 +8,11 @@ import re
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_, and_
+from sqlalchemy import func, or_, and_, Text, cast, String
 
 from app.models import Codebundle, CodeCollection, AIConfiguration
 from app.services.ai_service import AIEnhancementService
+from app.services.ai_prompts import AIPrompts
 
 logger = logging.getLogger(__name__)
 
@@ -113,17 +114,17 @@ class ChatService:
                         Codebundle.ai_enhanced_description.ilike(keyword_pattern)
                     )
             
-            # 2. Search in support tags
+            # 2. Search in support tags (JSON array)
             for keyword in keywords:
-                # Use PostgreSQL's JSON operators for tag search
+                # Convert JSON array to text for searching
                 search_conditions.append(
-                    func.cast(Codebundle.support_tags, func.text('text')).ilike(f"%{keyword}%")
+                    func.cast(Codebundle.support_tags, Text).ilike(f"%{keyword}%")
                 )
             
-            # 3. Search in task names (stored in JSON)
+            # 3. Search in task names (JSON array)
             for keyword in keywords:
                 search_conditions.append(
-                    func.cast(Codebundle.tasks, func.text('text')).ilike(f"%{keyword}%")
+                    func.cast(Codebundle.tasks, Text).ilike(f"%{keyword}%")
                 )
             
             # Combine all search conditions with OR
@@ -242,17 +243,14 @@ class ChatService:
                 (str(codebundle.discovery_resource_types or []), 1.2)
             ]
             
-            # Calculate keyword matches
+            # Calculate keyword matches (more strict)
             for text, weight in text_fields:
                 text_lower = text.lower()
                 for keyword in keywords:
-                    if keyword in text_lower:
-                        # Exact word match gets full score
-                        if f" {keyword} " in f" {text_lower} " or text_lower.startswith(keyword) or text_lower.endswith(keyword):
-                            score += weight
-                        # Partial match gets half score
-                        else:
-                            score += weight * 0.5
+                    # Only count exact word boundaries, not partial matches
+                    if re.search(r'\b' + re.escape(keyword) + r'\b', text_lower):
+                        score += weight
+                    # No partial matches - they create too much noise
             
             # Boost score for certain indicators
             question_lower = question.lower()
@@ -281,57 +279,65 @@ class ChatService:
         # Sort by score (descending)
         scored_tasks.sort(key=lambda x: x[1], reverse=True)
         
-        return scored_tasks
+        # Filter out tasks with very low relevance scores
+        # Only keep tasks with a minimum absolute score (not just relative)
+        MIN_RELEVANCE_THRESHOLD = 3.0  # Minimum score to be considered relevant (increased from 1.0)
+        filtered_tasks = [(cb, score) for cb, score in scored_tasks if score >= MIN_RELEVANCE_THRESHOLD]
+        
+        # Normalize scores to percentages (0-100%)
+        if filtered_tasks:
+            max_score = filtered_tasks[0][1] if filtered_tasks[0][1] > 0 else 1.0
+            normalized_tasks = []
+            for codebundle, score in filtered_tasks:
+                # Convert to percentage and cap at 100%
+                percentage = min(100.0, (score / max_score) * 100.0)
+                normalized_tasks.append((codebundle, percentage))
+            return normalized_tasks
+        
+        return []  # Return empty list if no tasks meet threshold
     
     def _build_context(self, question: str, relevant_tasks: List[Dict[str, Any]]) -> str:
-        """Build context string for the AI from relevant tasks"""
-        context_parts = [
-            "# CodeCollection Registry - Available Tasks and Libraries",
-            "",
-            f"User Question: {question}",
-            "",
-            "## Relevant Tasks Found:",
-            ""
-        ]
+        """Build context string for the AI from relevant tasks - focused on task names"""
+        context_parts = []
         
         for i, task in enumerate(relevant_tasks, 1):
             context_parts.extend([
-                f"### {i}. {task['codebundle_name']}",
+                f"## Codebundle {i}: {task['codebundle_name']}",
                 f"**Collection:** {task['collection_name']}",
                 f"**Description:** {task['description'] or 'No description available'}",
                 f"**Platform:** {task.get('platform', 'Generic')}",
-                f"**Access Level:** {task['access_level']}",
                 f"**Support Tags:** {', '.join(task['support_tags']) if task['support_tags'] else 'None'}",
                 ""
             ])
             
-            # Add tasks if available
+            # Emphasize the tasks - this is what we want to recommend
             if task['tasks']:
-                context_parts.append("**Available Tasks:**")
-                for task_name in task['tasks'][:3]:  # Limit to first 3 tasks
+                context_parts.append("**TASKS (these are what you should recommend):**")
+                for task_name in task['tasks']:
                     if isinstance(task_name, str):
-                        context_parts.append(f"- {task_name}")
+                        context_parts.append(f'- "{task_name}"')
                     elif isinstance(task_name, dict):
-                        context_parts.append(f"- {task_name.get('name', 'Unknown Task')}")
+                        context_parts.append(f'- "{task_name.get("name", "Unknown Task")}"')
                 context_parts.append("")
             
-            # Add IAM requirements if available
+            # Add SLIs if available
+            if task.get('slis'):
+                context_parts.append("**SLI TASKS:**")
+                for sli_name in task['slis']:
+                    if isinstance(sli_name, str):
+                        context_parts.append(f'- "{sli_name}"')
+                    elif isinstance(sli_name, dict):
+                        context_parts.append(f'- "{sli_name.get("name", "Unknown SLI")}"')
+                context_parts.append("")
+            
+            # Add access level and permissions for context
+            if task['access_level'] != 'unknown':
+                context_parts.append(f"**Access Level:** {task['access_level']}")
+            
             if task['minimum_iam_requirements']:
-                context_parts.extend([
-                    "**Required Permissions:**",
-                    f"- {', '.join(task['minimum_iam_requirements'])}",
-                    ""
-                ])
+                context_parts.append(f"**Required Permissions:** {', '.join(task['minimum_iam_requirements'])}")
             
-            # Add source URL if available
-            if task['runbook_source_url']:
-                context_parts.extend([
-                    f"**Source:** {task['runbook_source_url']}",
-                    ""
-                ])
-            
-            context_parts.append("---")
-            context_parts.append("")
+            context_parts.extend(["", "---", ""])
         
         return "\n".join(context_parts)
     
@@ -341,26 +347,9 @@ class ChatService:
             client = self.ai_service._get_ai_client()
             model_name = self.ai_service._get_model_name()
             
-            system_prompt = """You are a helpful assistant for the CodeCollection Registry. Your job is to help users find the right tasks and libraries for their needs.
-
-When answering questions:
-1. Be specific and actionable
-2. Recommend the most relevant tasks from the provided context
-3. Explain what each recommended task does
-4. Mention any important requirements (permissions, platforms, etc.)
-5. If multiple options exist, explain the differences
-6. Keep answers concise but informative
-7. Always base your recommendations on the provided context
-
-If you can't find relevant information in the context, say so clearly."""
-
-            user_prompt = f"""Based on the following context about available CodeCollection tasks and libraries, please answer the user's question.
-
-{context}
-
-Question: {question}
-
-Please provide a helpful answer that recommends specific tasks and explains how they address the user's needs."""
+            # Use the improved chat prompts
+            system_prompt = AIPrompts.get_system_prompt('chat_query')
+            user_prompt = AIPrompts.get_chat_query_prompt(question, context)
 
             response = client.chat.completions.create(
                 model=model_name,
@@ -381,30 +370,45 @@ Please provide a helpful answer that recommends specific tasks and explains how 
     
     def _generate_fallback_answer(self, question: str, context: str) -> str:
         """Generate a simple fallback answer when AI is not available"""
-        # Extract task names from context
+        # Extract actual task names from context (look for quoted task names)
         lines = context.split('\n')
         task_names = []
+        codebundle_names = []
         
+        current_codebundle = None
         for line in lines:
-            if line.startswith('### '):
-                # Extract task name
-                task_name = line.replace('### ', '').split('.', 1)[-1].strip()
-                task_names.append(task_name)
+            if line.startswith('## Codebundle'):
+                # Extract codebundle name
+                current_codebundle = line.split(':', 1)[-1].strip()
+                codebundle_names.append(current_codebundle)
+            elif line.startswith('- "') and line.endswith('"'):
+                # Extract task name (in quotes)
+                task_name = line.strip('- "')
+                if current_codebundle:
+                    task_names.append((task_name, current_codebundle))
         
         if not task_names:
-            return "I couldn't find any relevant tasks for your question. Please try rephrasing your query or check if the tasks you're looking for are available in the registry."
+            return f"""**No Matching Tasks Found**
+
+I couldn't find any tasks in the CodeCollection registry that match your request for "{question}".
+
+**Would you like these tasks added to the registry?**
+
+Based on your question, it would be helpful to have tasks that can handle: {question}
+
+You can create a GitHub issue to request these tasks be added to the registry."""
         
         answer_parts = [
-            f"Based on your question '{question}', I found the following relevant tasks:",
+            f"**Tasks Available in Registry for: {question}**",
             ""
         ]
         
-        for i, task_name in enumerate(task_names, 1):
-            answer_parts.append(f"{i}. **{task_name}**")
+        for i, (task_name, codebundle_name) in enumerate(task_names, 1):
+            answer_parts.append(f'{i}. **"{task_name}"** (from {codebundle_name})')
         
         answer_parts.extend([
             "",
-            "Please check the task details above for more information about descriptions, requirements, and usage instructions."
+            "These are the available tasks from the CodeCollection registry that match your query."
         ])
         
         return "\n".join(answer_parts)

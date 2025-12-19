@@ -72,9 +72,12 @@ async def simple_query(
             elif any(word in query.question.lower() for word in ['pod', 'pods', 'kubernetes', 'k8s']):
                 answer += "**Note:** Look for Kubernetes-related codebundles that contain pod troubleshooting and management tasks.\n"
         else:
-            # Provide helpful suggestions
+            # Suggest adding to registry and provide helpful suggestions
             answer = f"I couldn't find any codebundles matching your question '{query.question}'. \n\n"
-            answer += "**Try searching for:**\n"
+            answer += "**Would you like these tasks added to the registry?**\n\n"
+            answer += f"If you need tasks for '{query.question}', we can add them to the CodeCollection registry.\n"
+            answer += "You can create a GitHub issue to request these tasks.\n\n"
+            answer += "**Or try searching for existing tasks:**\n"
             answer += "• 'sli' - for monitoring and measurement tasks\n"
             answer += "• 'runbook' - for operational procedures\n"
             answer += "• 'kubernetes' or 'k8s' - for container orchestration tasks\n"

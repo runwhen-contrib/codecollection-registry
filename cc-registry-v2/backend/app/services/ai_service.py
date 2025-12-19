@@ -26,11 +26,52 @@ class AIEnhancementService:
         self.config = self._get_active_config()
         
     def _get_active_config(self) -> Optional[AIConfiguration]:
-        """Get the active AI configuration"""
-        return self.db.query(AIConfiguration).filter(
+        """Get the active AI configuration from database or environment variables"""
+        # First try to get from database
+        db_config = self.db.query(AIConfiguration).filter(
             AIConfiguration.is_active == True,
             AIConfiguration.enhancement_enabled == True
         ).first()
+        
+        if db_config:
+            return db_config
+        
+        # Fallback to environment variables
+        if self._has_env_config():
+            return self._create_env_config()
+        
+        return None
+    
+    def _has_env_config(self) -> bool:
+        """Check if we have AI configuration in environment variables"""
+        if settings.AI_SERVICE_PROVIDER == "azure-openai":
+            return (settings.AZURE_OPENAI_API_KEY and 
+                   settings.AZURE_OPENAI_ENDPOINT and 
+                   settings.AZURE_OPENAI_DEPLOYMENT_NAME)
+        else:
+            return settings.OPENAI_API_KEY is not None
+    
+    def _create_env_config(self) -> AIConfiguration:
+        """Create a temporary AI configuration from environment variables"""
+        if settings.AI_SERVICE_PROVIDER == "azure-openai":
+            return AIConfiguration(
+                service_provider="azure-openai",
+                api_key=settings.AZURE_OPENAI_API_KEY,
+                model_name=settings.AI_MODEL,
+                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                azure_deployment_name=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
+                api_version=settings.AZURE_OPENAI_API_VERSION,
+                enhancement_enabled=settings.AI_ENHANCEMENT_ENABLED,
+                is_active=True
+            )
+        else:
+            return AIConfiguration(
+                service_provider="openai",
+                api_key=settings.OPENAI_API_KEY,
+                model_name=settings.AI_MODEL,
+                enhancement_enabled=settings.AI_ENHANCEMENT_ENABLED,
+                is_active=True
+            )
     
     def is_enabled(self) -> bool:
         """Check if AI enhancement is enabled and configured"""

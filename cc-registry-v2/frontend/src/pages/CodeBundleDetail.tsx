@@ -178,7 +178,10 @@ const CodeBundleDetail: React.FC = () => {
                   {codebundle.tasks.map((task, index) => (
                     <React.Fragment key={index}>
                       <ListItem>
-                        <ListItemText primary={task} />
+                        <ListItemText 
+                          primary={typeof task === 'string' ? task : task.name}
+                          secondary={typeof task === 'object' ? task.doc : undefined}
+                        />
                       </ListItem>
                       {index < codebundle.tasks!.length - 1 && <Divider />}
                     </React.Fragment>
@@ -199,7 +202,10 @@ const CodeBundleDetail: React.FC = () => {
                   {codebundle.slis.map((sli, index) => (
                     <React.Fragment key={index}>
                       <ListItem>
-                        <ListItemText primary={sli} />
+                        <ListItemText 
+                          primary={typeof sli === 'string' ? sli : sli.name}
+                          secondary={typeof sli === 'object' ? sli.doc : undefined}
+                        />
                       </ListItem>
                       {index < codebundle.slis!.length - 1 && <Divider />}
                     </React.Fragment>

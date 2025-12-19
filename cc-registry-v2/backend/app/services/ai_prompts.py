@@ -29,7 +29,25 @@ Analyze individual automation tasks to provide detailed, actionable descriptions
 Return your response as JSON with keys:
 - purpose: Detailed explanation of why this task exists and what problem it solves (2-3 sentences)
 - function: Comprehensive explanation of what this task does, how it works, and when you would use it (3-4 sentences)
-- requirements: List of SPECIFIC prerequisites, permissions, tools, and conditions needed (be very detailed about authorization requirements)"""
+- requirements: List of SPECIFIC prerequisites, permissions, tools, and conditions needed (be very detailed about authorization requirements)""",
+
+        "chat_query": """You are a RunWhen CodeCollection task recommendation system. Your job is to recommend ONLY tasks that exist in the provided registry data.
+
+CRITICAL RULES:
+1. **ONLY recommend tasks that appear in the provided codebundles** - Never suggest tasks that don't exist
+2. **Use EXACT task names** from the "tasks" arrays - Do not modify or paraphrase them
+3. **If no relevant tasks exist**, tell the user and suggest adding tasks to the registry
+4. **Never hallucinate or invent tasks** - Only work with what's provided
+
+When relevant tasks exist:
+- Format: **"Exact Task Name"** (from Codebundle Name)
+- Explain what it does based on the codebundle description
+- Prioritize by relevance
+
+When NO relevant tasks exist:
+- Say "I couldn't find any tasks in the registry that match your request"
+- Suggest: "Would you like these tasks added to the registry?"
+- Optionally mention what types of tasks would be helpful for their use case"""
     }
     
     # Template prompts for different enhancement scenarios
@@ -133,6 +151,40 @@ Provide detailed analysis:
 Platform: {platform} | Resource Types: {resource_types}
 
 Focus on providing actionable, security-conscious information that helps users understand exactly what they need and when to use this task.
+"""
+
+    CHAT_QUERY_TEMPLATE = """
+User Question: "{user_question}"
+
+Available CodeBundles and Their Tasks:
+{context_codebundles}
+
+STRICT REQUIREMENTS:
+- ONLY recommend tasks that appear in the above codebundles
+- Use EXACT task names from the "tasks" arrays (in quotes)
+- If no relevant tasks exist, say so and suggest adding them to the registry
+
+IF RELEVANT TASKS EXIST, format as:
+
+**Tasks Available in Registry for: {user_question}**
+
+1. **"Exact Task Name"** (from Codebundle Name)
+   - What it does: [Based on codebundle description]
+   - When to use: [Specific scenario]
+
+IF NO RELEVANT TASKS EXIST, respond with:
+
+**No Matching Tasks Found**
+
+I couldn't find any tasks in the CodeCollection registry that match your request for "{user_question}".
+
+**Would you like these tasks added to the registry?**
+
+[Briefly describe what types of tasks would be helpful for their use case]
+
+You can create a GitHub issue to request these tasks be added to the registry.
+
+NEVER invent or suggest tasks that don't exist in the provided data.
 """
 
     # Prompt variations for different scenarios
@@ -257,6 +309,23 @@ This gives you actual implementation details to analyze for more accurate enhanc
             base_prompt += variation['context_suffix']
         
         return base_prompt
+
+    @classmethod
+    def get_chat_query_prompt(cls, user_question: str, context_codebundles: str) -> str:
+        """
+        Generate a complete prompt for chat queries about codebundles
+        
+        Args:
+            user_question: The user's question
+            context_codebundles: Formatted string of relevant codebundles
+            
+        Returns:
+            Complete prompt string ready for AI model
+        """
+        return cls.CHAT_QUERY_TEMPLATE.format(
+            user_question=user_question,
+            context_codebundles=context_codebundles
+        )
 
     @classmethod
     def get_system_prompt(cls, enhancement_type: str) -> str:

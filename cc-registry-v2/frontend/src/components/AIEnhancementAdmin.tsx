@@ -1,4 +1,33 @@
 import React, { useState, useEffect } from 'react';
+import {
+  Container,
+  Typography,
+  Card,
+  CardContent,
+  Box,
+  Button,
+  Tabs,
+  Tab,
+  Alert,
+  CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
+} from '@mui/material';
 
 interface EnhancementLog {
   id: number;
@@ -66,32 +95,32 @@ const AIEnhancementAdmin: React.FC = () => {
     setError(null);
     
     try {
-      // Fetch enhancement logs
-      const logsResponse = await fetch('/api/v1/admin/ai-enhancement/logs?limit=50', {
-        headers: { 'Authorization': `Bearer ${token}` }
+      // Import the configured API instance
+      const { default: axios } = await import('axios');
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001/api/v1';
+      const api = axios.create({
+        baseURL: API_BASE_URL,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
       });
-      
-      if (!logsResponse.ok) throw new Error('Failed to fetch enhancement logs');
-      const logsData = await logsResponse.json();
-      setLogs(logsData);
+
+      // Fetch enhancement logs
+      const logsResponse = await api.get('/admin/ai-enhancement/logs?limit=50');
+      setLogs(logsResponse.data);
 
       // Fetch stats
-      const statsResponse = await fetch('/api/v1/admin/ai-enhancement/stats', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!statsResponse.ok) throw new Error('Failed to fetch stats');
-      const statsData = await statsResponse.json();
-      setStats(statsData);
+      const statsResponse = await api.get('/admin/ai-enhancement/stats');
+      setStats(statsResponse.data);
 
       // Fetch Celery task executions
-      const tasksResponse = await fetch('/api/v1/admin/task-executions?limit=50', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (tasksResponse.ok) {
-        const tasksData = await tasksResponse.json();
-        setTaskExecutions(tasksData);
+      try {
+        const tasksResponse = await api.get('/admin/task-executions?limit=50');
+        setTaskExecutions(tasksResponse.data);
+      } catch (taskErr) {
+        console.warn('Failed to fetch task executions:', taskErr);
+        setTaskExecutions([]);
       }
 
     } catch (err) {
@@ -103,21 +132,22 @@ const AIEnhancementAdmin: React.FC = () => {
 
   const handleManualEdit = async (logId: number) => {
     try {
-      const response = await fetch(`/api/v1/admin/ai-enhancement/logs/${logId}/manual-edit`, {
-        method: 'PUT',
+      const { default: axios } = await import('axios');
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001/api/v1';
+      const api = axios.create({
+        baseURL: API_BASE_URL,
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          enhanced_description: editForm.enhanced_description,
-          access_level: editForm.access_level,
-          iam_requirements: editForm.iam_requirements.split('\n').filter(req => req.trim()),
-          manual_notes: editForm.manual_notes
-        })
       });
 
-      if (!response.ok) throw new Error('Failed to save manual edit');
+      await api.put(`/admin/ai-enhancement/logs/${logId}/manual-edit`, {
+        enhanced_description: editForm.enhanced_description,
+        access_level: editForm.access_level,
+        iam_requirements: editForm.iam_requirements.split('\n').filter(req => req.trim()),
+        manual_notes: editForm.manual_notes
+      });
       
       setEditingLog(null);
       fetchData(); // Refresh data
@@ -129,12 +159,17 @@ const AIEnhancementAdmin: React.FC = () => {
   const enhanceCodebundle = async (codebundleId: number) => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/v1/admin/ai-enhancement/enhance/${codebundleId}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+      const { default: axios } = await import('axios');
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001/api/v1';
+      const api = axios.create({
+        baseURL: API_BASE_URL,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
       });
 
-      if (!response.ok) throw new Error('Failed to enhance codebundle');
+      await api.post(`/admin/ai-enhancement/enhance/${codebundleId}`);
       
       fetchData(); // Refresh data
     } catch (err) {
@@ -247,7 +282,7 @@ const AIEnhancementAdmin: React.FC = () => {
       <div className="bg-white border rounded-lg shadow">
         <div className="border-b">
           <nav className="flex space-x-8 px-6">
-            {['enhancements', 'celery', 'prompts'].map((tab) => (
+            {['enhancements', 'celery'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -259,7 +294,6 @@ const AIEnhancementAdmin: React.FC = () => {
               >
                 {tab === 'enhancements' && '⚙️ AI Enhancement Logs'}
                 {tab === 'celery' && '🗄️ Celery Task Logs'}
-                {tab === 'prompts' && '📝 Prompt Management'}
               </button>
             ))}
           </nav>
@@ -393,51 +427,6 @@ const AIEnhancementAdmin: React.FC = () => {
             </div>
           )}
 
-          {/* Prompt Management Tab */}
-          {activeTab === 'prompts' && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold">📝 Prompt Management</h2>
-              
-              <p className="text-sm text-gray-600">
-                View and edit the prompts sent to AI for enhancement. Click on any log entry in the Enhancement Logs tab to see the full prompts.
-              </p>
-              
-              {selectedLog && (
-                <div className="space-y-4">
-                  <h3 className="font-medium">Prompts for: {selectedLog.codebundle_slug}</h3>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-2">System Prompt:</label>
-                    <textarea
-                      value={selectedLog.system_prompt || ''}
-                      readOnly
-                      className="w-full h-32 p-3 border rounded font-mono text-xs bg-gray-50"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-2">User Prompt:</label>
-                    <textarea
-                      value={selectedLog.prompt_sent || ''}
-                      readOnly
-                      className="w-full h-64 p-3 border rounded font-mono text-xs bg-gray-50"
-                    />
-                  </div>
-                  
-                  {selectedLog.ai_response_raw && (
-                    <div>
-                      <label className="block text-sm font-medium mb-2">AI Response:</label>
-                      <textarea
-                        value={selectedLog.ai_response_raw}
-                        readOnly
-                        className="w-full h-32 p-3 border rounded font-mono text-xs bg-gray-50"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 

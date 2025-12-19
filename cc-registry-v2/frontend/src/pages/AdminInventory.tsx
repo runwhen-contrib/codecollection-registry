@@ -64,8 +64,8 @@ interface CodeBundleInventoryItem {
   collection_id: number;
   collection_name: string;
   collection_slug: string;
-  tasks: string[];
-  slis: string[];
+  tasks: Array<{name: string; doc: string; tags: string[]} | string>;
+  slis: Array<{name: string; doc: string; tags: string[]} | string>;
   task_count: number;
   sli_count: number;
   support_tags: string[];
@@ -705,7 +705,7 @@ const AdminInventory: React.FC = () => {
                             <ListItemIcon>
                               <TaskIcon fontSize="small" />
                             </ListItemIcon>
-                            <ListItemText primary={task} />
+                            <ListItemText primary={typeof task === 'string' ? task : task.name} />
                           </ListItem>
                         ))}
                       </List>
@@ -720,7 +720,7 @@ const AdminInventory: React.FC = () => {
                             <ListItemIcon>
                               <TaskIcon fontSize="small" />
                             </ListItemIcon>
-                            <ListItemText primary={sli} />
+                            <ListItemText primary={typeof sli === 'string' ? sli : sli.name} />
                           </ListItem>
                         ))}
                       </List>

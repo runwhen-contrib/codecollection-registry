@@ -85,7 +85,7 @@ async def health_check():
     }
 
 # Include routers
-from app.routers import admin, tasks, raw_data, admin_crud, ai_admin, ai_enhancement_admin, task_execution_admin, versions, task_management, admin_inventory, helm_charts, chat, simple_chat
+from app.routers import admin, tasks, raw_data, admin_crud, ai_admin, ai_enhancement_admin, task_execution_admin, versions, task_management, admin_inventory, helm_charts, chat, simple_chat, github_issues
 app.include_router(admin.router)
 app.include_router(tasks.router)
 app.include_router(raw_data.router)
@@ -99,6 +99,7 @@ app.include_router(task_management.router)
 app.include_router(helm_charts.router, prefix="/api/v1", tags=["helm-charts"])
 app.include_router(chat.router)
 app.include_router(simple_chat.router)
+app.include_router(github_issues.router, prefix="/api/v1")
 
 @app.get("/api/v1/registry/collections")
 async def list_collections():
@@ -378,7 +379,7 @@ async def get_all_tasks(
         )
 
 @app.get("/api/v1/codebundles")
-async def list_codebundles(limit: int = Query(50, description="Number of codebundles to return"), offset: int = Query(0, description="Offset for pagination")):
+async def list_codebundles(limit: int = Query(500, description="Number of codebundles to return"), offset: int = Query(0, description="Offset for pagination")):
     """List codebundles with pagination"""
     try:
         from app.core.database import SessionLocal
@@ -389,8 +390,29 @@ async def list_codebundles(limit: int = Query(50, description="Number of codebun
             # Get total count
             total_count = db.query(Codebundle).filter(Codebundle.is_active == True).count()
             
-            # Get paginated results
-            codebundles = db.query(Codebundle).filter(Codebundle.is_active == True).offset(offset).limit(limit).all()
+            # Get paginated results with better distribution across collections
+            # Use ROW_NUMBER() to interleave results from different collections
+            from sqlalchemy import text
+            codebundles_query = text("""
+                SELECT cb.* FROM (
+                    SELECT *, 
+                           ROW_NUMBER() OVER (PARTITION BY codecollection_id ORDER BY name) as rn
+                    FROM codebundles 
+                    WHERE is_active = true
+                ) cb
+                ORDER BY cb.rn, cb.codecollection_id
+                LIMIT :limit OFFSET :offset
+            """)
+            
+            result = db.execute(codebundles_query, {"limit": limit, "offset": offset})
+            codebundle_rows = result.fetchall()
+            
+            # Convert to Codebundle objects
+            codebundles = []
+            for row in codebundle_rows:
+                cb = db.query(Codebundle).filter(Codebundle.id == row.id).first()
+                if cb:
+                    codebundles.append(cb)
             
             result = []
             for cb in codebundles:

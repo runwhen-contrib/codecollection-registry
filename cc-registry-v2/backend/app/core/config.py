@@ -25,6 +25,15 @@ class Settings(BaseSettings):
     AI_MODEL: str = "gpt-4"
     AI_ENHANCEMENT_ENABLED: bool = False
     
+    # Azure OpenAI Configuration
+    AZURE_OPENAI_API_KEY: Optional[str] = None
+    AZURE_OPENAI_ENDPOINT: Optional[str] = None
+    AZURE_OPENAI_DEPLOYMENT_NAME: Optional[str] = None
+    AZURE_OPENAI_API_VERSION: str = "2024-02-15-preview"
+    
+    # AI Service Provider (openai, azure-openai)
+    AI_SERVICE_PROVIDER: str = "openai"
+    
     # Environment
     ENVIRONMENT: str = "development"
     DEBUG: bool = True

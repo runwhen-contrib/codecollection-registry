@@ -28,47 +28,16 @@ class DataPopulationService:
         self.all_codecollection_stats = {}
         
     def populate_registry_data(self) -> Dict[str, Any]:
-        """Main method to populate the registry with data from the original process"""
-        try:
-            logger.info("Starting registry data population...")
-            
-            # Read the original codecollections.yaml
-            yaml_data = self._read_codecollections_yaml()
-            
-            # Create temporary directory for cloning
-            self.temp_dir = tempfile.mkdtemp(prefix="registry_migration_")
-            logger.info(f"Using temp directory: {self.temp_dir}")
-            
-            # Process each codecollection
-            for collection_data in yaml_data.get('codecollections', []):
-                logger.info(f"Processing collection: {collection_data['name']}")
-                self._process_codecollection(collection_data)
-            
-            # Generate categories and tags
-            self._generate_categories()
-            
-            # Update statistics
-            self._update_collection_stats()
-            
-            logger.info("Registry data population completed successfully")
-            return {
-                "status": "success",
-                "collections_processed": len(yaml_data.get('codecollections', [])),
-                "total_codebundles": len(self.all_codebundle_tasks),
-                "total_tags": len(self.all_support_tags),
-                "temp_dir": self.temp_dir
-            }
-            
-        except Exception as e:
-            logger.error(f"Registry data population failed: {e}")
-            return {
-                "status": "error",
-                "error": str(e)
-            }
-        finally:
-            # Cleanup temp directory
-            if self.temp_dir and os.path.exists(self.temp_dir):
-                shutil.rmtree(self.temp_dir)
+        """DISABLED: This method creates fake demo data and is not allowed"""
+        logger.error("DataPopulationService is DISABLED - it creates fake demo data instead of real parsed data")
+        return {
+            "status": "error",
+            "error": "DataPopulationService is disabled because it creates fake demo data. Use proper repository sync instead.",
+            "collections_processed": 0,
+            "total_codebundles": 0,
+            "total_tags": 0,
+            "message": "This service creates fake codebundles with generic names like 'sli', 'runbook' instead of real parsed data. It has been disabled to prevent fake data creation."
+        }
     
     def _read_codecollections_yaml(self) -> Dict[str, Any]:
         """Read the original codecollections.yaml file"""

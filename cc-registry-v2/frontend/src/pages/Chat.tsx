@@ -26,9 +26,10 @@ import {
   Person as PersonIcon,
   ContentCopy as CopyIcon,
   OpenInNew as OpenInNewIcon,
-  Lightbulb as LightbulbIcon
+  Lightbulb as LightbulbIcon,
+  GitHub as GitHubIcon
 } from '@mui/icons-material';
-import { chatApi, ChatResponse, ExampleQueries } from '../services/api';
+import { chatApi, githubApi, ChatResponse, ExampleQueries, TaskRequestIssue } from '../services/api';
 
 interface ChatMessage {
   id: string;
@@ -171,6 +172,40 @@ const Chat: React.FC = () => {
     }
   };
 
+  const handleCreateGitHubIssue = async (userQuery: string) => {
+    try {
+      // Get the issue template
+      const template = await githubApi.getIssueTemplate(userQuery);
+      
+      // Create the issue
+      const issueData: TaskRequestIssue = {
+        user_query: template.user_query,
+        task_description: template.task_description,
+        use_case: template.use_case,
+        platform: template.platform,
+        priority: template.priority
+      };
+      
+      const result = await githubApi.createTaskRequest(issueData);
+      
+      // Show success message
+      alert(`GitHub issue created successfully!\nIssue #${result.issue_number}\nURL: ${result.issue_url}`);
+      
+      // Optionally open the issue in a new tab
+      window.open(result.issue_url, '_blank');
+      
+    } catch (error: any) {
+      console.error('Error creating GitHub issue:', error);
+      
+      // Show user-friendly error message
+      if (error.response?.data?.detail) {
+        alert(`Error creating GitHub issue: ${error.response.data.detail}`);
+      } else {
+        alert('Error creating GitHub issue. Please try again or contact support.');
+      }
+    }
+  };
+
   const handleExampleClick = async (query: string) => {
     if (loading) return;
     
@@ -268,28 +303,6 @@ const Chat: React.FC = () => {
         Ask questions about available tasks and libraries in the CodeCollection Registry.
       </Typography>
 
-      {/* Quick Search */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <TextField
-            fullWidth
-            placeholder="Quick search: try 'runbook', 'sli', 'kubernetes', 'pods failing'..."
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={loading}
-            size="small"
-          />
-          <Button
-            variant="contained"
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || loading}
-            sx={{ minWidth: 'auto', px: 2 }}
-          >
-            <SendIcon />
-          </Button>
-        </Box>
-      </Paper>
 
       {/* Health Status */}
       {chatHealth && (
@@ -389,6 +402,28 @@ const Chat: React.FC = () => {
                             <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                               {message.content}
                             </Typography>
+                            
+                            {/* GitHub Issue Button for "No Matching Tasks" responses */}
+                            {message.type === 'bot' && message.content.includes('No Matching Tasks Found') && (
+                              <Box sx={{ mt: 2 }}>
+                                <Button
+                                  variant="contained"
+                                  startIcon={<GitHubIcon />}
+                                  onClick={() => {
+                                    // Extract the original query from the message content
+                                    const match = message.content.match(/request for "([^"]+)"/);
+                                    const userQuery = match ? match[1] : 'custom task request';
+                                    handleCreateGitHubIssue(userQuery);
+                                  }}
+                                  sx={{ mr: 1 }}
+                                >
+                                  Create GitHub Issue
+                                </Button>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                                  Request these tasks to be added to the registry
+                                </Typography>
+                              </Box>
+                            )}
                             
                             {message.type === 'bot' && (
                               <Tooltip title="Copy response">

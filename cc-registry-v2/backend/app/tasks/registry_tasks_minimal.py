@@ -75,3 +75,4 @@ def generate_metrics_task(self):
 def _parse_runwhen_discovery(db, collection_slug: str, codebundle_name: str) -> Dict[str, Any]:
     """Parse .runwhen directory for discovery configuration"""
     return {}
+

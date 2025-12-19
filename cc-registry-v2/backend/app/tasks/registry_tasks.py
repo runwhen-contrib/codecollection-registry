@@ -45,31 +45,36 @@ def _parse_robot_file_content(content: str, file_path: str, collection_slug: str
     from app.tasks.fixed_parser import parse_robot_file_content
     return parse_robot_file_content(content, file_path, collection_slug)
 
-# Minimal stub functions for the other tasks that are imported
+# DISABLED: These stub functions were creating fake data and are not allowed
 @celery_app.task(bind=True)
 def seed_database_from_yaml_task(self, yaml_file_path: str = "/app/codecollections.yaml"):
-    """Minimal stub"""
-    return {"status": "success", "message": "Minimal stub"}
+    """DISABLED: This task was creating fake data"""
+    logger.error("seed_database_from_yaml_task is DISABLED - it creates fake demo data")
+    return {"status": "error", "message": "DISABLED: This task creates fake demo data and has been disabled"}
 
 @celery_app.task(bind=True) 
 def sync_all_collections_task(self):
-    """Minimal stub"""
-    return {"status": "success", "message": "Minimal stub"}
+    """DISABLED: This task was creating fake data"""
+    logger.error("sync_all_collections_task is DISABLED - it creates fake demo data")
+    return {"status": "error", "message": "DISABLED: This task creates fake demo data and has been disabled"}
 
 @celery_app.task(bind=True)
 def parse_all_codebundles_task(self):
-    """Minimal stub"""
-    return {"status": "success", "message": "Minimal stub"}
+    """DISABLED: This task was creating fake data"""
+    logger.error("parse_all_codebundles_task is DISABLED - it creates fake demo data")
+    return {"status": "error", "message": "DISABLED: This task creates fake demo data and has been disabled"}
 
 @celery_app.task(bind=True)
 def enhance_all_codebundles_task(self):
-    """Minimal stub"""
-    return {"status": "success", "message": "Minimal stub"}
+    """DISABLED: This task was creating fake data"""
+    logger.error("enhance_all_codebundles_task is DISABLED - it creates fake demo data")
+    return {"status": "error", "message": "DISABLED: This task creates fake demo data and has been disabled"}
 
 @celery_app.task(bind=True)
 def generate_metrics_task(self):
-    """Minimal stub"""
-    return {"status": "success", "message": "Minimal stub"}
+    """DISABLED: This task was creating fake data"""
+    logger.error("generate_metrics_task is DISABLED - it creates fake demo data")
+    return {"status": "error", "message": "DISABLED: This task creates fake demo data and has been disabled"}
 
 def _parse_runwhen_discovery(db, collection_slug: str, codebundle_name: str) -> Dict[str, Any]:
     """Parse .runwhen directory for discovery configuration"""
