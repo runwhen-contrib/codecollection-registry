@@ -1,0 +1,178 @@
+{
+  "libraries": [
+    {
+      "name": "RW.CLI.RunCli",
+      "category": "cli",
+      "description": "Execute shell commands and CLI tools within the RunWhen platform. Supports kubectl, aws, gcloud, and other command-line tools.",
+      "usage_example": "RW.CLI.RunCli.run(cmd=\"kubectl get pods -n ${NAMESPACE}\")",
+      "documentation_url": "https://docs.runwhen.com/public/runwhen-authors/rw-cli-runcli",
+      "common_use_cases": [
+        "Running kubectl commands",
+        "Executing AWS CLI commands",
+        "Running gcloud commands",
+        "General shell script execution"
+      ],
+      "parameters": {
+        "cmd": "The command to execute",
+        "env": "Environment variables for the command",
+        "secret": "Secret references for authentication"
+      },
+      "requirements": [
+        "CLI tool must be installed in the workspace",
+        "Appropriate credentials configured"
+      ]
+    },
+    {
+      "name": "RW.Core.Import",
+      "category": "python",
+      "description": "Import and execute Python modules and functions within RunWhen codebundles",
+      "usage_example": "RW.Core.Import.import_python_module(module=\"requests\", function=\"get\")",
+      "documentation_url": "https://docs.runwhen.com/public/runwhen-authors/rw-core-import",
+      "common_use_cases": [
+        "Importing Python libraries",
+        "Running custom Python code",
+        "Data processing and transformation"
+      ],
+      "parameters": {
+        "module": "Python module to import",
+        "function": "Function to execute"
+      },
+      "requirements": [
+        "Python module must be available in workspace"
+      ]
+    },
+    {
+      "name": "RW.Core.HTTP",
+      "category": "python",
+      "description": "Make HTTP requests to APIs and web services. Supports GET, POST, PUT, DELETE methods with authentication.",
+      "usage_example": "RW.Core.HTTP.get(url=\"https://api.example.com/health\", headers={\"Authorization\": \"Bearer ${TOKEN}\"})",
+      "documentation_url": "https://docs.runwhen.com/public/runwhen-authors/rw-core-http",
+      "common_use_cases": [
+        "API health checks",
+        "Webhook integrations",
+        "REST API calls",
+        "Fetching external data"
+      ],
+      "parameters": {
+        "url": "Target URL",
+        "method": "HTTP method (GET, POST, etc.)",
+        "headers": "HTTP headers",
+        "body": "Request body",
+        "timeout": "Request timeout"
+      },
+      "requirements": [
+        "Network access to target URL",
+        "Valid authentication if required"
+      ]
+    },
+    {
+      "name": "RW.CLI.AwsCli",
+      "category": "cli",
+      "description": "Wrapper for AWS CLI commands with built-in authentication and session management",
+      "usage_example": "RW.CLI.AwsCli.run(cmd=\"aws eks describe-cluster --name ${CLUSTER_NAME}\", secret=\"aws-credentials\")",
+      "documentation_url": "https://docs.runwhen.com/public/runwhen-authors/rw-cli-awscli",
+      "common_use_cases": [
+        "AWS EKS cluster operations",
+        "EC2 instance management",
+        "S3 operations",
+        "CloudWatch metrics"
+      ],
+      "parameters": {
+        "cmd": "AWS CLI command",
+        "secret": "AWS credentials secret",
+        "region": "AWS region"
+      },
+      "requirements": [
+        "AWS CLI installed",
+        "Valid AWS credentials",
+        "Appropriate IAM permissions"
+      ]
+    },
+    {
+      "name": "RW.CLI.GcpCli",
+      "category": "cli",
+      "description": "Wrapper for GCP gcloud commands with authentication handling",
+      "usage_example": "RW.CLI.GcpCli.run(cmd=\"gcloud container clusters describe ${CLUSTER_NAME}\", secret=\"gcp-sa-key\")",
+      "documentation_url": "https://docs.runwhen.com/public/runwhen-authors/rw-cli-gcpcli",
+      "common_use_cases": [
+        "GKE cluster operations",
+        "GCE instance management",
+        "Cloud Storage operations",
+        "Cloud Monitoring queries"
+      ],
+      "parameters": {
+        "cmd": "gcloud command",
+        "secret": "GCP service account key",
+        "project": "GCP project ID"
+      },
+      "requirements": [
+        "gcloud CLI installed",
+        "Valid GCP service account",
+        "Appropriate IAM roles"
+      ]
+    },
+    {
+      "name": "RW.CLI.AzureCli",
+      "category": "cli",
+      "description": "Wrapper for Azure CLI commands with authentication",
+      "usage_example": "RW.CLI.AzureCli.run(cmd=\"az aks show --name ${CLUSTER_NAME} --resource-group ${RG}\", secret=\"azure-sp\")",
+      "documentation_url": "https://docs.runwhen.com/public/runwhen-authors/rw-cli-azurecli",
+      "common_use_cases": [
+        "AKS cluster operations",
+        "VM management",
+        "Storage operations",
+        "Azure Monitor queries"
+      ],
+      "parameters": {
+        "cmd": "Azure CLI command",
+        "secret": "Azure service principal",
+        "subscription": "Azure subscription ID"
+      },
+      "requirements": [
+        "Azure CLI installed",
+        "Valid service principal",
+        "Appropriate RBAC permissions"
+      ]
+    },
+    {
+      "name": "RW.Platform.Secret",
+      "category": "python",
+      "description": "Access and manage secrets securely within codebundles. Supports various secret types including credentials, tokens, and configuration.",
+      "usage_example": "secret_value = RW.Platform.Secret.get(name=\"database-password\")",
+      "documentation_url": "https://docs.runwhen.com/public/runwhen-authors/secrets",
+      "common_use_cases": [
+        "Retrieving database passwords",
+        "Accessing API tokens",
+        "Loading kubeconfig",
+        "Getting cloud credentials"
+      ],
+      "parameters": {
+        "name": "Secret name",
+        "key": "Specific key within secret (optional)"
+      },
+      "requirements": [
+        "Secret must be configured in workspace",
+        "Codebundle must have access permissions"
+      ]
+    },
+    {
+      "name": "RW.Core.Parse",
+      "category": "python",
+      "description": "Parse and process various data formats including JSON, YAML, XML, and text",
+      "usage_example": "data = RW.Core.Parse.json(content=\"${OUTPUT}\")",
+      "documentation_url": "https://docs.runwhen.com/public/runwhen-authors/rw-core-parse",
+      "common_use_cases": [
+        "Parsing CLI output",
+        "Processing API responses",
+        "Extracting data from logs",
+        "Configuration file parsing"
+      ],
+      "parameters": {
+        "content": "Content to parse",
+        "format": "Data format (json, yaml, xml, etc.)"
+      },
+      "requirements": []
+    }
+  ]
+}
+

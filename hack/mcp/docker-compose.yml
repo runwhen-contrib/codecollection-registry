@@ -1,0 +1,205 @@
+version: '3.8'
+
+services:
+  # Web Test Client - AI-powered testing interface
+  web-client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: runwhen-mcp-server:latest
+    container_name: runwhen-mcp-webclient
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+    env_file:
+      - az.secret
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MCP_SERVER_URL=http://mcp-http:8000
+      - PORT=8080
+    command: python client_web.py
+    depends_on:
+      - mcp-http
+    networks:
+      - mcp-network
+
+  # HTTP API Server - Primary production service
+  mcp-http:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: runwhen-mcp-server:latest
+    container_name: runwhen-mcp-http
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount code for development
+      - .:/app
+      # Mount data directory (rw for vector store)
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MCP_LOG_LEVEL=INFO
+    command: python server_http.py
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - mcp-network
+
+  # Indexer - clones repos, parses codebundles, builds vector store
+  indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: runwhen-mcp-server:latest
+    container_name: runwhen-mcp-indexer
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      # Mount parent codecollections.yaml
+      - ../../codecollections.yaml:/app/codecollections.yaml:ro
+    env_file:
+      - az.secret
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python indexer.py --config /app/codecollections.yaml
+    networks:
+      - mcp-network
+    profiles:
+      - index
+
+  # Indexer with local embeddings (no Azure API)
+  indexer-local:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: runwhen-mcp-server:latest
+    container_name: runwhen-mcp-indexer-local
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ../../codecollections.yaml:/app/codecollections.yaml:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python indexer.py --config /app/codecollections.yaml --local
+    networks:
+      - mcp-network
+    profiles:
+      - index-local
+
+  # MCP Server - stdio version (legacy/alternative)
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: runwhen-mcp-server:latest
+    container_name: runwhen-mcp-server
+    stdin_open: true
+    tty: true
+    volumes:
+      # Mount code for development
+      - .:/app
+      # Mount data directory
+      - ./data:/app/data:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MCP_LOG_LEVEL=INFO
+    command: python server.py
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    profiles:
+      - stdio
+
+  # Test runner - for automated testing
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: runwhen-mcp-server:latest
+    container_name: runwhen-mcp-test
+    volumes:
+      - .:/app
+      - ./data:/app/data:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python client_test.py
+    networks:
+      - mcp-network
+    profiles:
+      - test
+
+  # Interactive client - for development
+  interactive:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: runwhen-mcp-server:latest
+    container_name: runwhen-mcp-interactive
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/app
+      - ./data:/app/data:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python interactive_client.py
+    networks:
+      - mcp-network
+    profiles:
+      - interactive
+
+  # Demo - first query demonstration
+  demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: runwhen-mcp-server:latest
+    container_name: runwhen-mcp-demo
+    volumes:
+      - .:/app
+      - ./data:/app/data:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python demo_first_query.py
+    networks:
+      - mcp-network
+    profiles:
+      - demo
+
+  # Data validator - validates JSON data files
+  validator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: runwhen-mcp-server:latest
+    container_name: runwhen-mcp-validator
+    volumes:
+      - ./data:/app/data:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: >
+      sh -c "
+      echo '🔍 Validating data files...' &&
+      python -m json.tool data/codebundles.json > /dev/null && echo '✅ codebundles.json valid' &&
+      python -m json.tool data/codecollections.json > /dev/null && echo '✅ codecollections.json valid' &&
+      python -m json.tool data/libraries.json > /dev/null && echo '✅ libraries.json valid' &&
+      python -m json.tool data/documentation_resources.json > /dev/null && echo '✅ documentation_resources.json valid' &&
+      echo '✅ All data files valid'
+      "
+    networks:
+      - mcp-network
+    profiles:
+      - validate
+
+networks:
+  mcp-network:
+    driver: bridge
+    name: runwhen-mcp-network
+

@@ -1,0 +1,111 @@
+version: '3'
+
+vars:
+  PROJECT_NAME: runwhen-mcp-server
+  IMAGE_NAME: runwhen-mcp-server
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # ===========================================
+  # Core Commands
+  # ===========================================
+  build:
+    desc: Build the Docker image
+    cmds:
+      - |
+        if [ -f az.secret ]; then
+          source az.secret
+        fi
+        docker-compose build
+
+  start:
+    desc: Start the HTTP API server and web client
+    cmds:
+      - |
+        if [ -f az.secret ]; then
+          source az.secret
+        fi
+        docker-compose up -d mcp-http web-client
+      - |
+        echo "✅ Services running:"
+        echo "   API Server: http://localhost:8000"
+        echo "   API Docs:   http://localhost:8000/docs"
+        echo "   Web Client: http://localhost:8080"
+
+  stop:
+    desc: Stop the server
+    cmds:
+      - docker-compose down
+
+  logs:
+    desc: View server logs
+    cmds:
+      - docker-compose logs -f mcp-http web-client
+
+  test:
+    desc: Run tests
+    cmds:
+      - docker-compose run --rm test
+
+  # ===========================================
+  # Indexing Commands
+  # ===========================================
+  index:
+    desc: Run indexer with Azure OpenAI embeddings
+    cmds:
+      - echo "🔄 Running indexer with Azure OpenAI embeddings..."
+      - docker-compose --profile index run --rm indexer
+
+  index-local:
+    desc: Run indexer with local embeddings (no API)
+    cmds:
+      - echo "🔄 Running indexer with local embeddings..."
+      - docker-compose --profile index-local run --rm indexer-local
+
+  reindex:
+    desc: Rebuild index and restart services
+    cmds:
+      - task: index
+      - echo "🔄 Restarting services..."
+      - docker-compose restart mcp-http web-client
+      - echo "✅ Done! Semantic search is now available."
+
+  reindex-local:
+    desc: Rebuild index (local embeddings) and restart services
+    cmds:
+      - task: index-local
+      - echo "🔄 Restarting services..."
+      - docker-compose restart mcp-http web-client
+      - echo "✅ Done! Semantic search is now available."
+
+  index-status:
+    desc: Check vector store statistics
+    cmds:
+      - |
+        docker-compose exec mcp-http python -c "
+        from utils.semantic_search import get_semantic_search
+        ss = get_semantic_search()
+        stats = ss.get_stats()
+        print('Vector Store Stats:')
+        for k, v in stats.items():
+            print(f'  {k}: {v}')
+        "
+
+  # ===========================================
+  # Cleanup
+  # ===========================================
+  clean:
+    desc: Stop and clean up
+    cmds:
+      - docker-compose down -v
+      - docker system prune -f
+
+  clean-index:
+    desc: Remove indexed data (vector store + cloned repos)
+    cmds:
+      - rm -rf data/vectordb data/repos
+      - echo "✅ Index data cleared"

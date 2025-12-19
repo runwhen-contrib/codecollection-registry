@@ -112,3 +112,5 @@ celerybeat.pid
 *.backup
 *.old
 
+#Secrets
+*.secret
