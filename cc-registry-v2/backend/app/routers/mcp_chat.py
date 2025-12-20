@@ -123,6 +123,7 @@ async def query_codecollections(
             platform = "GCP"
         
         # Call MCP for semantic search
+        all_tasks = []  # Initialize for later use
         if is_keyword_question:
             mcp_response = await mcp.keyword_usage_help(
                 query=query.question,
@@ -140,11 +141,11 @@ async def query_codecollections(
             sources_used = _extract_sources_from_markdown(mcp_response)
             all_tasks = _parse_markdown_to_tasks(mcp_response)
             
-            # Filter results by relevance - be strict!
-            # 70% threshold = cosine distance of ~0.43 (reasonably close match)
+            # Filter results by relevance
+            # With local embeddings, 60-70% is typical for good matches
             # Don't force minimum results - if nothing is relevant, say so
-            MIN_RELEVANCE = 0.70  # Raised from 0.60 to reduce noise
-            STRONG_RELEVANCE = 0.75  # High-confidence matches
+            MIN_RELEVANCE = 0.60  # Good enough for semantic match
+            STRONG_RELEVANCE = 0.70  # High-confidence matches
             
             relevant_tasks = []
             for t in all_tasks:
@@ -163,13 +164,20 @@ async def query_codecollections(
             relevant_tasks = relevant_tasks[:query.context_limit]
         
         # Generate LLM-synthesized answer if AI is available
-        if ai_service.is_enabled() and relevant_tasks:
+        # Even if no tasks pass our strict filter, use LLM to synthesize from raw MCP context
+        if ai_service.is_enabled():
+            # If we have filtered relevant tasks, use those
+            # If not, parse ALL tasks from MCP response for context (LLM will filter)
+            tasks_for_llm = relevant_tasks if relevant_tasks else all_tasks[:query.context_limit]
             answer = await _generate_llm_answer(
                 ai_service=ai_service,
                 question=query.question,
                 mcp_context=mcp_response,
-                relevant_tasks=relevant_tasks
+                relevant_tasks=tasks_for_llm
             )
+            # Update relevant_tasks to show user what we're referencing
+            if not relevant_tasks:
+                relevant_tasks = tasks_for_llm
         else:
             # Fallback to MCP response directly
             answer = mcp_response
