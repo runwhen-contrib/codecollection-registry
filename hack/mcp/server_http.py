@@ -170,6 +170,15 @@ async def list_tools():
                 "category": {"type": "string", "enum": ["cli", "kubernetes", "aws", "azure", "all"], "default": "all"}
             }
         },
+        {
+            "name": "find_documentation",
+            "description": "Find documentation, guides, examples, and FAQs for CodeBundle development. Ask how-to questions or search for specific topics.",
+            "parameters": {
+                "query": {"type": "string", "required": True, "description": "What you want to learn about (e.g., 'how to use secrets', 'meta.yaml format')"},
+                "category": {"type": "string", "enum": ["documentation", "examples", "libraries", "faq", "all"], "default": "all"},
+                "max_results": {"type": "integer", "default": 5}
+            }
+        },
         # === Basic Search Tools (keyword-based) ===
         {
             "name": "list_codebundles",
@@ -241,6 +250,8 @@ async def call_tool(request: ToolCallRequest):
             result = await handle_find_codecollection(arguments)
         elif tool_name == "keyword_usage_help":
             result = await handle_keyword_usage_help(arguments)
+        elif tool_name == "find_documentation":
+            result = await handle_find_documentation(arguments)
         # Basic search tools (keyword-based)
         elif tool_name == "list_codebundles":
             result = await handle_list_codebundles(arguments)
@@ -488,6 +499,47 @@ async def handle_keyword_usage_help(arguments: Dict[str, Any]) -> str:
         if lib.get('git_url'):
             output += f"**Source:** [View on GitHub]({lib['git_url']})\n\n"
         output += f"**Relevance:** {lib['score']:.0%}\n\n"
+        output += "---\n\n"
+    
+    return output
+
+
+async def handle_find_documentation(arguments: Dict[str, Any]) -> str:
+    """Handle find_documentation tool call"""
+    query = arguments.get("query", "")
+    category = arguments.get("category", "all")
+    max_results = arguments.get("max_results", 5)
+    
+    if not query:
+        return "Error: query is required"
+    
+    ss = get_semantic_search_instance()
+    
+    if not ss.is_available:
+        return "Documentation search is not available. Vector store not initialized."
+    
+    results = ss.search_documentation(
+        query=query,
+        category=category if category != "all" else None,
+        max_results=max_results
+    )
+    
+    if not results:
+        return f"No documentation found matching: {query}\n\nTry different keywords or check the official RunWhen documentation at https://docs.runwhen.com"
+    
+    output = f"# Documentation: {query}\n\n"
+    output += f"Found {len(results)} relevant resource(s):\n\n"
+    
+    for i, doc in enumerate(results, 1):
+        output += f"## {i}. {doc['name']}\n\n"
+        output += f"**Category:** {doc['category']}\n\n"
+        if doc.get('description'):
+            output += f"**Description:** {doc['description']}\n\n"
+        if doc.get('topics'):
+            output += f"**Topics:** {', '.join(doc['topics'])}\n\n"
+        if doc.get('url'):
+            output += f"**Link:** [{doc['url']}]({doc['url']})\n\n"
+        output += f"**Relevance:** {doc['score']:.0%}\n\n"
         output += "---\n\n"
     
     return output

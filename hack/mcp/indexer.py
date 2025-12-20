@@ -603,6 +603,66 @@ class CodeCollectionIndexer:
         return "\n".join(parts)
 
 
+    def load_documentation_sources(self) -> List[Dict[str, Any]]:
+        """Load documentation sources from sources.yaml"""
+        sources_file = self.base_dir / "sources.yaml"
+        if not sources_file.exists():
+            logger.info("No sources.yaml found, skipping documentation indexing")
+            return []
+        
+        try:
+            with open(sources_file, 'r') as f:
+                data = yaml.safe_load(f)
+            
+            sources = data.get('sources', {})
+            all_docs = []
+            
+            # Flatten all source categories
+            for category, items in sources.items():
+                if isinstance(items, list):
+                    for item in items:
+                        item['category'] = category
+                        all_docs.append(item)
+            
+            return all_docs
+        except Exception as e:
+            logger.error(f"Failed to load sources.yaml: {e}")
+            return []
+    
+    def index_documentation(self):
+        """Index documentation sources"""
+        docs = self.load_documentation_sources()
+        if not docs:
+            return
+        
+        logger.info(f"Indexing {len(docs)} documentation sources...")
+        
+        # Create documents for embedding
+        doc_texts = []
+        for doc in docs:
+            parts = [
+                doc.get('name', doc.get('question', '')),
+                doc.get('description', doc.get('answer', '')),
+            ]
+            if doc.get('topics'):
+                parts.append(f"Topics: {', '.join(doc['topics'])}")
+            if doc.get('key_points'):
+                parts.append(f"Key points: {', '.join(doc['key_points'])}")
+            if doc.get('usage_examples'):
+                parts.append(f"Examples: {', '.join(doc['usage_examples'])}")
+            doc_texts.append(" ".join(parts))
+        
+        # Generate embeddings
+        embeddings = self.embedding_generator.embed_texts(doc_texts)
+        if not embeddings:
+            logger.error("Failed to generate documentation embeddings")
+            return
+        
+        # Store in vector database
+        self.vector_store.add_documentation(docs, embeddings)
+        logger.info(f"Indexed {len(docs)} documentation sources")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Index codecollections for semantic search"
@@ -627,6 +687,11 @@ def main():
         type=str,
         help="Path to codecollections.yaml"
     )
+    parser.add_argument(
+        "--docs-only",
+        action="store_true",
+        help="Only index documentation sources (skip codebundles)"
+    )
     
     args = parser.parse_args()
     
@@ -636,7 +701,12 @@ def main():
         prefer_local_embeddings=args.local
     )
     
-    indexer.run(collection_filter=args.collection)
+    if args.docs_only:
+        indexer.index_documentation()
+    else:
+        indexer.run(collection_filter=args.collection)
+        # Also index documentation
+        indexer.index_documentation()
 
 
 if __name__ == "__main__":

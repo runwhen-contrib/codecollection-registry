@@ -1,0 +1,304 @@
+# MCP Documentation & Knowledge Sources Configuration
+# 
+# This file defines external documentation, examples, and knowledge sources
+# that can be indexed and searched alongside codebundles.
+#
+# Categories:
+#   - documentation: Official docs, guides, reference materials
+#   - examples: Sample code, tutorials, walkthroughs  
+#   - libraries: Robot Framework keyword libraries
+#   - faq: Common questions and troubleshooting guides
+#   - community: Blog posts, videos, external resources
+
+sources:
+
+  # =========================================================================
+  # Official Documentation
+  # =========================================================================
+  documentation:
+    - name: CodeBundle Development Guide
+      url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development
+      description: Complete guide to developing RunWhen CodeBundles including structure, syntax, and best practices
+      topics:
+        - development
+        - best-practices
+        - getting-started
+        - structure
+      priority: high
+      
+    - name: Robot Framework Syntax for CodeBundles
+      url: https://docs.runwhen.com/public/runwhen-authors/robot-framework
+      description: Using Robot Framework syntax for CodeBundle development including keywords, variables, and control flow
+      topics:
+        - robot-framework
+        - syntax
+        - keywords
+        - variables
+      priority: high
+      
+    - name: Using Secrets in CodeBundles
+      url: https://docs.runwhen.com/public/runwhen-authors/secrets
+      description: How to use secrets for authentication and sensitive data in CodeBundles
+      topics:
+        - secrets
+        - security
+        - authentication
+        - credentials
+      key_points:
+        - Secrets are defined at workspace level
+        - Access via RW.Platform.Secret library
+        - Support for kubeconfig, cloud credentials, API tokens
+        - Environment variable injection
+      priority: high
+      
+    - name: Meta.yaml Reference
+      url: https://docs.runwhen.com/public/runwhen-authors/meta-yaml
+      description: Complete reference for CodeBundle meta.yaml files including all available fields and options
+      topics:
+        - meta.yaml
+        - configuration
+        - metadata
+        - variables
+      priority: medium
+      
+    - name: Environment Variables and Configuration
+      url: https://docs.runwhen.com/public/runwhen-authors/environment-variables
+      description: Managing environment variables and configuration in CodeBundles
+      topics:
+        - configuration
+        - environment-variables
+        - setup
+        - variables
+      priority: medium
+      
+    - name: Task and SLI Development
+      url: https://docs.runwhen.com/public/runwhen-authors/tasks-and-slis
+      description: Creating tasks for automation and SLIs (Service Level Indicators) for monitoring
+      topics:
+        - tasks
+        - slis
+        - metrics
+        - monitoring
+        - health-checks
+      priority: high
+      
+    - name: IAM and Permissions Guide
+      url: https://docs.runwhen.com/public/runwhen-authors/iam-permissions
+      description: Understanding IAM requirements for CodeBundles across different cloud platforms
+      topics:
+        - iam
+        - permissions
+        - security
+        - rbac
+        - aws
+        - gcp
+        - azure
+        - kubernetes
+      priority: high
+      
+    - name: Generation Rules and Discovery
+      url: https://docs.runwhen.com/public/runwhen-authors/generation-rules
+      description: How to configure CodeBundles for automatic discovery and generation of workspace items
+      topics:
+        - discovery
+        - automation
+        - generation-rules
+        - templates
+      priority: medium
+      
+    - name: Testing and Debugging CodeBundles
+      url: https://docs.runwhen.com/public/runwhen-authors/testing-debugging
+      description: Best practices for testing and debugging CodeBundles during development
+      topics:
+        - testing
+        - debugging
+        - troubleshooting
+        - development
+      priority: medium
+
+  # =========================================================================
+  # Library References
+  # =========================================================================
+  libraries:
+    - name: RW.CLI.RunCli
+      url: https://docs.runwhen.com/public/runwhen-authors/rw-cli-runcli
+      description: Execute shell commands and CLI tools. Supports kubectl, aws, gcloud, and other CLI tools.
+      category: cli
+      topics:
+        - cli
+        - shell
+        - kubectl
+        - aws
+        - gcloud
+      usage_examples:
+        - "RW.CLI.Run Cli    cmd=kubectl get pods -n \\${NAMESPACE}"
+        - "RW.CLI.Run Cli    cmd=aws eks describe-cluster --name \\${CLUSTER_NAME}"
+      common_use_cases:
+        - Running kubectl commands
+        - Executing AWS CLI commands
+        - Running gcloud commands
+        - General shell script execution
+      priority: high
+      
+    - name: RW.Core.HTTP
+      url: https://docs.runwhen.com/public/runwhen-authors/rw-core-http
+      description: Make HTTP requests to APIs and web services. Supports GET, POST, PUT, DELETE with authentication.
+      category: python
+      topics:
+        - http
+        - api
+        - rest
+        - webhooks
+      usage_examples:
+        - "RW.Core.HTTP.Get    url=https://api.example.com/health"
+        - "RW.Core.HTTP.Post   url=https://api.example.com/data    body=\\${DATA}"
+      common_use_cases:
+        - API health checks
+        - Webhook integrations
+        - REST API calls
+        - Fetching external data
+      priority: high
+      
+    - name: RW.K8s.Wait
+      url: https://docs.runwhen.com/public/runwhen-authors/rw-k8s-wait
+      description: Wait for Kubernetes resource conditions like pod ready, deployment available, etc.
+      category: kubernetes
+      topics:
+        - kubernetes
+        - wait
+        - conditions
+        - pods
+        - deployments
+      usage_examples:
+        - "RW.K8s.Wait    condition=Ready    resource=pod/\\${POD_NAME}    namespace=\\${NAMESPACE}"
+      common_use_cases:
+        - Waiting for pods to be ready
+        - Waiting for deployments to complete
+        - Synchronization between tasks
+      priority: medium
+      
+    - name: RW.Prometheus
+      url: https://docs.runwhen.com/public/runwhen-authors/rw-prometheus
+      description: Query Prometheus metrics and evaluate alert conditions
+      category: monitoring
+      topics:
+        - prometheus
+        - metrics
+        - monitoring
+        - alerting
+      usage_examples:
+        - "RW.Prometheus.Query    query=up{job=\"kubernetes\"}    url=\\${PROMETHEUS_URL}"
+      common_use_cases:
+        - Querying metrics for SLIs
+        - Alert condition evaluation
+        - Performance monitoring
+      priority: medium
+
+  # =========================================================================
+  # Examples & Tutorials  
+  # =========================================================================
+  examples:
+    - name: Simple Health Check Example
+      url: https://github.com/runwhen-contrib/rw-public-codecollection/tree/main/codebundles/k8s-deployment-healthcheck
+      description: A simple example of a Kubernetes deployment health check CodeBundle
+      topics:
+        - example
+        - health-check
+        - kubernetes
+        - getting-started
+      priority: high
+      
+    - name: Troubleshooting Task Example
+      url: https://github.com/runwhen-contrib/rw-cli-codecollection/tree/main/codebundles/k8s-namespace-healthcheck
+      description: Example of a comprehensive namespace troubleshooting CodeBundle with multiple tasks
+      topics:
+        - example
+        - troubleshooting
+        - kubernetes
+        - namespace
+      priority: high
+      
+    - name: AWS CodeBundle Example
+      url: https://github.com/runwhen-contrib/rw-cli-codecollection/tree/main/codebundles/aws-eks-cluster-healthcheck
+      description: Example of an AWS EKS cluster health check CodeBundle
+      topics:
+        - example
+        - aws
+        - eks
+        - health-check
+      priority: medium
+
+  # =========================================================================
+  # FAQ & Troubleshooting
+  # =========================================================================
+  faq:
+    - question: How do I use kubectl in a CodeBundle?
+      answer: |
+        Use the RW.CLI.Run Cli keyword with your kubectl command:
+        
+        ```robot
+        RW.CLI.Run Cli    cmd=kubectl get pods -n ${NAMESPACE}
+            ...    kubeconfig=${KUBECONFIG}
+        ```
+        
+        Make sure you have:
+        1. A kubeconfig secret configured in your workspace
+        2. The NAMESPACE variable defined in your meta.yaml
+      topics:
+        - kubectl
+        - kubernetes
+        - cli
+        
+    - question: How do I access cloud provider credentials?
+      answer: |
+        Cloud credentials are configured as secrets in your workspace and accessed via environment variables:
+        
+        For AWS: Use the aws-credentials secret type
+        For GCP: Use the gcp-service-account secret type  
+        For Azure: Use the azure-credentials secret type
+        
+        These are automatically injected into your CodeBundle's environment.
+      topics:
+        - credentials
+        - aws
+        - gcp
+        - azure
+        - secrets
+        
+    - question: How do I create an SLI vs a Task?
+      answer: |
+        SLIs (Service Level Indicators) return a numeric metric value (0-1 or percentage).
+        Tasks perform actions and may return success/failure.
+        
+        In your robot file:
+        - SLI: Use the `sli.robot` filename and return a numeric value
+        - Task: Use `runbook.robot` or `taskset.robot` and perform automation
+      topics:
+        - sli
+        - task
+        - monitoring
+        - automation
+
+# =========================================================================
+# Index Configuration
+# =========================================================================
+index_config:
+  # How often to re-index documentation sources (in hours)
+  refresh_interval: 24
+  
+  # Whether to crawl linked pages from documentation URLs
+  crawl_linked_pages: false
+  
+  # Maximum depth for crawling
+  max_crawl_depth: 1
+  
+  # Include code examples in embeddings
+  include_code_examples: true
+  
+  # Weights for search relevance
+  relevance_weights:
+    title_match: 2.0
+    topic_match: 1.5
+    description_match: 1.0
+    content_match: 0.8
+

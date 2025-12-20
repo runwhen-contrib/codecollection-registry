@@ -140,24 +140,26 @@ async def query_codecollections(
             sources_used = _extract_sources_from_markdown(mcp_response)
             all_tasks = _parse_markdown_to_tasks(mcp_response)
             
-            # Filter results:
-            # 1. Keep high-relevance results (>= 60%)
-            # 2. Or keep results that match detected platform
-            MIN_RELEVANCE = 0.60
+            # Filter results by relevance - be strict!
+            # 70% threshold = cosine distance of ~0.43 (reasonably close match)
+            # Don't force minimum results - if nothing is relevant, say so
+            MIN_RELEVANCE = 0.70  # Raised from 0.60 to reduce noise
+            STRONG_RELEVANCE = 0.75  # High-confidence matches
+            
             relevant_tasks = []
             for t in all_tasks:
-                # Always include high relevance
-                if t.relevance_score >= MIN_RELEVANCE:
+                # Include strong matches
+                if t.relevance_score >= STRONG_RELEVANCE:
                     relevant_tasks.append(t)
-                # Or if platform matches the query's platform
-                elif platform and t.platform and t.platform.lower() == platform.lower():
-                    relevant_tasks.append(t)
+                # Include moderate matches only if platform aligns
+                elif t.relevance_score >= MIN_RELEVANCE:
+                    if not platform:  # No platform specified, include it
+                        relevant_tasks.append(t)
+                    elif t.platform and t.platform.lower() == platform.lower():
+                        relevant_tasks.append(t)
+                    # Skip if platform doesn't match (e.g., AWS result for K8s query)
             
-            # If we filtered too much, keep at least the top 3
-            if len(relevant_tasks) < 3 and len(all_tasks) >= 3:
-                relevant_tasks = all_tasks[:3]
-            
-            # Limit to requested context_limit
+            # Limit to requested context_limit - but don't pad with irrelevant results
             relevant_tasks = relevant_tasks[:query.context_limit]
         
         # Generate LLM-synthesized answer if AI is available
@@ -332,23 +334,33 @@ async def _generate_llm_answer(
 
 CodeBundles are automation scripts for troubleshooting and managing infrastructure (Kubernetes, AWS, Azure, GCP, databases, etc.).
 
-When answering questions:
-1. Recommend specific tasks from the search results that match the user's needs
-2. Explain what each recommended task does in plain language
-3. Be conversational and helpful - match the user's tone
-4. If asking about failing pods, focus on troubleshooting/diagnostic tasks
-5. Mention the codebundle name and collection so users can find it
-6. Keep responses concise but informative
+CRITICAL RULES:
+1. ONLY recommend codebundles that DIRECTLY ADDRESS the user's specific question
+2. Do NOT include results just because they share a vague category (e.g., don't show generic K8s health checks for a specific networking question)
+3. Be STRICT about relevance - fewer accurate recommendations are better than many tangential ones
+4. If a codebundle's description doesn't clearly match the query, DON'T recommend it
 
-If no relevant tasks are found, explain that and suggest the user create a GitHub issue to request new tasks."""
+When recommending:
+- Explain what each recommended codebundle does in plain language
+- Be conversational and match the user's tone
+- Mention the codebundle name and collection so users can find it
+- Keep responses concise but informative
+
+If NO codebundles directly address the query:
+- Be honest: "I couldn't find a codebundle specifically for [user's need]"
+- Suggest the closest match IF it's genuinely useful, or suggest creating a GitHub issue
+- Don't pad the response with irrelevant results"""
 
         user_prompt = f"""User Question: {question}
 
-Available CodeBundles from search:
+Available CodeBundles from search (sorted by relevance score):
 
 {task_context}
 
-Please provide a helpful, conversational response recommending the most relevant tasks for the user's question."""
+IMPORTANT: Only recommend codebundles that DIRECTLY solve the user's problem. 
+- If a codebundle doesn't specifically address their question, don't include it
+- If none are truly relevant, say so honestly
+- Quality over quantity - 1-2 good matches is better than 5 mediocre ones"""
 
         response = client.chat.completions.create(
             model=model_name,

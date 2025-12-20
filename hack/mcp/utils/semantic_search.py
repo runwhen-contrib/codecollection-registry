@@ -226,6 +226,51 @@ class SemanticSearch:
         
         return recommendations
     
+    def search_documentation(
+        self,
+        query: str,
+        category: str = None,
+        max_results: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Search documentation resources based on a natural language query.
+        
+        Args:
+            query: Natural language query about how to do something
+            category: Optional category filter (documentation, examples, faq, libraries)
+            max_results: Maximum number of results
+            
+        Returns:
+            List of documentation recommendations
+        """
+        if not self._is_available:
+            return []
+        
+        query_embedding = self.embedding_generator.embed_text(query)
+        if not query_embedding:
+            return []
+        
+        results = self.vector_store.search_documentation(
+            query_embedding=query_embedding,
+            n_results=max_results,
+            category_filter=category
+        )
+        
+        recommendations = []
+        for result in results:
+            meta = result.metadata
+            recommendations.append({
+                'name': meta.get('name', ''),
+                'description': meta.get('description', ''),
+                'url': meta.get('url', ''),
+                'category': meta.get('category', ''),
+                'topics': meta.get('topics', '').split(',') if meta.get('topics') else [],
+                'priority': meta.get('priority', 'medium'),
+                'score': result.score
+            })
+        
+        return recommendations
+    
     def get_stats(self) -> Dict[str, Any]:
         """Get search statistics"""
         stats = self.vector_store.get_stats()

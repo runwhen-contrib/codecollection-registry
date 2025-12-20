@@ -62,6 +62,7 @@ class VectorStore:
         self.CODEBUNDLES = "codebundles"
         self.CODECOLLECTIONS = "codecollections"
         self.LIBRARIES = "libraries"
+        self.DOCUMENTATION = "documentation"
         
         logger.info(f"VectorStore initialized at {persist_dir}")
     
@@ -270,9 +271,17 @@ class VectorStore:
         documents = []
         metadatas = []
         
+        seen_ids = set()
         for lib in libraries:
-            # Create unique ID from collection + import path
-            lib_id = f"{lib.get('collection_slug', 'unknown')}/{lib.get('import_path', lib.get('name', 'unknown'))}"
+            # Create unique ID from collection + module path (use full module_path for uniqueness)
+            base_id = f"{lib.get('collection_slug', 'unknown')}/{lib.get('module_path', lib.get('import_path', lib.get('name', 'unknown')))}"
+            lib_id = base_id
+            # Handle duplicates by appending a counter
+            counter = 1
+            while lib_id in seen_ids:
+                lib_id = f"{base_id}_{counter}"
+                counter += 1
+            seen_ids.add(lib_id)
             ids.append(lib_id)
             
             # Create document text
@@ -379,11 +388,103 @@ class VectorStore:
         
         return formatted
     
+    # =========================================================================
+    # Documentation operations
+    # =========================================================================
+    
+    def add_documentation(
+        self,
+        docs: List[Dict[str, Any]],
+        embeddings: List[List[float]],
+        clear_existing: bool = True
+    ):
+        """Add documentation resources to the vector store"""
+        if clear_existing:
+            collection = self.clear_collection(self.DOCUMENTATION)
+        else:
+            collection = self._get_or_create_collection(self.DOCUMENTATION)
+        
+        if not docs:
+            return
+        
+        ids = []
+        documents = []
+        metadatas = []
+        
+        seen_ids = set()
+        for i, doc in enumerate(docs):
+            # Create unique ID from name and category
+            name = doc.get('name', doc.get('question', f'doc-{i}'))
+            base_id = f"{doc.get('category', 'general')}/{name}".lower().replace(' ', '-')
+            doc_id = base_id
+            # Handle duplicates
+            counter = 1
+            while doc_id in seen_ids:
+                doc_id = f"{base_id}_{counter}"
+                counter += 1
+            seen_ids.add(doc_id)
+            ids.append(doc_id)
+            
+            # Create document text for embedding
+            doc_parts = [
+                doc.get("name", ""),
+                doc.get("description", ""),
+            ]
+            if doc.get("topics"):
+                doc_parts.append(f"Topics: {', '.join(doc['topics'])}")
+            if doc.get("key_points"):
+                doc_parts.append(f"Key points: {', '.join(doc['key_points'])}")
+            if doc.get("usage_examples"):
+                doc_parts.append(f"Examples: {', '.join(doc['usage_examples'])}")
+            if doc.get("answer"):
+                doc_parts.append(f"Answer: {doc['answer'][:500]}")
+            documents.append(" ".join(doc_parts))
+            
+            metadatas.append({
+                "name": doc.get("name", doc.get("question", "")),
+                "description": doc.get("description", doc.get("answer", ""))[:500],
+                "url": doc.get("url", ""),
+                "category": doc.get("category", "general"),
+                "topics": ",".join(doc.get("topics", [])),
+                "priority": doc.get("priority", "medium"),
+            })
+        
+        collection.add(
+            ids=ids,
+            embeddings=embeddings,
+            documents=documents,
+            metadatas=metadatas
+        )
+        
+        logger.info(f"Added {len(docs)} documentation resources to vector store")
+    
+    def search_documentation(
+        self,
+        query_embedding: List[float],
+        n_results: int = 5,
+        category_filter: str = None
+    ) -> List[SearchResult]:
+        """Search documentation by semantic similarity"""
+        collection = self._get_or_create_collection(self.DOCUMENTATION)
+        
+        where_filter = None
+        if category_filter and category_filter != "all":
+            where_filter = {"category": category_filter}
+        
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=n_results,
+            where=where_filter,
+            include=["documents", "metadatas", "distances"]
+        )
+        
+        return self._format_results(results)
+    
     def get_stats(self) -> Dict[str, int]:
         """Get statistics about stored data"""
         stats = {}
         
-        for name in [self.CODEBUNDLES, self.CODECOLLECTIONS, self.LIBRARIES]:
+        for name in [self.CODEBUNDLES, self.CODECOLLECTIONS, self.LIBRARIES, self.DOCUMENTATION]:
             try:
                 collection = self._get_or_create_collection(name)
                 stats[name] = collection.count()
