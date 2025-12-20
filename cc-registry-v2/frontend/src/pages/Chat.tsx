@@ -1,34 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Box,
-  Container,
-  Typography,
-  TextField,
-  Button,
-  Paper,
-  Card,
-  CardContent,
-  Chip,
-  Alert,
-  CircularProgress,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Link,
-  Divider,
-  IconButton,
-  Tooltip
+  Box, Typography, TextField, IconButton, Paper, Chip, Alert,
+  CircularProgress, Collapse, Link, Avatar
 } from '@mui/material';
 import {
-  Send as SendIcon,
-  ExpandMore as ExpandMoreIcon,
-  SmartToy as BotIcon,
-  Person as PersonIcon,
-  ContentCopy as CopyIcon,
-  OpenInNew as OpenInNewIcon,
-  Lightbulb as LightbulbIcon,
-  GitHub as GitHubIcon
+  Send as SendIcon, SmartToy as BotIcon, Person as PersonIcon,
+  ContentCopy as CopyIcon, Check as CheckIcon, ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon, GitHub as GitHubIcon, OpenInNew as OpenInNewIcon
 } from '@mui/icons-material';
+import ReactMarkdown from 'react-markdown';
 import { chatApi, githubApi, ChatResponse, ExampleQueries, TaskRequestIssue } from '../services/api';
 
 interface ChatMessage {
@@ -47,507 +27,162 @@ const Chat: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [chatHealth, setChatHealth] = useState<any>(null);
   const [examples, setExamples] = useState<ExampleQueries | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Scroll to bottom when new messages are added
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Load initial data
-  useEffect(() => {
-    const loadInitialData = async () => {
+    const load = async () => {
       try {
-        const [healthData, examplesData] = await Promise.all([
-          chatApi.health(),
-          chatApi.getExamples()
-        ]);
-        setChatHealth(healthData);
-        setExamples(examplesData);
-      } catch (err) {
-        console.error('Failed to load initial data:', err);
-        setError('Failed to initialize chat service');
-      }
+        const [h, e] = await Promise.all([chatApi.health(), chatApi.getExamples()]);
+        setChatHealth(h); setExamples(e);
+      } catch (err) { setError('Failed to initialize chat'); }
     };
-
-    loadInitialData();
+    load();
   }, []);
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || loading) return;
+  const send = async (text?: string) => {
+    const msg = text || inputValue.trim();
+    if (!msg || loading) return;
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: inputValue.trim(),
-      timestamp: new Date()
-    };
+    const user: ChatMessage = { id: Date.now().toString(), type: 'user', content: msg, timestamp: new Date() };
+    const bot: ChatMessage = { id: (Date.now()+1).toString(), type: 'bot', content: '', timestamp: new Date(), loading: true };
 
-    const botMessage: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      type: 'bot',
-      content: '',
-      timestamp: new Date(),
-      loading: true
-    };
-
-    setMessages(prev => [...prev, userMessage, botMessage]);
+    setMessages(p => [...p, user, bot]);
     setInputValue('');
     setLoading(true);
     setError(null);
 
     try {
-      // Try the full chat API first, fallback to simple chat
-      let response: ChatResponse;
+      let resp: ChatResponse;
       try {
-        response = await chatApi.query({
-          question: userMessage.content,
-          context_limit: 5,
-          include_enhanced_descriptions: true
-        });
-        
-        // Update the bot message with the response
-        setMessages(prev => prev.map(msg => 
-          msg.id === botMessage.id 
-            ? { ...msg, content: response.answer, response, loading: false }
-            : msg
-        ));
-      } catch (mainChatError) {
-        console.warn('Main chat failed, trying simple chat:', mainChatError);
-        
-        // Fallback to simple chat
-        const simpleResponse = await chatApi.simpleQuery(userMessage.content);
-        
-        // Convert simple response to chat response format
-        const convertedResponse: ChatResponse = {
-          answer: simpleResponse.answer,
-          relevant_tasks: simpleResponse.relevant_codebundles.map((cb, index) => ({
-            id: index,
-            codebundle_name: cb.name,
-            codebundle_slug: cb.name.toLowerCase().replace(/\s+/g, '-'),
-            collection_name: cb.collection,
-            collection_slug: cb.collection.toLowerCase().replace(/\s+/g, '-'),
-            description: cb.description,
-            support_tags: cb.support_tags || [],
-            tasks: [],
-            slis: [],
-            author: '',
-            access_level: 'unknown',
-            minimum_iam_requirements: [],
-            runbook_source_url: '',
-            relevance_score: 1.0,
-            platform: '',
-            resource_types: []
+        resp = await chatApi.query({ question: msg, context_limit: 5, include_enhanced_descriptions: true });
+        setMessages(p => p.map(m => m.id === bot.id ? { ...m, content: resp.answer, response: resp, loading: false } : m));
+      } catch {
+        const s = await chatApi.simpleQuery(msg);
+        const conv: ChatResponse = {
+          answer: s.answer,
+          relevant_tasks: s.relevant_codebundles.map((c: any, i: number) => ({
+            id: i, codebundle_name: c.name, codebundle_slug: c.name.toLowerCase().replace(/\s+/g, '-'),
+            collection_name: c.collection, collection_slug: c.collection.toLowerCase().replace(/\s+/g, '-'),
+            description: c.description, support_tags: c.support_tags || [], tasks: [], slis: [],
+            author: '', access_level: c.access_level || 'unknown', minimum_iam_requirements: [],
+            runbook_source_url: c.runbook_source_url || '', relevance_score: c.relevance_score || 0.5,
+            platform: c.platform || '', resource_types: []
           })),
-          sources_used: simpleResponse.relevant_codebundles.map(cb => cb.name),
-          query_metadata: {
-            query_processed_at: new Date().toISOString(),
-            context_tasks_count: simpleResponse.relevant_codebundles.length,
-            ai_model: 'simple-fallback'
-          }
+          sources_used: s.relevant_codebundles.map((c: any) => c.name),
+          query_metadata: { query_processed_at: new Date().toISOString(), context_tasks_count: s.relevant_codebundles.length, ai_model: 'fallback' }
         };
-        
-        setMessages(prev => prev.map(msg => 
-          msg.id === botMessage.id 
-            ? { ...msg, content: simpleResponse.answer, response: convertedResponse, loading: false }
-            : msg
-        ));
+        setMessages(p => p.map(m => m.id === bot.id ? { ...m, content: s.answer, response: conv, loading: false } : m));
       }
-    } catch (err: any) {
-      console.error('All chat methods failed:', err);
-      const errorMessage = err.response?.data?.detail || 'Failed to get response from chat service';
-      
-      setMessages(prev => prev.map(msg => 
-        msg.id === botMessage.id 
-          ? { ...msg, content: `Sorry, I encountered an error: ${errorMessage}`, loading: false }
-          : msg
-      ));
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) {
+      setMessages(p => p.map(m => m.id === bot.id ? { ...m, content: 'Error: ' + (e.response?.data?.detail || 'Failed'), loading: false } : m));
+      setError(e.response?.data?.detail || 'Failed');
+    } finally { setLoading(false); inputRef.current?.focus(); }
   };
 
-  const handleCreateGitHubIssue = async (userQuery: string) => {
+  const createIssue = async (q: string) => {
     try {
-      // Get the issue template
-      const template = await githubApi.getIssueTemplate(userQuery);
-      
-      // Create the issue
-      const issueData: TaskRequestIssue = {
-        user_query: template.user_query,
-        task_description: template.task_description,
-        use_case: template.use_case,
-        platform: template.platform,
-        priority: template.priority
-      };
-      
-      const result = await githubApi.createTaskRequest(issueData);
-      
-      // Show success message
-      alert(`GitHub issue created successfully!\nIssue #${result.issue_number}\nURL: ${result.issue_url}`);
-      
-      // Optionally open the issue in a new tab
-      window.open(result.issue_url, '_blank');
-      
-    } catch (error: any) {
-      console.error('Error creating GitHub issue:', error);
-      
-      // Show user-friendly error message
-      if (error.response?.data?.detail) {
-        alert(`Error creating GitHub issue: ${error.response.data.detail}`);
-      } else {
-        alert('Error creating GitHub issue. Please try again or contact support.');
-      }
-    }
+      const t = await githubApi.getIssueTemplate(q);
+      const r = await githubApi.createTaskRequest({ user_query: t.user_query, task_description: t.task_description, use_case: t.use_case, platform: t.platform, priority: t.priority } as TaskRequestIssue);
+      window.open(r.issue_url, '_blank');
+    } catch (e: any) { alert(e.response?.data?.detail || 'Error'); }
   };
 
-  const handleExampleClick = async (query: string) => {
-    if (loading) return;
-    
-    // Send the query directly
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: query,
-      timestamp: new Date()
-    };
+  const copy = (t: string, id: string) => { navigator.clipboard.writeText(t); setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); };
+  const toggle = (id: string) => setExpandedTasks(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-    const botMessage: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      type: 'bot',
-      content: '',
-      timestamp: new Date(),
-      loading: true
-    };
-
-    setMessages(prev => [...prev, userMessage, botMessage]);
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Use simple chat for examples since it's more reliable
-      const simpleResponse = await chatApi.simpleQuery(query);
-      
-      // Convert simple response to chat response format
-      const convertedResponse: ChatResponse = {
-        answer: simpleResponse.answer,
-        relevant_tasks: simpleResponse.relevant_codebundles.map((cb, index) => ({
-          id: index,
-          codebundle_name: cb.name,
-          codebundle_slug: cb.name.toLowerCase().replace(/\s+/g, '-'),
-          collection_name: cb.collection,
-          collection_slug: cb.collection.toLowerCase().replace(/\s+/g, '-'),
-          description: cb.description,
-          support_tags: cb.support_tags || [],
-          tasks: [],
-          slis: [],
-          author: '',
-          access_level: 'unknown',
-          minimum_iam_requirements: [],
-          runbook_source_url: '',
-          relevance_score: 1.0,
-          platform: '',
-          resource_types: []
-        })),
-        sources_used: simpleResponse.relevant_codebundles.map(cb => cb.name),
-        query_metadata: {
-          query_processed_at: new Date().toISOString(),
-          context_tasks_count: simpleResponse.relevant_codebundles.length,
-          ai_model: 'simple-chat'
-        }
-      };
-      
-      setMessages(prev => prev.map(msg => 
-        msg.id === botMessage.id 
-          ? { ...msg, content: simpleResponse.answer, response: convertedResponse, loading: false }
-          : msg
-      ));
-    } catch (err: any) {
-      console.error('Example query failed:', err);
-      const errorMessage = err.response?.data?.detail || 'Failed to get response';
-      
-      setMessages(prev => prev.map(msg => 
-        msg.id === botMessage.id 
-          ? { ...msg, content: `Sorry, I encountered an error: ${errorMessage}`, loading: false }
-          : msg
-      ));
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleKeyPress = (event: React.KeyboardEvent) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      handleSendMessage();
-    }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const mdStyle = {
+    '& h1,& h2,& h3': { fontWeight: 600, mt: 2, mb: 1 },
+    '& p': { mb: 1.5, lineHeight: 1.7 }, '& ul,& ol': { pl: 2.5, mb: 1.5 }, '& li': { mb: 0.5 },
+    '& code': { backgroundColor: 'rgba(0,0,0,0.05)', px: 0.75, py: 0.25, borderRadius: 0.5, fontFamily: 'monospace', fontSize: '0.875em' },
+    '& pre': { backgroundColor: 'rgba(0,0,0,0.05)', p: 2, borderRadius: 1, overflow: 'auto', '& code': { backgroundColor: 'transparent', p: 0 } },
+    '& a': { color: 'primary.main' }, '& strong': { fontWeight: 600 }
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        CodeCollection Assistant
-      </Typography>
-      
-      <Typography variant="body1" color="text.secondary" paragraph>
-        Ask questions about available tasks and libraries in the CodeCollection Registry.
-      </Typography>
-
-
-      {/* Health Status */}
-      {chatHealth && (
-        <Alert 
-          severity={chatHealth.status === 'healthy' ? 'success' : 'warning'} 
-          sx={{ mb: 2 }}
-        >
-          Chat service is {chatHealth.status}
-          {chatHealth.ai_enabled && chatHealth.model && (
-            <span> • Using {chatHealth.ai_provider} ({chatHealth.model})</span>
-          )}
-        </Alert>
-      )}
-
-      {/* Example Queries */}
-      {examples && messages.length === 0 && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <LightbulbIcon sx={{ mr: 1, color: 'primary.main' }} />
-            <Typography variant="h6">Try asking about:</Typography>
+    <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', backgroundColor: '#f7f7f8' }}>
+      <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+        {messages.length === 0 ? (
+          <Box sx={{ maxWidth: 800, mx: 'auto', p: 4, textAlign: 'center', mt: 8 }}>
+            <Avatar sx={{ width: 64, height: 64, mx: 'auto', mb: 3 }} src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png" />
+            <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>CodeCollection Assistant</Typography>
+            <Typography color="text.secondary" sx={{ mb: 4 }}>Ask me about tasks and codebundles</Typography>
+            {chatHealth?.status !== 'healthy' && <Alert severity="warning" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>Chat unavailable</Alert>}
+            {examples && <Box sx={{ mt: 4 }}>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>Try:</Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
+                {examples.examples.slice(0,2).flatMap(c => c.queries.slice(0,2).map((q,i) => <Chip key={c.category+i} label={q} variant="outlined" onClick={() => send(q)} sx={{ cursor: 'pointer' }} />))}
+              </Box>
+            </Box>}
           </Box>
-          
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-            {examples.examples.map((category, categoryIndex) => (
-              <Box key={categoryIndex} sx={{ flex: '1 1 300px', minWidth: '300px' }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                  {category.category}
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {category.queries.map((query, queryIndex) => (
-                    <Chip
-                      key={queryIndex}
-                      label={query}
-                      variant="outlined"
-                      clickable
-                      onClick={() => handleExampleClick(query)}
-                      sx={{ 
-                        justifyContent: 'flex-start',
-                        height: 'auto',
-                        py: 1,
-                        '& .MuiChip-label': {
-                          whiteSpace: 'normal',
-                          textAlign: 'left'
-                        }
-                      }}
-                    />
-                  ))}
+        ) : (
+          <Box sx={{ maxWidth: 800, mx: 'auto', py: 4, px: 2 }}>
+            {messages.map(m => (
+              <Box key={m.id} sx={{ mb: 3, display: 'flex', gap: 2 }}>
+                <Avatar sx={{ width: 32, height: 32, backgroundColor: m.type === 'user' ? 'grey.700' : 'transparent', flexShrink: 0 }} src={m.type === 'bot' ? 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png' : undefined}>
+                  {m.type === 'user' && <PersonIcon sx={{ fontSize: 18 }} />}
+                </Avatar>
+                <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 600 }}>{m.type === 'user' ? 'You' : 'Assistant'}</Typography>
+                  {m.loading ? (
+                    <Box sx={{ display: 'flex', gap: 1.5, py: 1 }}><CircularProgress size={16} /><Typography variant="body2" color="text.secondary">Thinking...</Typography></Box>
+                  ) : (
+                    <Box>
+                      <Box sx={mdStyle}><ReactMarkdown>{m.content}</ReactMarkdown></Box>
+                      {m.type === 'bot' && <Box sx={{ display: 'flex', gap: 1, mt: 2, opacity: 0.7, '&:hover': { opacity: 1 } }}>
+                        <IconButton size="small" onClick={() => copy(m.content, m.id)} sx={{ p: 0.5 }}>{copiedId === m.id ? <CheckIcon sx={{ fontSize: 16 }} /> : <CopyIcon sx={{ fontSize: 16 }} />}</IconButton>
+                        {m.content.includes('No Matching') && <IconButton size="small" onClick={() => createIssue(m.content)} sx={{ p: 0.5 }}><GitHubIcon sx={{ fontSize: 16 }} /></IconButton>}
+                      </Box>}
+                      {(m.response?.relevant_tasks?.length ?? 0) > 0 && <Box sx={{ mt: 2 }}>
+                        <Box onClick={() => toggle(m.id)} sx={{ display: 'flex', gap: 0.5, cursor: 'pointer', color: 'text.secondary', '&:hover': { color: 'text.primary' } }}>
+                          {expandedTasks.has(m.id) ? <ExpandLessIcon sx={{ fontSize: 18 }} /> : <ExpandMoreIcon sx={{ fontSize: 18 }} />}
+                          <Typography variant="body2">{m.response!.relevant_tasks.length} codebundle{m.response!.relevant_tasks.length > 1 ? 's' : ''}</Typography>
+                        </Box>
+                        <Collapse in={expandedTasks.has(m.id)}>
+                          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            {m.response!.relevant_tasks.map((t, i) => (
+                              <Paper key={i} variant="outlined" sx={{ p: 2 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{t.codebundle_name}</Typography>
+                                  <Chip label={Math.round(t.relevance_score * 100) + '%'} size="small" sx={{ height: 20, fontSize: '0.7rem', backgroundColor: t.relevance_score > 0.7 ? 'success.light' : 'grey.200' }} />
+                                </Box>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>{t.collection_name}{t.platform && ' • ' + t.platform}</Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{t.description}</Typography>
+                                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                  {t.support_tags.slice(0, 3).map((tag, j) => <Chip key={j} label={tag} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />)}
+                                  {t.runbook_source_url && <Link href={t.runbook_source_url} target="_blank" sx={{ display: 'flex', gap: 0.5, fontSize: '0.75rem', ml: 'auto' }}>View <OpenInNewIcon sx={{ fontSize: 12 }} /></Link>}
+                                </Box>
+                              </Paper>
+                            ))}
+                          </Box>
+                        </Collapse>
+                      </Box>}
+                    </Box>
+                  )}
                 </Box>
               </Box>
             ))}
+            <div ref={messagesEndRef} />
           </Box>
-        </Paper>
-      )}
-
-      {/* Chat Messages */}
-      <Paper sx={{ height: '60vh', display: 'flex', flexDirection: 'column', mb: 2 }}>
-        <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
-          {messages.length === 0 ? (
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              height: '100%',
-              color: 'text.secondary'
-            }}>
-              <Typography>Start a conversation by asking a question about CodeCollection tasks!</Typography>
-            </Box>
-          ) : (
-            messages.map((message) => (
-              <Box key={message.id} sx={{ mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                  {message.type === 'user' ? (
-                    <PersonIcon sx={{ color: 'primary.main', mt: 0.5 }} />
-                  ) : (
-                    <BotIcon sx={{ color: 'secondary.main', mt: 0.5 }} />
-                  )}
-                  
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                      {message.type === 'user' ? 'You' : 'Assistant'}
-                      <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
-                        {message.timestamp.toLocaleTimeString()}
-                      </Typography>
-                    </Typography>
-                    
-                    <Card variant="outlined">
-                      <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-                        {message.loading ? (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <CircularProgress size={16} />
-                            <Typography variant="body2" color="text.secondary">
-                              Thinking...
-                            </Typography>
-                          </Box>
-                        ) : (
-                          <>
-                            <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                              {message.content}
-                            </Typography>
-                            
-                            {/* GitHub Issue Button for "No Matching Tasks" responses */}
-                            {message.type === 'bot' && message.content.includes('No Matching Tasks Found') && (
-                              <Box sx={{ mt: 2 }}>
-                                <Button
-                                  variant="contained"
-                                  startIcon={<GitHubIcon />}
-                                  onClick={() => {
-                                    // Extract the original query from the message content
-                                    const match = message.content.match(/request for "([^"]+)"/);
-                                    const userQuery = match ? match[1] : 'custom task request';
-                                    handleCreateGitHubIssue(userQuery);
-                                  }}
-                                  sx={{ mr: 1 }}
-                                >
-                                  Create GitHub Issue
-                                </Button>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                                  Request these tasks to be added to the registry
-                                </Typography>
-                              </Box>
-                            )}
-                            
-                            {message.type === 'bot' && (
-                              <Tooltip title="Copy response">
-                                <IconButton 
-                                  size="small" 
-                                  onClick={() => copyToClipboard(message.content)}
-                                  sx={{ mt: 1 }}
-                                >
-                                  <CopyIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                          </>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    {/* Relevant Tasks */}
-                    {message.response && message.response.relevant_tasks.length > 0 && (
-                      <Accordion sx={{ mt: 2 }}>
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                          <Typography variant="subtitle2">
-                            Relevant Tasks ({message.response.relevant_tasks.length})
-                          </Typography>
-                        </AccordionSummary>
-                        <AccordionDetails>
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            {message.response.relevant_tasks.map((task, index) => (
-                              <Card key={task.id} variant="outlined">
-                                <CardContent>
-                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                                    <Typography variant="h6" component="h3">
-                                      {task.codebundle_name}
-                                    </Typography>
-                                    <Chip 
-                                      label={`${Math.round(task.relevance_score * 100)}% match`} 
-                                      size="small" 
-                                      color="primary" 
-                                    />
-                                  </Box>
-                                  
-                                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                                    {task.collection_name} • {task.platform || 'Generic'}
-                                  </Typography>
-                                  
-                                  <Typography variant="body2" paragraph>
-                                    {task.description}
-                                  </Typography>
-                                  
-                                  {task.support_tags.length > 0 && (
-                                    <Box sx={{ mb: 1 }}>
-                                      {task.support_tags.map((tag, tagIndex) => (
-                                        <Chip key={tagIndex} label={tag} size="small" sx={{ mr: 0.5, mb: 0.5 }} />
-                                      ))}
-                                    </Box>
-                                  )}
-                                  
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Chip 
-                                      label={task.access_level} 
-                                      size="small" 
-                                      color={task.access_level === 'read-only' ? 'success' : 'warning'} 
-                                    />
-                                    
-                                    {task.runbook_source_url && (
-                                      <Link 
-                                        href={task.runbook_source_url} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-                                      >
-                                        View Source
-                                        <OpenInNewIcon fontSize="small" />
-                                      </Link>
-                                    )}
-                                  </Box>
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </Box>
-                        </AccordionDetails>
-                      </Accordion>
-                    )}
-                  </Box>
-                </Box>
-              </Box>
-            ))
-          )}
-          <div ref={messagesEndRef} />
+        )}
+      </Box>
+      <Box sx={{ borderTop: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', p: 2 }}>
+        <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+          <Paper elevation={0} sx={{ display: 'flex', alignItems: 'flex-end', border: '1px solid', borderColor: 'divider', borderRadius: 3, '&:focus-within': { borderColor: 'primary.main' } }}>
+            <TextField fullWidth multiline maxRows={6} value={inputValue} onChange={e => setInputValue(e.target.value)} onKeyPress={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Ask about CodeCollection tasks..." disabled={loading || chatHealth?.status !== 'healthy'} inputRef={inputRef} variant="standard" InputProps={{ disableUnderline: true, sx: { px: 2, py: 1.5 } }} />
+            <IconButton onClick={() => send()} disabled={!inputValue.trim() || loading || chatHealth?.status !== 'healthy'} sx={{ m: 1, backgroundColor: inputValue.trim() ? 'primary.main' : 'grey.200', color: inputValue.trim() ? 'white' : 'grey.500', '&:hover': { backgroundColor: inputValue.trim() ? 'primary.dark' : 'grey.300' }, '&.Mui-disabled': { backgroundColor: 'grey.200', color: 'grey.400' } }}>
+              {loading ? <CircularProgress size={20} color="inherit" /> : <SendIcon sx={{ fontSize: 20 }} />}
+            </IconButton>
+          </Paper>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>Enter to send • Shift+Enter for new line</Typography>
         </Box>
-
-        <Divider />
-
-        {/* Input Area */}
-        <Box sx={{ p: 2 }}>
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-          
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <TextField
-              fullWidth
-              multiline
-              maxRows={4}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Ask about CodeCollection tasks... (e.g., 'What do I run when pods are failing?')"
-              disabled={loading || chatHealth?.status !== 'healthy'}
-            />
-            <Button
-              variant="contained"
-              onClick={handleSendMessage}
-              disabled={!inputValue.trim() || loading || chatHealth?.status !== 'healthy'}
-              sx={{ minWidth: 'auto', px: 2 }}
-            >
-              <SendIcon />
-            </Button>
-          </Box>
-        </Box>
-      </Paper>
-    </Container>
+      </Box>
+    </Box>
   );
 };
 

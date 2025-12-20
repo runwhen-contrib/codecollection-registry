@@ -214,3 +214,136 @@ async def get_releases_status(token: str = Depends(verify_admin_token)):
     except Exception as e:
         logger.error(f"Error getting release status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get release status: {str(e)}")
+
+
+@router.get("/ai-enhancement/status")
+async def get_ai_enhancement_status(token: str = Depends(verify_admin_token)):
+    """Get AI enhancement status and statistics"""
+    try:
+        from app.core.database import SessionLocal
+        from app.models import Codebundle
+        from app.services.ai_service import AIEnhancementService
+        
+        db = SessionLocal()
+        try:
+            # Check if AI is configured
+            ai_service = AIEnhancementService(db)
+            
+            # Get enhancement statistics
+            total = db.query(Codebundle).filter(Codebundle.is_active == True).count()
+            enhanced = db.query(Codebundle).filter(
+                Codebundle.is_active == True,
+                Codebundle.enhancement_status == 'completed'
+            ).count()
+            pending = db.query(Codebundle).filter(
+                Codebundle.is_active == True,
+                (Codebundle.enhancement_status == None) | 
+                (Codebundle.enhancement_status == 'pending')
+            ).count()
+            failed = db.query(Codebundle).filter(
+                Codebundle.is_active == True,
+                Codebundle.enhancement_status == 'failed'
+            ).count()
+            
+            return {
+                "ai_enabled": ai_service.is_enabled(),
+                "ai_provider": ai_service.config.service_provider if ai_service.config else None,
+                "ai_model": ai_service.config.model_name if ai_service.config else None,
+                "total_codebundles": total,
+                "enhanced": enhanced,
+                "pending": pending,
+                "failed": failed,
+                "enhancement_percentage": round((enhanced / total * 100) if total > 0 else 0, 1)
+            }
+            
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Error getting AI enhancement status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get AI status: {str(e)}")
+
+
+@router.post("/ai-enhancement/run")
+async def run_ai_enhancement(
+    token: str = Depends(verify_admin_token),
+    limit: int = 10,
+    collection_slug: str = None
+):
+    """Trigger AI enhancement for pending codebundles"""
+    try:
+        from app.core.database import SessionLocal
+        from app.models import Codebundle, CodeCollection
+        from app.services.ai_service import AIEnhancementService
+        from datetime import datetime
+        
+        db = SessionLocal()
+        try:
+            ai_service = AIEnhancementService(db)
+            
+            if not ai_service.is_enabled():
+                raise HTTPException(
+                    status_code=400, 
+                    detail="AI enhancement is not configured. Set AZURE_OPENAI_* environment variables."
+                )
+            
+            # Build query
+            query = db.query(Codebundle).filter(
+                Codebundle.is_active == True,
+                (Codebundle.enhancement_status == None) | 
+                (Codebundle.enhancement_status == 'pending') |
+                (Codebundle.enhancement_status == 'failed')
+            )
+            
+            if collection_slug:
+                collection = db.query(CodeCollection).filter(CodeCollection.slug == collection_slug).first()
+                if collection:
+                    query = query.filter(Codebundle.codecollection_id == collection.id)
+            
+            codebundles = query.limit(limit).all()
+            
+            if not codebundles:
+                return {"message": "No codebundles need enhancement", "enhanced": 0, "failed": 0}
+            
+            # Enhance codebundles
+            enhanced_count = 0
+            failed_count = 0
+            
+            for cb in codebundles:
+                try:
+                    cb.enhancement_status = "processing"
+                    db.commit()
+                    
+                    result = ai_service.enhance_codebundle(cb)
+                    
+                    cb.ai_enhanced_description = result["enhanced_description"]
+                    cb.access_level = result["access_level"]
+                    cb.minimum_iam_requirements = result["iam_requirements"]
+                    cb.ai_enhanced_metadata = result.get("enhancement_metadata", {})
+                    cb.enhancement_status = "completed"
+                    cb.last_enhanced = datetime.utcnow()
+                    
+                    db.commit()
+                    enhanced_count += 1
+                    
+                except Exception as e:
+                    logger.error(f"Failed to enhance {cb.name}: {e}")
+                    cb.enhancement_status = "failed"
+                    db.commit()
+                    failed_count += 1
+            
+            return {
+                "message": f"Enhanced {enhanced_count} codebundles",
+                "enhanced": enhanced_count,
+                "failed": failed_count,
+                "remaining": query.count() - len(codebundles)
+            }
+            
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI enhancement error: {e}")
+        raise HTTPException(status_code=500, detail=f"Enhancement failed: {str(e)}")

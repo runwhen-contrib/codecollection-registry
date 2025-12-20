@@ -113,8 +113,9 @@ export interface CodeCollectionVersion {
   };
 }
 
-export interface DiscoveryInfo {
-  is_discoverable: boolean;
+export interface ConfigurationType {
+  type: 'Automatically Discovered' | 'Manual';
+  has_generation_rules: boolean;
   platform: string | null;
   resource_types: string[];
   match_patterns: any[];
@@ -124,6 +125,9 @@ export interface DiscoveryInfo {
   runwhen_directory_path: string | null;
 }
 
+// Backwards compatibility alias
+export type DiscoveryInfo = ConfigurationType;
+
 export interface CodeBundle {
   id: number;
   name: string;
@@ -131,6 +135,7 @@ export interface CodeBundle {
   display_name: string;
   description: string;
   doc: string;
+  readme: string | null;
   author: string;
   support_tags: string[];
   tasks: Array<{name: string; doc: string; tags: string[]} | string> | null;
@@ -139,7 +144,9 @@ export interface CodeBundle {
   sli_count: number;
   runbook_source_url: string;
   created_at: string;
-  discovery: DiscoveryInfo;
+  configuration_type: ConfigurationType;
+  // Backwards compatibility
+  discovery?: DiscoveryInfo;
   // AI Enhancement fields
   ai_enhanced_description?: string;
   access_level?: 'read-only' | 'read-write' | 'unknown';
@@ -496,69 +503,8 @@ export const apiService = {
     return response.data;
   },
 
-  // AI Configuration endpoints
-  async getAIConfigurations(token: string) {
-    const response = await api.get('/admin/ai/config', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async getActiveAIConfiguration(token: string) {
-    const response = await api.get('/admin/ai/config/active', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async createAIConfiguration(token: string, configData: any) {
-    const response = await api.post('/admin/ai/config', configData, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async updateAIConfiguration(token: string, configId: number, configData: any) {
-    const response = await api.put(`/admin/ai/config/${configId}`, configData, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async deleteAIConfiguration(token: string, configId: number) {
-    const response = await api.delete(`/admin/ai/config/${configId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerAIEnhancement(token: string, enhancementRequest: any) {
-    const response = await api.post('/admin/ai/enhance', enhancementRequest, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async getEnhancementStatus(token: string, taskId: string) {
-    const response = await api.get(`/admin/ai/enhance/status/${taskId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async getAIStats(token: string) {
-    const response = await api.get('/admin/ai/stats', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async resetAIEnhancements(token: string) {
-    const response = await api.post('/admin/ai/reset', {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
+  // AI Configuration: Now managed via environment variables (az.secret)
+  // See: AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT_NAME
 
   // Admin Inventory endpoints
   async getInventoryStats(token: string) {
@@ -888,7 +834,7 @@ export interface IssueTemplate {
 }
 
 export const chatApi = {
-  // Query the chat system
+  // Query the chat system (MCP-powered semantic search)
   async query(queryData: ChatQuery): Promise<ChatResponse> {
     console.log('API: Sending chat query', queryData);
     const response = await api.post('/chat/query', queryData);
@@ -896,11 +842,37 @@ export const chatApi = {
     return response.data;
   },
 
-  // Simple chat query (fallback)
+  // Simple chat query (now routes to main MCP query)
   async simpleQuery(question: string): Promise<{answer: string, relevant_codebundles: any[]}> {
     console.log('API: Sending simple chat query', question);
-    const response = await api.post('/simple-chat/query', { question });
-    console.log('API: Simple chat query response:', response.data);
+    // Route to main query endpoint - MCP handles all search types
+    const response = await api.post('/chat/query', { 
+      question,
+      context_limit: 5,
+      include_enhanced_descriptions: true
+    });
+    // Convert response format - preserve all fields for proper display
+    return {
+      answer: response.data.answer,
+      relevant_codebundles: response.data.relevant_tasks.map((task: any) => ({
+        name: task.codebundle_name,
+        description: task.description,
+        collection: task.collection_name,
+        support_tags: task.support_tags || [],
+        // Preserve these fields for proper display
+        relevance_score: task.relevance_score,
+        platform: task.platform,
+        runbook_source_url: task.runbook_source_url,
+        access_level: task.access_level
+      }))
+    };
+  },
+
+  // Keyword/library usage help (new MCP endpoint)
+  async keywordHelp(question: string, category: string = 'all'): Promise<{answer: string, query_metadata: any}> {
+    console.log('API: Sending keyword help query', question);
+    const response = await api.post('/chat/keywords', { question, category });
+    console.log('API: Keyword help response:', response.data);
     return response.data;
   },
 

@@ -114,3 +114,5 @@ celerybeat.pid
 
 #Secrets
 *.secret
+hack/mcp/data/**
+hack/mcp/data/**/*

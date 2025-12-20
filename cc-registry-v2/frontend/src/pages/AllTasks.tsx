@@ -483,6 +483,7 @@ const AllTasks: React.FC = () => {
                                     display_name: group.codebundle.name,
                                     description: group.codebundle.description,
                                     doc: '',
+                                    readme: null,
                                     author: group.codebundle.author,
                                     support_tags: group.codebundle.support_tags,
                                     tasks: group.tasks.filter(t => t.type === 'TaskSet').map(t => ({name: t.name, doc: t.description || '', tags: []})),
@@ -491,8 +492,9 @@ const AllTasks: React.FC = () => {
                                     sli_count: group.tasks.filter(t => t.type === 'SLI').length,
                                     runbook_source_url: group.codebundle.runbook_source_url || '',
                                     created_at: new Date().toISOString(),
-                                    discovery: {
-                                      is_discoverable: false,
+                                    configuration_type: {
+                                      type: 'Manual' as const,
+                                      has_generation_rules: false,
                                       platform: null,
                                       resource_types: [],
                                       match_patterns: [],

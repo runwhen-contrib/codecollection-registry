@@ -19,41 +19,26 @@ logger = logging.getLogger(__name__)
 
 
 class AIEnhancementService:
-    """Service for AI-powered CodeBundle enhancement"""
+    """Service for AI-powered CodeBundle enhancement
+    
+    Configuration is read from environment variables only:
+    - AI_SERVICE_PROVIDER: "azure-openai" or "openai"
+    - AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT_NAME
+    - OPENAI_API_KEY (for non-Azure)
+    - AI_ENHANCEMENT_ENABLED: true/false
+    """
     
     def __init__(self, db_session: Session):
         self.db = db_session
-        self.config = self._get_active_config()
-        
-    def _get_active_config(self) -> Optional[AIConfiguration]:
-        """Get the active AI configuration from database or environment variables"""
-        # First try to get from database
-        db_config = self.db.query(AIConfiguration).filter(
-            AIConfiguration.is_active == True,
-            AIConfiguration.enhancement_enabled == True
-        ).first()
-        
-        if db_config:
-            return db_config
-        
-        # Fallback to environment variables
-        if self._has_env_config():
-            return self._create_env_config()
-        
-        return None
+        self.config = self._get_config_from_env()
     
-    def _has_env_config(self) -> bool:
-        """Check if we have AI configuration in environment variables"""
+    def _get_config_from_env(self) -> Optional[AIConfiguration]:
+        """Get AI configuration from environment variables only"""
         if settings.AI_SERVICE_PROVIDER == "azure-openai":
-            return (settings.AZURE_OPENAI_API_KEY and 
+            if not (settings.AZURE_OPENAI_API_KEY and 
                    settings.AZURE_OPENAI_ENDPOINT and 
-                   settings.AZURE_OPENAI_DEPLOYMENT_NAME)
-        else:
-            return settings.OPENAI_API_KEY is not None
-    
-    def _create_env_config(self) -> AIConfiguration:
-        """Create a temporary AI configuration from environment variables"""
-        if settings.AI_SERVICE_PROVIDER == "azure-openai":
+                   settings.AZURE_OPENAI_DEPLOYMENT_NAME):
+                return None
             return AIConfiguration(
                 service_provider="azure-openai",
                 api_key=settings.AZURE_OPENAI_API_KEY,
@@ -65,6 +50,8 @@ class AIEnhancementService:
                 is_active=True
             )
         else:
+            if not settings.OPENAI_API_KEY:
+                return None
             return AIConfiguration(
                 service_provider="openai",
                 api_key=settings.OPENAI_API_KEY,

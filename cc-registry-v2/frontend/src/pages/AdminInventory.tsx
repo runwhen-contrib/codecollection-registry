@@ -76,9 +76,12 @@ interface CodeBundleInventoryItem {
   minimum_iam_requirements: string[];
   ai_enhanced_metadata: any;
   last_enhanced?: string;
-  is_discoverable: boolean;
-  discovery_platform?: string;
-  discovery_resource_types: string[];
+  configuration_type: {
+    type: string;
+    has_generation_rules: boolean;
+    platform?: string;
+    resource_types: string[];
+  };
   created_at: string;
   updated_at?: string;
 }

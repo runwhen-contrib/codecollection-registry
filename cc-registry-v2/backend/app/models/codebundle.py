@@ -14,6 +14,7 @@ class Codebundle(Base):
     display_name = Column(String(255))
     description = Column(Text)
     doc = Column(Text)  # Robot file documentation
+    readme = Column(Text)  # README.md content
     
     # Robot file metadata
     author = Column(String(255))

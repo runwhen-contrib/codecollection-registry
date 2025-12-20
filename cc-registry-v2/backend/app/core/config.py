@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # AI Service Provider (openai, azure-openai)
     AI_SERVICE_PROVIDER: str = "openai"
     
+    # MCP Server
+    MCP_SERVER_URL: str = "http://mcp-http:8000"
+    
     # Environment
     ENVIRONMENT: str = "development"
     DEBUG: bool = True

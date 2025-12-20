@@ -454,19 +454,19 @@ const CodeBundleDetail: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Discovery Information */}
+          {/* Configuration Type Information */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6" sx={{ mb: 2 }}>
-                Discovery
+                Configuration Type
               </Typography>
               
               <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" color="text.secondary">
-                  Discoverable
+                  Auto-Discovered
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {codebundle.discovery?.is_discoverable ? (
+                  {codebundle.configuration_type?.has_generation_rules ? (
                     <>
                       <CheckCircleIcon color="success" fontSize="small" />
                       <Typography variant="body1" color="success.main">
@@ -484,15 +484,15 @@ const CodeBundleDetail: React.FC = () => {
                 </Box>
               </Box>
 
-              {codebundle.discovery?.is_discoverable && (
+              {codebundle.configuration_type?.has_generation_rules && (
                 <>
-                  {codebundle.discovery.platform && (
+                  {codebundle.configuration_type.platform && (
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="body2" color="text.secondary">
                         Platform
                       </Typography>
                       <Chip 
-                        label={codebundle.discovery.platform.toUpperCase()} 
+                        label={codebundle.configuration_type.platform.toUpperCase()} 
                         size="small" 
                         color="primary" 
                         variant="outlined" 
@@ -500,13 +500,13 @@ const CodeBundleDetail: React.FC = () => {
                     </Box>
                   )}
 
-                  {codebundle.discovery.resource_types && codebundle.discovery.resource_types.length > 0 && (
+                  {codebundle.configuration_type.resource_types && codebundle.configuration_type.resource_types.length > 0 && (
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                         Resource Types
                       </Typography>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {codebundle.discovery.resource_types.map((type, index) => (
+                        {codebundle.configuration_type.resource_types.map((type, index) => (
                           <Chip 
                             key={index}
                             label={type} 
@@ -518,13 +518,13 @@ const CodeBundleDetail: React.FC = () => {
                     </Box>
                   )}
 
-                  {codebundle.discovery.templates && codebundle.discovery.templates.length > 0 && (
+                  {codebundle.configuration_type.templates && codebundle.configuration_type.templates.length > 0 && (
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        Templates ({codebundle.discovery.templates.length})
+                        Templates ({codebundle.configuration_type.templates.length})
                       </Typography>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        {codebundle.discovery.templates.map((template, index) => (
+                        {codebundle.configuration_type.templates.map((template, index) => (
                           <Typography key={index} variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                             {template}
                           </Typography>
@@ -533,13 +533,13 @@ const CodeBundleDetail: React.FC = () => {
                     </Box>
                   )}
 
-                  {codebundle.discovery.level_of_detail && (
+                  {codebundle.configuration_type.level_of_detail && (
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="body2" color="text.secondary">
                         Level of Detail
                       </Typography>
                       <Typography variant="body1">
-                        {codebundle.discovery.level_of_detail}
+                        {codebundle.configuration_type.level_of_detail}
                       </Typography>
                     </Box>
                   )}

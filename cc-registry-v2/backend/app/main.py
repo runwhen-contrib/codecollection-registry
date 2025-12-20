@@ -85,20 +85,18 @@ async def health_check():
     }
 
 # Include routers
-from app.routers import admin, tasks, raw_data, admin_crud, ai_admin, ai_enhancement_admin, task_execution_admin, versions, task_management, admin_inventory, helm_charts, chat, simple_chat, github_issues
+from app.routers import admin, tasks, raw_data, admin_crud, task_execution_admin, versions, task_management, admin_inventory, helm_charts, mcp_chat, github_issues
 app.include_router(admin.router)
 app.include_router(tasks.router)
 app.include_router(raw_data.router)
 app.include_router(admin_crud.router)
-app.include_router(ai_admin.router)
-app.include_router(ai_enhancement_admin.router, prefix="/api/v1")
+# AI config removed - now uses env vars only (AZURE_OPENAI_* in az.secret)
 app.include_router(task_execution_admin.router, prefix="/api/v1")
 app.include_router(admin_inventory.router)
 app.include_router(versions.router, prefix="/api/v1/registry")
 app.include_router(task_management.router)
 app.include_router(helm_charts.router, prefix="/api/v1", tags=["helm-charts"])
-app.include_router(chat.router)
-app.include_router(simple_chat.router)
+app.include_router(mcp_chat.router)  # MCP-powered chat (replaces legacy chat + simple_chat)
 app.include_router(github_issues.router, prefix="/api/v1")
 
 @app.get("/api/v1/registry/collections")
@@ -426,6 +424,7 @@ async def list_codebundles(limit: int = Query(500, description="Number of codebu
                     "display_name": cb.display_name,
                     "description": cb.description,
                     "doc": cb.doc,
+                    "readme": cb.readme,
                     "author": cb.author,
                     "support_tags": cb.support_tags,
                     "tasks": cb.tasks,
@@ -442,8 +441,9 @@ async def list_codebundles(limit: int = Query(500, description="Number of codebu
                     "ai_enhanced_metadata": cb.ai_enhanced_metadata or {},
                     "last_enhanced": cb.last_enhanced,
                     # Discovery information
-                    "discovery": {
-                        "is_discoverable": cb.is_discoverable,
+                    "configuration_type": {
+                        "type": "Automatically Discovered" if cb.has_genrules else "Manual",
+                        "has_generation_rules": cb.has_genrules,
                         "platform": cb.discovery_platform,
                         "resource_types": cb.discovery_resource_types,
                         "match_patterns": cb.discovery_match_patterns,
@@ -516,6 +516,7 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
                 "display_name": codebundle.display_name,
                 "description": codebundle.description,
                 "doc": codebundle.doc,
+                "readme": codebundle.readme,
                 "author": codebundle.author,
                 "support_tags": codebundle.support_tags,
                 "tasks": codebundle.tasks,
@@ -535,8 +536,9 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
                 "ai_enhanced_metadata": codebundle.ai_enhanced_metadata or {},
                 "last_enhanced": codebundle.last_enhanced,
                 # Discovery information
-                "discovery": {
-                    "is_discoverable": codebundle.is_discoverable,
+                "configuration_type": {
+                    "type": "Automatically Discovered" if codebundle.has_genrules else "Manual",
+                    "has_generation_rules": codebundle.has_genrules,
                     "platform": codebundle.discovery_platform,
                     "resource_types": codebundle.discovery_resource_types,
                     "match_patterns": codebundle.discovery_match_patterns,

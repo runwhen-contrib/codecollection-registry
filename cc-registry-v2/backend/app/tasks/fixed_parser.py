@@ -1,11 +1,151 @@
 import tempfile
 import os
 import re
-from typing import Optional, Dict, Any
+import yaml
+from pathlib import Path
+from typing import Optional, Dict, Any, List
 from robot.api import TestSuite
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def parse_generation_rules(runwhen_dir: Path) -> Dict[str, Any]:
+    """
+    Parse .runwhen/generation-rules/*.yaml files to extract discovery configuration.
+    
+    Returns a dict with:
+    - has_genrules: bool
+    - is_discoverable: bool  
+    - discovery_platform: str (kubernetes, aws, azure, gcp, etc.)
+    - discovery_resource_types: List[str]
+    - discovery_match_patterns: List[dict]
+    - discovery_output_items: List[str]
+    - discovery_level_of_detail: str
+    - discovery_templates: List[str]
+    """
+    result = {
+        'has_genrules': False,
+        'is_discoverable': False,
+        'discovery_platform': None,
+        'discovery_resource_types': [],
+        'discovery_match_patterns': [],
+        'discovery_output_items': [],
+        'discovery_level_of_detail': None,
+        'discovery_templates': [],
+    }
+    
+    gen_rules_dir = runwhen_dir / 'generation-rules'
+    templates_dir = runwhen_dir / 'templates'
+    
+    if not gen_rules_dir.exists():
+        return result
+    
+    result['has_genrules'] = True
+    result['is_discoverable'] = True
+    
+    # Parse all generation rule files
+    all_resource_types = []
+    all_match_patterns = []
+    all_output_items = set()
+    level_of_detail = None
+    
+    for yaml_file in gen_rules_dir.glob('*.yaml'):
+        try:
+            with open(yaml_file, 'r') as f:
+                content = yaml.safe_load(f)
+            
+            if not content or 'spec' not in content:
+                continue
+            
+            spec = content.get('spec', {})
+            rules = spec.get('generationRules', [])
+            
+            for rule in rules:
+                # Extract resource types
+                resource_types = rule.get('resourceTypes', [])
+                all_resource_types.extend(resource_types)
+                
+                # Extract match rules
+                match_rules = rule.get('matchRules', [])
+                for match in match_rules:
+                    all_match_patterns.append({
+                        'type': match.get('type'),
+                        'pattern': match.get('pattern'),
+                        'properties': match.get('properties', []),
+                        'mode': match.get('mode')
+                    })
+                
+                # Extract SLX definitions
+                slxs = rule.get('slxs', [])
+                for slx in slxs:
+                    # Get level of detail
+                    if slx.get('levelOfDetail'):
+                        level_of_detail = slx.get('levelOfDetail')
+                    
+                    # Get output items
+                    output_items = slx.get('outputItems', [])
+                    for item in output_items:
+                        if isinstance(item, dict):
+                            all_output_items.add(item.get('type', ''))
+                        else:
+                            all_output_items.add(str(item))
+                    
+        except Exception as e:
+            logger.warning(f"Failed to parse generation rules file {yaml_file}: {e}")
+            continue
+    
+    # Determine platform from resource types
+    platform = _detect_platform_from_resources(all_resource_types)
+    
+    # Get template files
+    templates = []
+    if templates_dir.exists():
+        templates = [f.name for f in templates_dir.glob('*.yaml')]
+    
+    result['discovery_resource_types'] = list(set(all_resource_types))
+    result['discovery_match_patterns'] = all_match_patterns
+    result['discovery_output_items'] = list(all_output_items)
+    result['discovery_level_of_detail'] = level_of_detail
+    result['discovery_platform'] = platform
+    result['discovery_templates'] = templates
+    
+    return result
+
+
+def _detect_platform_from_resources(resource_types: List[str]) -> str:
+    """Detect platform from Kubernetes resource types"""
+    if not resource_types:
+        return None
+    
+    # Check for common patterns
+    resource_str = ' '.join(resource_types).lower()
+    
+    # Azure patterns
+    if any(x in resource_str for x in ['azure', 'microsoft.', 'aks']):
+        return 'Azure'
+    
+    # AWS patterns  
+    if any(x in resource_str for x in ['aws', 'amazon', 'eks']):
+        return 'AWS'
+    
+    # GCP patterns
+    if any(x in resource_str for x in ['gcp', 'google', 'gke']):
+        return 'GCP'
+    
+    # Kubernetes-native patterns
+    if any(x in resource_str for x in ['.k8s.io', 'kubernetes', 'k8s']):
+        return 'Kubernetes'
+    
+    # Database patterns
+    if any(x in resource_str for x in ['postgres', 'mysql', 'redis', 'mongo']):
+        return 'Kubernetes'  # Database operators run on K8s
+    
+    # Default to Kubernetes if we have CRDs
+    if any('.' in rt for rt in resource_types):
+        return 'Kubernetes'
+    
+    return None
 
 def _create_display_name(name: str) -> str:
     """Create a display name from a codebundle name"""

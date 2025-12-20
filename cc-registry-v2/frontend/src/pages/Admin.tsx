@@ -15,7 +15,6 @@ import {
   Tab,
 } from '@mui/material';
 import { apiService } from '../services/api';
-import AIConfiguration from '../components/AIConfiguration';
 import AdminInventory from './AdminInventory';
 
 const Admin: React.FC = () => {
@@ -23,6 +22,8 @@ const Admin: React.FC = () => {
   const [populationStatus, setPopulationStatus] = useState<any>(null);
   const [isPopulating, setIsPopulating] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [aiStatus, setAiStatus] = useState<any>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState(0);
@@ -32,8 +33,52 @@ const Admin: React.FC = () => {
       setError(null);
       const status = await apiService.getPopulationStatus(token);
       setPopulationStatus(status);
+      // Also check AI status
+      await checkAiStatus();
     } catch (err) {
       setError(`Failed to get status: ${err}`);
+    }
+  };
+
+  const checkAiStatus = async () => {
+    try {
+      const response = await fetch('/api/v1/admin/ai-enhancement/status', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAiStatus(data);
+      }
+    } catch (err) {
+      console.error('Failed to get AI status:', err);
+    }
+  };
+
+  const triggerAiEnhancement = async (limit: number = 20) => {
+    try {
+      setIsEnhancing(true);
+      setError(null);
+      setMessage(null);
+      
+      const response = await fetch(`/api/v1/admin/ai-enhancement/run?limit=${limit}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Enhancement failed');
+      }
+      
+      const result = await response.json();
+      setMessage(`AI Enhancement: ${result.message}\nEnhanced: ${result.enhanced}, Failed: ${result.failed}, Remaining: ${result.remaining}`);
+      
+      // Refresh status
+      await checkAiStatus();
+    } catch (err: any) {
+      setError(`AI Enhancement failed: ${err.message || err}`);
+    } finally {
+      setIsEnhancing(false);
     }
   };
 
@@ -100,13 +145,6 @@ const Admin: React.FC = () => {
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <Button 
               variant="outlined" 
-              onClick={() => window.open('/admin/ai-enhancement', '_blank')}
-              sx={{ minWidth: 200 }}
-            >
-              🤖 AI Enhancement Admin
-            </Button>
-            <Button 
-              variant="outlined" 
               onClick={() => window.open('/tasks', '_blank')}
               sx={{ minWidth: 200 }}
             >
@@ -114,14 +152,13 @@ const Admin: React.FC = () => {
             </Button>
           </Box>
           <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
-            Access specialized admin interfaces for AI enhancement and task management
+            Access specialized admin interfaces
           </Typography>
         </CardContent>
       </Card>
 
       <Tabs value={currentTab} onChange={handleTabChange} sx={{ mb: 3 }}>
         <Tab label="Data Management" />
-        <Tab label="AI Configuration" />
         <Tab label="Database Inventory" />
       </Tabs>
 
@@ -247,6 +284,96 @@ const Admin: React.FC = () => {
           </Card>
         </Box>
 
+        {/* AI Enhancement */}
+        <Card>
+          <CardContent>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              🤖 AI Enhancement
+            </Typography>
+            
+            {aiStatus && (
+              <Box sx={{ mb: 3 }}>
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+                  <Chip 
+                    label={aiStatus.ai_enabled ? `AI: ${aiStatus.ai_provider}` : 'AI: Not Configured'} 
+                    color={aiStatus.ai_enabled ? 'success' : 'error'}
+                    variant="outlined"
+                  />
+                  <Chip 
+                    label={`Enhanced: ${aiStatus.enhanced}/${aiStatus.total_codebundles} (${aiStatus.enhancement_percentage}%)`}
+                    color="primary"
+                    variant="outlined"
+                  />
+                  <Chip 
+                    label={`Pending: ${aiStatus.pending}`}
+                    color="warning"
+                    variant="outlined"
+                  />
+                  {aiStatus.failed > 0 && (
+                    <Chip 
+                      label={`Failed: ${aiStatus.failed}`}
+                      color="error"
+                      variant="outlined"
+                    />
+                  )}
+                </Box>
+                {aiStatus.ai_model && (
+                  <Typography variant="caption" color="text.secondary">
+                    Model: {aiStatus.ai_model}
+                  </Typography>
+                )}
+              </Box>
+            )}
+            
+            <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
+              Use AI to generate enhanced descriptions, access level classifications, and IAM requirements for codebundles.
+            </Typography>
+            
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => triggerAiEnhancement(10)}
+                disabled={isEnhancing || !token || !aiStatus?.ai_enabled}
+                sx={{ minWidth: 150 }}
+              >
+                {isEnhancing ? (
+                  <>
+                    <CircularProgress size={20} sx={{ mr: 1 }} color="inherit" />
+                    Enhancing...
+                  </>
+                ) : (
+                  'Enhance 10'
+                )}
+              </Button>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={() => triggerAiEnhancement(50)}
+                disabled={isEnhancing || !token || !aiStatus?.ai_enabled}
+                sx={{ minWidth: 150 }}
+              >
+                Enhance 50
+              </Button>
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={() => triggerAiEnhancement(aiStatus?.pending || 100)}
+                disabled={isEnhancing || !token || !aiStatus?.ai_enabled || !aiStatus?.pending}
+                sx={{ minWidth: 150 }}
+              >
+                Enhance All ({aiStatus?.pending || 0})
+              </Button>
+            </Box>
+            
+            {!aiStatus?.ai_enabled && (
+              <Typography variant="caption" display="block" sx={{ mt: 2, color: 'warning.main' }}>
+                ⚠️ AI is not configured. Set AZURE_OPENAI_* environment variables in az.secret.
+              </Typography>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Messages */}
         {message && (
           <Alert severity="success" sx={{ mb: 2 }}>
@@ -265,10 +392,6 @@ const Admin: React.FC = () => {
       )}
 
       {currentTab === 1 && (
-        <AIConfiguration token={token} />
-      )}
-
-      {currentTab === 2 && (
         <AdminInventory />
       )}
     </Container>
