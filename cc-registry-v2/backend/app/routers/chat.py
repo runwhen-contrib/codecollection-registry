@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 class ChatQuery(BaseModel):
     """Request model for chat queries"""
     question: str
-    context_limit: Optional[int] = 5  # Number of relevant tasks to include in context
+    context_limit: Optional[int] = 10  # Number of relevant tasks to include in context
     include_enhanced_descriptions: Optional[bool] = True
 
 

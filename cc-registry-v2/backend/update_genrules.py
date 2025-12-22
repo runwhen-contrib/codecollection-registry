@@ -22,7 +22,7 @@ from app.tasks.fixed_parser import parse_generation_rules
 # Path to MCP cloned repos (mounted from docker-compose)
 MCP_REPOS_PATH = Path('/mcp-repos')
 # Alternative path if running locally (outside container)
-ALT_REPOS_PATH = Path('/workspaces/codecollection-registry/hack/mcp/data/repos')
+ALT_REPOS_PATH = Path('/workspaces/codecollection-registry/mcp-server/data/repos')
 
 
 def find_repos_path():

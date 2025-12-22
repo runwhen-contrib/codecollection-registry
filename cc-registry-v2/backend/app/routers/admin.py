@@ -2,11 +2,20 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Dict, Any
 import logging
+import yaml
+import json
+import os
+import tempfile
+import shutil
+import git
 
-from app.services.data_migration_service import DataPopulationService
 from app.services.helm_sync import sync_runwhen_local_chart
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
+from app.models import CodeCollection, Codebundle, RawYamlData, RawRepositoryData
+from app.services.robot_parser import parse_all_robot_files
+from app.tasks.fixed_parser import parse_robot_file_content, parse_generation_rules
+from pathlib import Path
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -24,24 +33,220 @@ def verify_admin_token(credentials: HTTPAuthorizationCredentials = Depends(secur
 
 @router.post("/populate-data")
 async def trigger_data_population(token: str = Depends(verify_admin_token)):
-    """Trigger comprehensive data population from original generate_registry.py"""
+    """Trigger comprehensive data population: Load YAML, clone repos, parse codebundles"""
+    db = SessionLocal()
     try:
         logger.info("Starting data population triggered by admin")
         
-        population_service = DataPopulationService()
-        result = population_service.populate_registry_data()
-        
-        if result["status"] == "success":
-            return {
-                "message": "Registry data population completed successfully",
-                "details": result
-            }
-        else:
-            raise HTTPException(status_code=500, detail=f"Population failed: {result.get('error', 'Unknown error')}")
+        # Step 1: Load YAML data
+        yaml_path = "/app/codecollections.yaml"
+        if not os.path.exists(yaml_path):
+            raise HTTPException(status_code=404, detail=f"YAML file not found: {yaml_path}")
             
+        with open(yaml_path, 'r') as file:
+            yaml_data = yaml.safe_load(file)
+        
+        collections_data = yaml_data.get('codecollections', [])
+        logger.info(f"Loaded {len(collections_data)} collections from YAML")
+        
+        # Step 2: Process each collection
+        collections_synced = 0
+        codebundles_created = 0
+        codebundles_updated = 0
+        
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            for collection_data in collections_data:
+                try:
+                    collection_slug = collection_data.get('slug')
+                    git_url = collection_data.get('git_url')
+                    
+                    if not collection_slug or not git_url:
+                        logger.warning(f"Skipping collection with missing slug or git_url")
+                        continue
+                    
+                    # Create/update collection in DB
+                    collection = db.query(CodeCollection).filter(
+                        CodeCollection.slug == collection_slug
+                    ).first()
+                    
+                    if not collection:
+                        collection = CodeCollection(
+                            name=collection_data.get('name', collection_slug),
+                            slug=collection_slug,
+                            git_url=git_url,
+                            description=collection_data.get('description', ''),
+                            owner=collection_data.get('owner', ''),
+                            owner_email=collection_data.get('owner_email', ''),
+                            owner_icon=collection_data.get('owner_icon', ''),
+                            git_ref=collection_data.get('git_ref', 'main'),
+                            is_active=True
+                        )
+                        db.add(collection)
+                        db.commit()
+                        db.refresh(collection)
+                        logger.info(f"Created collection: {collection_slug}")
+                    else:
+                        collection.name = collection_data.get('name', collection_slug)
+                        collection.git_url = git_url
+                        collection.description = collection_data.get('description', '')
+                        collection.is_active = True
+                        db.commit()
+                        logger.info(f"Updated collection: {collection_slug}")
+                    
+                    collections_synced += 1
+                    
+                    # Clone repository
+                    repo_path = os.path.join(tmp_dir, collection_slug)
+                    logger.info(f"Cloning {git_url} to {repo_path}")
+                    
+                    try:
+                        git.Repo.clone_from(git_url, repo_path, depth=1)
+                    except Exception as clone_err:
+                        logger.error(f"Failed to clone {git_url}: {clone_err}")
+                        continue
+                    
+                    # Find and parse codebundles
+                    codebundles_dir = os.path.join(repo_path, 'codebundles')
+                    if not os.path.exists(codebundles_dir):
+                        logger.warning(f"No codebundles directory in {collection_slug}")
+                        continue
+                    
+                    for bundle_name in os.listdir(codebundles_dir):
+                        bundle_path = os.path.join(codebundles_dir, bundle_name)
+                        if not os.path.isdir(bundle_path):
+                            continue
+                        
+                        # Parse robot files
+                        robot_files = [f for f in os.listdir(bundle_path) if f.endswith('.robot')]
+                        if not robot_files:
+                            continue
+                        
+                        # Use the fixed parser
+                        for robot_file in robot_files:
+                            robot_path = os.path.join(bundle_path, robot_file)
+                            try:
+                                with open(robot_path, 'r', encoding='utf-8') as f:
+                                    content = f.read()
+                                
+                                relative_path = f"codebundles/{bundle_name}/{robot_file}"
+                                parsed = parse_robot_file_content(content, relative_path, collection_slug)
+                                
+                                if parsed:
+                                    # Read README if exists
+                                    readme_content = ""
+                                    readme_path = os.path.join(bundle_path, "README.md")
+                                    if os.path.exists(readme_path):
+                                        with open(readme_path, 'r', encoding='utf-8') as f:
+                                            readme_content = f.read()
+                                    
+                                    # Parse .runwhen/generation-rules for discovery configuration
+                                    runwhen_dir = Path(bundle_path) / '.runwhen'
+                                    gen_rules = parse_generation_rules(runwhen_dir)
+                                    
+                                    # Create/update codebundle
+                                    existing = db.query(Codebundle).filter(
+                                        Codebundle.slug == parsed['slug'],
+                                        Codebundle.codecollection_id == collection.id
+                                    ).first()
+                                    
+                                    # Build runbook source URL
+                                    runbook_source_url = f"{git_url.rstrip('.git')}/tree/main/codebundles/{bundle_name}"
+                                    
+                                    if existing:
+                                        existing.name = parsed.get('name', bundle_name)
+                                        existing.display_name = parsed.get('display_name', bundle_name)
+                                        existing.description = parsed.get('description', '')
+                                        existing.doc = parsed.get('doc', '')
+                                        existing.readme = readme_content
+                                        existing.author = parsed.get('author', '')
+                                        existing.support_tags = parsed.get('support_tags', [])
+                                        existing.tasks = parsed.get('tasks', [])
+                                        existing.slis = parsed.get('slis', [])
+                                        existing.task_count = len(parsed.get('tasks', []))
+                                        existing.sli_count = len(parsed.get('slis', []))
+                                        existing.runbook_source_url = runbook_source_url
+                                        existing.runbook_path = f"codebundles/{bundle_name}/{robot_file}"
+                                        # Discovery configuration from generation-rules
+                                        existing.has_genrules = gen_rules.get('has_genrules', False)
+                                        existing.is_discoverable = gen_rules.get('is_discoverable', False)
+                                        existing.discovery_platform = gen_rules.get('discovery_platform')
+                                        existing.discovery_resource_types = gen_rules.get('discovery_resource_types', [])
+                                        existing.discovery_match_patterns = gen_rules.get('discovery_match_patterns', [])
+                                        existing.discovery_output_items = gen_rules.get('discovery_output_items', [])
+                                        existing.discovery_level_of_detail = gen_rules.get('discovery_level_of_detail')
+                                        existing.discovery_templates = gen_rules.get('discovery_templates', [])
+                                        if runwhen_dir.exists():
+                                            existing.runwhen_directory_path = f"codebundles/{bundle_name}/.runwhen"
+                                        codebundles_updated += 1
+                                    else:
+                                        codebundle = Codebundle(
+                                            name=parsed.get('name', bundle_name),
+                                            slug=parsed['slug'],
+                                            display_name=parsed.get('display_name', bundle_name),
+                                            description=parsed.get('description', ''),
+                                            doc=parsed.get('doc', ''),
+                                            readme=readme_content,
+                                            author=parsed.get('author', ''),
+                                            support_tags=parsed.get('support_tags', []),
+                                            tasks=parsed.get('tasks', []),
+                                            slis=parsed.get('slis', []),
+                                            task_count=len(parsed.get('tasks', [])),
+                                            sli_count=len(parsed.get('slis', [])),
+                                            codecollection_id=collection.id,
+                                            runbook_source_url=runbook_source_url,
+                                            runbook_path=f"codebundles/{bundle_name}/{robot_file}",
+                                            is_active=True,
+                                            # Discovery configuration from generation-rules
+                                            has_genrules=gen_rules.get('has_genrules', False),
+                                            is_discoverable=gen_rules.get('is_discoverable', False),
+                                            discovery_platform=gen_rules.get('discovery_platform'),
+                                            discovery_resource_types=gen_rules.get('discovery_resource_types', []),
+                                            discovery_match_patterns=gen_rules.get('discovery_match_patterns', []),
+                                            discovery_output_items=gen_rules.get('discovery_output_items', []),
+                                            discovery_level_of_detail=gen_rules.get('discovery_level_of_detail'),
+                                            discovery_templates=gen_rules.get('discovery_templates', []),
+                                            runwhen_directory_path=f"codebundles/{bundle_name}/.runwhen" if runwhen_dir.exists() else None
+                                        )
+                                        db.add(codebundle)
+                                        codebundles_created += 1
+                                    
+                                    # Only process first robot file per bundle
+                                    break
+                                    
+                            except Exception as parse_err:
+                                logger.error(f"Failed to parse {robot_path}: {parse_err}")
+                                continue
+                    
+                    db.commit()
+                    
+                except Exception as coll_err:
+                    logger.error(f"Failed to process collection {collection_data.get('slug', 'unknown')}: {coll_err}")
+                    continue
+        
+        db.commit()
+        
+        result = {
+            "status": "success",
+            "collections_synced": collections_synced,
+            "codebundles_created": codebundles_created,
+            "codebundles_updated": codebundles_updated,
+            "total_codebundles": codebundles_created + codebundles_updated
+        }
+        
+        logger.info(f"Data population completed: {result}")
+        
+        return {
+            "message": "Registry data population completed successfully",
+            "details": result
+        }
+            
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Data population error: {e}")
+        logger.error(f"Data population error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Population failed: {str(e)}")
+    finally:
+        db.close()
 
 @router.get("/population-status")
 async def get_population_status(token: str = Depends(verify_admin_token)):

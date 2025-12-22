@@ -42,13 +42,8 @@ const Admin: React.FC = () => {
 
   const checkAiStatus = async () => {
     try {
-      const response = await fetch('/api/v1/admin/ai-enhancement/status', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setAiStatus(data);
-      }
+      const status = await apiService.getAiEnhancementStatus(token);
+      setAiStatus(status);
     } catch (err) {
       console.error('Failed to get AI status:', err);
     }
@@ -60,23 +55,13 @@ const Admin: React.FC = () => {
       setError(null);
       setMessage(null);
       
-      const response = await fetch(`/api/v1/admin/ai-enhancement/run?limit=${limit}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Enhancement failed');
-      }
-      
-      const result = await response.json();
+      const result = await apiService.runAiEnhancement(token, limit);
       setMessage(`AI Enhancement: ${result.message}\nEnhanced: ${result.enhanced}, Failed: ${result.failed}, Remaining: ${result.remaining}`);
       
       // Refresh status
       await checkAiStatus();
     } catch (err: any) {
-      setError(`AI Enhancement failed: ${err.message || err}`);
+      setError(`AI Enhancement failed: ${err.response?.data?.detail || err.message || err}`);
     } finally {
       setIsEnhancing(false);
     }

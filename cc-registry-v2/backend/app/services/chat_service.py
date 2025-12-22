@@ -31,7 +31,7 @@ class ChatService:
     async def answer_query(
         self,
         question: str,
-        context_limit: int = 5,
+        context_limit: int = 10,
         include_enhanced_descriptions: bool = True
     ) -> Dict[str, Any]:
         """

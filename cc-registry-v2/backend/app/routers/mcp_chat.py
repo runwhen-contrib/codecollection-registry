@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 class ChatQuery(BaseModel):
     """Request model for chat queries"""
     question: str
-    context_limit: Optional[int] = 5
+    context_limit: Optional[int] = 10  # Increased from 5 for better coverage
     include_enhanced_descriptions: Optional[bool] = True
 
 
@@ -72,6 +72,30 @@ class KeywordHelpResponse(BaseModel):
     query_metadata: Dict[str, Any]
 
 
+class CodeBundleRequestQuery(BaseModel):
+    """Request model for creating a new CodeBundle request issue"""
+    platform: str
+    tasks: List[str]
+    original_query: Optional[str] = None
+    context: Optional[str] = None
+    contact_ok: bool = False
+
+
+class CodeBundleRequestResponse(BaseModel):
+    """Response model for CodeBundle request creation"""
+    success: bool
+    message: str
+    issue_url: Optional[str] = None
+    issue_number: Optional[int] = None
+
+
+class ExistingRequestsResponse(BaseModel):
+    """Response model for existing requests check"""
+    found: bool
+    message: str
+    existing_issues: List[Dict[str, Any]] = []
+
+
 # =============================================================================
 # Chat Endpoints
 # =============================================================================
@@ -104,11 +128,21 @@ async def query_codecollections(
                 detail="MCP search service is not available. Please try again later."
             )
         
-        # Determine if this is a keyword/library question
+        # Determine question type
         question_lower = query.question.lower()
+        
+        # Keywords/library questions
         is_keyword_question = any(word in question_lower for word in [
             'library', 'libraries', 'keyword', 'import', 'use ', 'how do i use',
             'rw.cli', 'rw.k8s', 'robot framework'
+        ])
+        
+        # Documentation/how-to questions (configuration, setup, guides)
+        is_docs_question = any(word in question_lower for word in [
+            'how to', 'how do i', 'configure', 'configuration', 'setup', 'set up',
+            'meta.yaml', 'secrets', 'credentials', 'generation rule', 'gen rule',
+            'sli', 'task vs', 'what is', 'guide', 'documentation', 'example',
+            'best practice', 'getting started', 'tutorial'
         ])
         
         # Determine platform from question
@@ -124,6 +158,8 @@ async def query_codecollections(
         
         # Call MCP for semantic search
         all_tasks = []  # Initialize for later use
+        doc_context = ""  # Documentation context
+        
         if is_keyword_question:
             mcp_response = await mcp.keyword_usage_help(
                 query=query.question,
@@ -132,6 +168,7 @@ async def query_codecollections(
             relevant_tasks = []
             sources_used = ["MCP Keyword Search"]
         else:
+            # Always search codebundles
             mcp_response = await mcp.find_codebundle(
                 query=query.question,
                 platform=platform,
@@ -141,11 +178,25 @@ async def query_codecollections(
             sources_used = _extract_sources_from_markdown(mcp_response)
             all_tasks = _parse_markdown_to_tasks(mcp_response)
             
+            # Also search documentation if this looks like a docs/how-to question
+            if is_docs_question:
+                try:
+                    doc_response = await mcp.find_documentation(
+                        query=query.question,
+                        category="all",
+                        max_results=5
+                    )
+                    if doc_response and "No documentation found" not in doc_response:
+                        doc_context = f"\n\n## Documentation Resources:\n{doc_response}"
+                        mcp_response += doc_context
+                        sources_used.append("MCP Documentation Search")
+                except Exception as e:
+                    logger.warning(f"Documentation search failed: {e}")
+            
             # Filter results by relevance
-            # With local embeddings, 60-70% is typical for good matches
-            # Don't force minimum results - if nothing is relevant, say so
-            MIN_RELEVANCE = 0.60  # Good enough for semantic match
-            STRONG_RELEVANCE = 0.70  # High-confidence matches
+            # With Azure embeddings (1536-dim), 70-80% is typical for good matches
+            MIN_RELEVANCE = 0.55  # Include more results for better coverage
+            STRONG_RELEVANCE = 0.65  # High-confidence matches
             
             relevant_tasks = []
             for t in all_tasks:
@@ -286,6 +337,15 @@ async def get_example_queries():
                 ]
             },
             {
+                "category": "Development & Configuration",
+                "queries": [
+                    "How do I set up generation rules?",
+                    "How do I configure secrets in codebundles?",
+                    "What goes in meta.yaml?",
+                    "How do I create an SLI vs a Task?"
+                ]
+            },
+            {
                 "category": "Keywords & Libraries",
                 "queries": [
                     "How do I run kubectl commands?",
@@ -307,13 +367,122 @@ async def get_example_queries():
                 "category": "General",
                 "queries": [
                     "What codebundles are available for monitoring?",
-                    "Find read-only diagnostic tasks",
+                    "Getting started with codebundle development",
                     "Show me tasks for PostgreSQL",
                     "What tasks require minimal permissions?"
                 ]
             }
         ]
     }
+
+
+@router.get("/check-existing-requests", response_model=ExistingRequestsResponse)
+async def check_existing_requests(search_term: str):
+    """
+    Check if there are existing CodeBundle requests similar to what the user needs.
+    
+    This searches open GitHub issues in the codecollection-registry repository.
+    """
+    try:
+        mcp = get_mcp_client()
+        
+        if not await mcp.is_available():
+            return ExistingRequestsResponse(
+                found=False,
+                message="MCP service not available",
+                existing_issues=[]
+            )
+        
+        result = await mcp.call_tool("check_existing_requests", {"search_term": search_term})
+        
+        # Parse the response to extract issues
+        if "No existing CodeBundle requests found" in result:
+            return ExistingRequestsResponse(
+                found=False,
+                message=f"No existing requests found for '{search_term}'",
+                existing_issues=[]
+            )
+        
+        # Parse issues from the markdown response
+        import re
+        issues = []
+        for match in re.finditer(r'\*\*#(\d+)\*\*: \[(.+?)\]\((.+?)\)', result):
+            issues.append({
+                "number": int(match.group(1)),
+                "title": match.group(2),
+                "url": match.group(3)
+            })
+        
+        return ExistingRequestsResponse(
+            found=len(issues) > 0,
+            message=f"Found {len(issues)} existing request(s)",
+            existing_issues=issues
+        )
+        
+    except Exception as e:
+        logger.error(f"Error checking existing requests: {e}")
+        return ExistingRequestsResponse(
+            found=False,
+            message=f"Error checking requests: {str(e)}",
+            existing_issues=[]
+        )
+
+
+@router.post("/request-codebundle", response_model=CodeBundleRequestResponse)
+async def request_codebundle(request: CodeBundleRequestQuery):
+    """
+    Create a new CodeBundle request on GitHub.
+    
+    This creates an issue in the codecollection-registry repository using
+    the codebundle-wanted template.
+    """
+    try:
+        mcp = get_mcp_client()
+        
+        if not await mcp.is_available():
+            raise HTTPException(
+                status_code=503,
+                detail="MCP service is not available"
+            )
+        
+        result = await mcp.call_tool("request_codebundle", {
+            "platform": request.platform,
+            "tasks": request.tasks,
+            "original_query": request.original_query,
+            "context": request.context,
+            "contact_ok": request.contact_ok
+        })
+        
+        # Parse the response
+        if "✅" in result and "Successfully" in result:
+            # Extract issue URL and number
+            import re
+            url_match = re.search(r'https://github\.com/[^\s\)]+', result)
+            num_match = re.search(r'#(\d+)', result)
+            
+            return CodeBundleRequestResponse(
+                success=True,
+                message="CodeBundle request created successfully!",
+                issue_url=url_match.group(0) if url_match else None,
+                issue_number=int(num_match.group(1)) if num_match else None
+            )
+        elif "⚠️" in result and "not configured" in result:
+            # GitHub token not configured - return the manual instructions
+            return CodeBundleRequestResponse(
+                success=False,
+                message=result
+            )
+        else:
+            return CodeBundleRequestResponse(
+                success=False,
+                message=result
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating codebundle request: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =============================================================================
@@ -338,26 +507,33 @@ async def _generate_llm_answer(
         # Build context from tasks
         task_context = _build_task_context(relevant_tasks)
         
-        system_prompt = """You are a helpful assistant that helps users find and use RunWhen CodeBundles.
+        system_prompt = """You are a helpful assistant that helps users find and use RunWhen CodeBundles and documentation.
 
 CodeBundles are automation scripts for troubleshooting and managing infrastructure (Kubernetes, AWS, Azure, GCP, databases, etc.).
 
+You have access to:
+1. CodeBundles - automation scripts for specific tasks
+2. Documentation - guides, tutorials, and reference materials for codebundle development
+3. Libraries - Robot Framework keyword libraries (RW.CLI, RW.K8s, etc.)
+4. Examples - sample codebundles and configurations
+
 CRITICAL RULES:
-1. ONLY recommend codebundles that DIRECTLY ADDRESS the user's specific question
-2. Do NOT include results just because they share a vague category (e.g., don't show generic K8s health checks for a specific networking question)
-3. Be STRICT about relevance - fewer accurate recommendations are better than many tangential ones
-4. If a codebundle's description doesn't clearly match the query, DON'T recommend it
+1. ONLY recommend resources that DIRECTLY ADDRESS the user's specific question
+2. For "how to" questions about configuration/development, prioritize documentation
+3. For troubleshooting/automation questions, recommend relevant codebundles
+4. Be STRICT about relevance - fewer accurate recommendations are better than many tangential ones
 
 When recommending:
-- Explain what each recommended codebundle does in plain language
-- Be conversational and match the user's tone
-- Mention the codebundle name and collection so users can find it
-- Keep responses concise but informative
+- Explain what each resource does in plain language
+- For documentation, explain what the guide covers and include the URL
+- For codebundles, mention the name and collection so users can find it
+- Be conversational and keep responses concise but informative
 
-If NO codebundles directly address the query:
-- Be honest: "I couldn't find a codebundle specifically for [user's need]"
-- Suggest the closest match IF it's genuinely useful, or suggest creating a GitHub issue
-- Don't pad the response with irrelevant results"""
+If NO resources directly address the query:
+- Be honest: "I couldn't find a resource specifically for [user's need]"
+- Suggest the closest match IF it's genuinely useful
+- For codebundle requests, suggest creating a GitHub issue
+- For documentation gaps, point to https://docs.runwhen.com"""
 
         user_prompt = f"""User Question: {question}
 

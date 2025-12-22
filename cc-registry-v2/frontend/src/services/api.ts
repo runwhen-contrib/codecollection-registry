@@ -368,6 +368,20 @@ export const apiService = {
     return response.data;
   },
 
+  async getAiEnhancementStatus(token: string) {
+    const response = await api.get('/admin/ai-enhancement/status', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async runAiEnhancement(token: string, limit: number = 10) {
+    const response = await api.post(`/admin/ai-enhancement/run?limit=${limit}`, {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
   async triggerDataPopulation(token: string) {
     const response = await api.post('/admin/populate-data', {}, {
       headers: { Authorization: `Bearer ${token}` }

@@ -114,38 +114,26 @@ def parse_generation_rules(runwhen_dir: Path) -> Dict[str, Any]:
 
 
 def _detect_platform_from_resources(resource_types: List[str]) -> str:
-    """Detect platform from Kubernetes resource types"""
+    """Detect platform from resource types. Defaults to Kubernetes."""
     if not resource_types:
-        return None
+        return 'Kubernetes'  # Default platform
     
-    # Check for common patterns
     resource_str = ' '.join(resource_types).lower()
     
     # Azure patterns
-    if any(x in resource_str for x in ['azure', 'microsoft.', 'aks']):
+    if any(x in resource_str for x in ['azure', 'microsoft.']):
         return 'Azure'
     
     # AWS patterns  
-    if any(x in resource_str for x in ['aws', 'amazon', 'eks']):
+    if any(x in resource_str for x in ['aws_', 'amazon']):
         return 'AWS'
     
     # GCP patterns
-    if any(x in resource_str for x in ['gcp', 'google', 'gke']):
+    if any(x in resource_str for x in ['gcp', 'google']):
         return 'GCP'
     
-    # Kubernetes-native patterns
-    if any(x in resource_str for x in ['.k8s.io', 'kubernetes', 'k8s']):
-        return 'Kubernetes'
-    
-    # Database patterns
-    if any(x in resource_str for x in ['postgres', 'mysql', 'redis', 'mongo']):
-        return 'Kubernetes'  # Database operators run on K8s
-    
-    # Default to Kubernetes if we have CRDs
-    if any('.' in rt for rt in resource_types):
-        return 'Kubernetes'
-    
-    return None
+    # Default to Kubernetes for everything else
+    return 'Kubernetes'
 
 def _create_display_name(name: str) -> str:
     """Create a display name from a codebundle name"""

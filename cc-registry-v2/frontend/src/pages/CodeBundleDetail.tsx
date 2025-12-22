@@ -90,11 +90,6 @@ const CodeBundleDetail: React.FC = () => {
         <Typography variant="h1" sx={{ mb: 2 }}>
           {codebundle.display_name}
         </Typography>
-        
-
-        <Typography variant="body1" sx={{ mb: 3 }}>
-          {codebundle.description}
-        </Typography>
 
         {/* Action Buttons */}
         <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
@@ -216,7 +211,8 @@ const CodeBundleDetail: React.FC = () => {
           )}
 
           {/* Additional Details */}
-          {(codebundle.ai_enhanced_description || 
+          {(codebundle.readme ||
+            codebundle.ai_enhanced_description || 
             codebundle.access_level !== 'unknown' || 
             (codebundle.minimum_iam_requirements && codebundle.minimum_iam_requirements.length > 0) ||
             (codebundle.ai_enhanced_metadata?.enhanced_tasks && codebundle.ai_enhanced_metadata.enhanced_tasks.length > 0)) && (
@@ -227,17 +223,32 @@ const CodeBundleDetail: React.FC = () => {
                   <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
                     Additional Details
                   </Typography>
-                  <Chip 
-                    label={codebundle.enhancement_status || 'pending'} 
-                    size="small" 
-                    color={
-                      codebundle.enhancement_status === 'completed' ? 'success' :
-                      codebundle.enhancement_status === 'processing' ? 'warning' :
-                      codebundle.enhancement_status === 'failed' ? 'error' : 'default'
-                    }
-                    sx={{ ml: 2 }}
-                  />
                 </Box>
+
+                {/* README.md Content */}
+                {codebundle.readme && (
+                  <Accordion defaultExpanded>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <DescriptionIcon sx={{ mr: 1, fontSize: '1.2rem' }} />
+                        <Typography variant="subtitle1">README</Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography 
+                        variant="body2" 
+                        component="pre"
+                        sx={{ 
+                          whiteSpace: 'pre-wrap', 
+                          fontFamily: 'inherit',
+                          m: 0 
+                        }}
+                      >
+                        {codebundle.readme}
+                      </Typography>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
 
                 {/* Enhanced Description */}
                 {codebundle.ai_enhanced_description && (

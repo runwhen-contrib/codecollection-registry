@@ -111,7 +111,7 @@ class MCPClient:
         return health.get("status") == "healthy"
     
     async def _call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """Call an MCP tool"""
+        """Call an MCP tool (internal - returns raw response)"""
         try:
             client = await self._get_client()
             response = await client.post(
@@ -127,12 +127,32 @@ class MCPClient:
             logger.error(f"MCP tool call failed: {e}")
             raise MCPError(f"Failed to call MCP tool {tool_name}: {e}")
     
+    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
+        """
+        Call any MCP tool by name and return the result string.
+        
+        This is the public interface for calling arbitrary tools.
+        
+        Args:
+            tool_name: Name of the MCP tool to call
+            arguments: Dictionary of arguments for the tool
+            
+        Returns:
+            The result string from the tool
+        """
+        result = await self._call_tool(tool_name, arguments)
+        
+        if result.get("success"):
+            return result.get("result", "No result returned")
+        else:
+            raise MCPError(result.get("error", "Unknown error"))
+    
     async def find_codebundle(
         self,
         query: str,
         platform: str = None,
         collection: str = None,
-        max_results: int = 5
+        max_results: int = 10
     ) -> str:
         """
         Find codebundles matching a natural language query.
@@ -212,11 +232,39 @@ class MCPClient:
         else:
             raise MCPError(result.get("error", "Unknown error"))
     
+    async def find_documentation(
+        self,
+        query: str,
+        category: str = "all",
+        max_results: int = 5
+    ) -> str:
+        """
+        Find documentation, guides, examples, and FAQs.
+        
+        Args:
+            query: What you want to learn about (e.g., 'how to use secrets', 'meta.yaml format')
+            category: Category filter (documentation, examples, libraries, faq, all)
+            max_results: Maximum number of results
+            
+        Returns:
+            Markdown formatted response with documentation resources
+        """
+        result = await self._call_tool("find_documentation", {
+            "query": query,
+            "category": category,
+            "max_results": max_results
+        })
+        
+        if result.get("success"):
+            return result.get("result", "No documentation found")
+        else:
+            raise MCPError(result.get("error", "Unknown error"))
+    
     async def search_codebundles_raw(
         self,
         query: str,
         platform: str = None,
-        max_results: int = 10
+        max_results: int = 15
     ) -> List[Dict[str, Any]]:
         """
         Search codebundles and return raw structured data (for API responses).
