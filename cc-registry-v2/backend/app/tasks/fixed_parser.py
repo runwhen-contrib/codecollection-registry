@@ -205,20 +205,15 @@ def parse_robot_file_content(content: str, file_path: str, collection_slug: str 
                 ret["imports"].append(i.name)
             
             # Extract codebundle name from path
+            # Slug should NOT include collection prefix - URL is /collections/{collection}/codebundles/{slug}
             path_parts = file_path.split('/')
             if len(path_parts) >= 2 and path_parts[0] == 'codebundles':
                 codebundle_dir = path_parts[1]
                 name = codebundle_dir
-                if collection_slug:
-                    slug = f"{collection_slug}-{codebundle_dir}".lower().replace(' ', '-').replace('_', '-')
-                else:
-                    slug = codebundle_dir.lower().replace(' ', '-').replace('_', '-')
+                slug = codebundle_dir.lower().replace(' ', '-').replace('_', '-')
             else:
                 name = os.path.splitext(os.path.basename(file_path))[0]
-                if collection_slug:
-                    slug = f"{collection_slug}-{name}".lower().replace(' ', '-').replace('_', '-')
-                else:
-                    slug = name.lower().replace(' ', '-').replace('_', '-')
+                slug = name.lower().replace(' ', '-').replace('_', '-')
             
             # Return data in the format expected by the microservices
             return {

@@ -144,6 +144,8 @@ export interface CodeBundle {
   sli_count: number;
   runbook_source_url: string;
   created_at: string;
+  updated_at: string;
+  git_updated_at: string | null;
   configuration_type: ConfigurationType;
   // Backwards compatibility
   discovery?: DiscoveryInfo;
@@ -288,6 +290,42 @@ export const apiService = {
         timestamp: new Date().toISOString()
       };
     }
+  },
+
+  // Registry Stats
+  async getRegistryStats(): Promise<{
+    collections: number;
+    codebundles: number;
+    tasks: number;
+    slis: number;
+    tasks_over_time: Array<{ month: string; tasks: number }>;
+  }> {
+    const response = await api.get('/registry/stats');
+    return response.data;
+  },
+
+  // Recent Codebundles
+  async getRecentCodebundles(): Promise<Array<{
+    id: number;
+    name: string;
+    slug: string;
+    display_name: string;
+    description: string;
+    collection_name: string;
+    collection_slug: string;
+    platform: string;
+    task_count: number;
+    git_updated_at: string | null;
+    updated_at: string | null;
+  }>> {
+    const response = await api.get('/registry/recent-codebundles');
+    return response.data;
+  },
+
+  // Tag Icons (from map-tag-icons.yaml)
+  async getTagIcons(): Promise<{ icons: Record<string, string> }> {
+    const response = await api.get('/registry/tag-icons');
+    return response.data;
   },
 
   // CodeCollections
@@ -775,14 +813,21 @@ export const apiService = {
 };
 
 // Chat API interfaces and functions
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface ChatQuery {
   question: string;
   context_limit?: number;
   include_enhanced_descriptions?: boolean;
+  conversation_history?: ConversationMessage[];
 }
 
 export interface ChatResponse {
   answer: string;
+  no_match?: boolean;  // True when no relevant codebundle was found
   relevant_tasks: Array<{
     id: number;
     codebundle_name: string;

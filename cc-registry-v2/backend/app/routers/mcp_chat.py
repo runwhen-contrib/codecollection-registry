@@ -24,11 +24,18 @@ router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 # Request/Response Models
 # =============================================================================
 
+class ConversationMessage(BaseModel):
+    """A message in conversation history"""
+    role: str  # 'user' or 'assistant'
+    content: str
+
+
 class ChatQuery(BaseModel):
     """Request model for chat queries"""
     question: str
     context_limit: Optional[int] = 10  # Increased from 5 for better coverage
     include_enhanced_descriptions: Optional[bool] = True
+    conversation_history: Optional[List[ConversationMessage]] = None  # Previous messages for context
 
 
 class RelevantTask(BaseModel):
@@ -58,6 +65,7 @@ class ChatResponse(BaseModel):
     confidence_score: Optional[float] = None
     sources_used: List[str]
     query_metadata: Dict[str, Any]
+    no_match: bool = False  # True when no relevant codebundle was found
 
 
 class KeywordHelpQuery(BaseModel):
@@ -131,6 +139,16 @@ async def query_codecollections(
         # Determine question type
         question_lower = query.question.lower()
         
+        # Detect follow-up questions that reference previous context
+        # These don't need a new semantic search
+        is_followup_question = any(phrase in question_lower for phrase in [
+            'this codebundle', 'this code bundle', 'that codebundle', 'that code bundle',
+            'what else can it', 'what else does it', 'what other', 'more about it',
+            'same codebundle', 'same bundle', 'can it also', 'does it also',
+            'anything else', 'other tasks', 'other features', 'what else can this',
+            'what else does this', 'tell me more', 'more details'
+        ]) and query.conversation_history and len(query.conversation_history) > 0
+        
         # Keywords/library questions
         is_keyword_question = any(word in question_lower for word in [
             'library', 'libraries', 'keyword', 'import', 'use ', 'how do i use',
@@ -143,6 +161,16 @@ async def query_codecollections(
             'meta.yaml', 'secrets', 'credentials', 'generation rule', 'gen rule',
             'sli', 'task vs', 'what is', 'guide', 'documentation', 'example',
             'best practice', 'getting started', 'tutorial'
+        ])
+        
+        # Meta questions about the system itself - should NOT show codebundles
+        is_meta_question = any(phrase in question_lower for phrase in [
+            'what do you have access to', 'what docs do you', 'what documentation',
+            'what can you do', 'what can you help', 'what are your capabilities',
+            'what tools do you have', 'what features', 'what is available',
+            'how can you help', 'what kind of', 'what types of', 'list your',
+            'tell me about yourself', 'what are you', 'what resources do you',
+            'hello', 'hi ', 'hey ', 'help me understand', 'introduce yourself'
         ])
         
         # Determine platform from question
@@ -159,8 +187,97 @@ async def query_codecollections(
         # Call MCP for semantic search
         all_tasks = []  # Initialize for later use
         doc_context = ""  # Documentation context
+        relevant_tasks = []  # Initialize
         
-        if is_keyword_question:
+        # Handle follow-up questions - do a focused search on the codebundle from conversation
+        if is_followup_question:
+            sources_used = ["Conversation Context"]
+            
+            # Extract codebundle name from conversation history
+            codebundle_name = None
+            for msg in reversed(query.conversation_history):
+                if msg.role == 'assistant':
+                    # Look for codebundle mentions like "azure-appservice-webapp-ops"
+                    import re
+                    match = re.search(r'\b([a-z]+-[a-z0-9-]+-[a-z0-9-]+)\b', msg.content.lower())
+                    if match:
+                        codebundle_name = match.group(1)
+                        break
+            
+            # If we found a codebundle name, search specifically for it
+            focused_tasks = []
+            if codebundle_name:
+                try:
+                    mcp_response = await mcp.find_codebundle(
+                        query=codebundle_name,  # Search for the specific codebundle
+                        platform=None,
+                        max_results=3
+                    )
+                    focused_tasks = _parse_markdown_to_tasks(mcp_response)
+                    # Filter to just the one we're discussing
+                    focused_tasks = [t for t in focused_tasks if codebundle_name in (t.codebundle_slug or '').lower()][:1]
+                    sources_used.append("MCP Codebundle Lookup")
+                except Exception as e:
+                    logger.warning(f"Focused codebundle search failed: {e}")
+                    mcp_response = ""
+            else:
+                mcp_response = ""
+            
+            # Go to LLM with conversation history + focused context
+            if ai_service.is_enabled():
+                answer = await _generate_llm_answer(
+                    ai_service=ai_service,
+                    question=query.question,
+                    mcp_context=mcp_response,
+                    relevant_tasks=focused_tasks,
+                    conversation_history=query.conversation_history
+                )
+            else:
+                answer = "I can answer follow-up questions better when AI is enabled. Please rephrase your question with more context."
+            
+            return ChatResponse(
+                answer=answer,
+                relevant_tasks=[],  # Don't show codebundle cards for follow-ups
+                confidence_score=None,
+                sources_used=sources_used,
+                query_metadata={
+                    "query_processed_at": _get_timestamp(),
+                    "context_tasks_count": len(focused_tasks),
+                    "is_followup": True,
+                    "focused_codebundle": codebundle_name
+                }
+            )
+        
+        if is_meta_question:
+            # Meta questions about the system - don't search codebundles
+            mcp_response = """# RunWhen Assistant Capabilities
+
+I have access to:
+
+1. **CodeBundles** - Automation scripts for troubleshooting and managing infrastructure:
+   - Kubernetes (pods, deployments, services, ingress, etc.)
+   - AWS (EC2, EKS, RDS, Lambda, S3, etc.)
+   - Azure (AKS, App Service, VMs, databases, etc.)
+   - GCP (GKE, Cloud Run, Cloud SQL, etc.)
+   - Databases (PostgreSQL, Redis, MongoDB, etc.)
+
+2. **Documentation** - Guides and references:
+   - CodeBundle development guides
+   - Robot Framework syntax tutorials
+   - Library references (RW.CLI, RW.Core, RW.K8s)
+   - Best practices and examples
+
+3. **Libraries** - Robot Framework keyword libraries for automation
+
+**Ask me:**
+- "What codebundles do you have for Kubernetes?"
+- "How do I troubleshoot Azure App Service?"
+- "What can I run when pods are failing?"
+- "How do I create a new CodeBundle?"
+"""
+            relevant_tasks = []
+            sources_used = ["System Information"]
+        elif is_keyword_question:
             mcp_response = await mcp.keyword_usage_help(
                 query=query.question,
                 category="all"
@@ -193,26 +310,65 @@ async def query_codecollections(
                 except Exception as e:
                     logger.warning(f"Documentation search failed: {e}")
             
-            # Filter results by relevance
+            # Filter results by relevance and specificity
             # With Azure embeddings (1536-dim), 70-80% is typical for good matches
-            MIN_RELEVANCE = 0.55  # Include more results for better coverage
-            STRONG_RELEVANCE = 0.65  # High-confidence matches
+            MIN_RELEVANCE = 0.58  # Minimum to show
+            STRONG_RELEVANCE = 0.64  # High-confidence matches get priority
+            
+            # Detect specific resource types in query to filter irrelevant results
+            query_lower = question_lower
+            resource_hints = []
+            resource_excludes = []  # Explicitly exclude these
+            if 'app service' in query_lower or 'webapp' in query_lower or 'web app' in query_lower:
+                resource_hints = ['appservice-webapp', 'appservice-plan', 'webapp']
+                resource_excludes = ['functionapp', 'function-', 'vmss', 'aks', 'appgateway', '-db-']
+            elif 'aks' in query_lower:
+                resource_hints = ['aks']
+                resource_excludes = ['appservice', 'vmss']
+            elif 'vmss' in query_lower or 'vm scale' in query_lower:
+                resource_hints = ['vmss']
+            elif 'function' in query_lower or 'functionapp' in query_lower:
+                resource_hints = ['function', 'functionapp']
+                resource_excludes = ['webapp-health', 'webapp-ops']
+            elif 'container' in query_lower:
+                resource_hints = ['container']
             
             relevant_tasks = []
             for t in all_tasks:
-                # Include strong matches
-                if t.relevance_score >= STRONG_RELEVANCE:
-                    relevant_tasks.append(t)
-                # Include moderate matches only if platform aligns
-                elif t.relevance_score >= MIN_RELEVANCE:
-                    if not platform:  # No platform specified, include it
-                        relevant_tasks.append(t)
-                    elif t.platform and t.platform.lower() == platform.lower():
-                        relevant_tasks.append(t)
-                    # Skip if platform doesn't match (e.g., AWS result for K8s query)
+                # Skip if below minimum
+                if t.relevance_score < MIN_RELEVANCE:
+                    continue
+                
+                # If we detected specific resource hints, filter by them
+                if resource_hints or resource_excludes:
+                    slug_lower = (t.codebundle_slug or '').lower()
+                    name_lower = (t.codebundle_name or '').lower()
+                    combined = slug_lower + ' ' + name_lower
+                    
+                    # Explicitly exclude certain resource types
+                    if resource_excludes:
+                        if any(excl in combined for excl in resource_excludes):
+                            continue
+                    
+                    # Check if this codebundle matches the resource hint
+                    if resource_hints:
+                        matches_hint = any(hint in combined for hint in resource_hints)
+                        # Only include if it matches, OR if it's a very strong match (>70%)
+                        if not matches_hint and t.relevance_score < 0.70:
+                            continue
+                
+                # Include if platform matches (or no platform specified)
+                if platform:
+                    if not t.platform or t.platform.lower() != platform.lower():
+                        # Platform mismatch - only include very strong matches
+                        if t.relevance_score < 0.70:
+                            continue
+                
+                relevant_tasks.append(t)
             
-            # Limit to requested context_limit - but don't pad with irrelevant results
-            relevant_tasks = relevant_tasks[:query.context_limit]
+            # Sort by relevance (highest first) and limit
+            relevant_tasks.sort(key=lambda x: x.relevance_score, reverse=True)
+            relevant_tasks = relevant_tasks[:min(query.context_limit, 5)]  # Cap at 5 for cleaner UI
         
         # Generate LLM-synthesized answer if AI is available
         # Even if no tasks pass our strict filter, use LLM to synthesize from raw MCP context
@@ -224,7 +380,8 @@ async def query_codecollections(
                 ai_service=ai_service,
                 question=query.question,
                 mcp_context=mcp_response,
-                relevant_tasks=tasks_for_llm
+                relevant_tasks=tasks_for_llm,
+                conversation_history=query.conversation_history
             )
             # Update relevant_tasks to show user what we're referencing
             if not relevant_tasks:
@@ -232,6 +389,12 @@ async def query_codecollections(
         else:
             # Fallback to MCP response directly
             answer = mcp_response
+        
+        # Check if LLM indicated no matching codebundle
+        no_match = "[NO_MATCHING_CODEBUNDLE]" in answer
+        if no_match:
+            # Remove the marker from the displayed answer
+            answer = answer.replace("[NO_MATCHING_CODEBUNDLE]", "").strip()
         
         return ChatResponse(
             answer=answer,
@@ -244,7 +407,8 @@ async def query_codecollections(
                 "search_engine": "mcp-semantic",
                 "llm_enabled": ai_service.is_enabled(),
                 "platform_filter": platform
-            }
+            },
+            no_match=no_match
         )
         
     except MCPError as e:
@@ -324,52 +488,67 @@ async def chat_health_check(db: Session = Depends(get_db)):
 
 @router.get("/examples")
 async def get_example_queries():
-    """Get example queries that users can ask"""
+    """Get example queries that users can ask - designed to showcase tool capabilities"""
     return {
         "examples": [
             {
-                "category": "Troubleshooting",
+                "category": "Kubernetes Operations",
+                "icon": "kubernetes",
                 "queries": [
-                    "What do I run when pods are failing?",
-                    "How do I debug Kubernetes networking issues?",
-                    "Find tasks for Azure App Service problems",
-                    "Troubleshoot AWS EKS cluster issues"
+                    "Find tasks for troubleshooting pods stuck in CrashLoopBackOff",
+                    "How do I check deployment health and restart stuck rollouts?",
+                    "What codebundles help with node resource pressure?",
+                    "Find tasks to troubleshoot Kubernetes persistent volume issues"
                 ]
             },
             {
-                "category": "Development & Configuration",
+                "category": "Azure Cloud",
+                "icon": "azure",
                 "queries": [
-                    "How do I set up generation rules?",
-                    "How do I configure secrets in codebundles?",
-                    "What goes in meta.yaml?",
-                    "How do I create an SLI vs a Task?"
+                    "What tasks can scale out Azure App Service instances?",
+                    "Find health checks for Azure databases and Redis caches",
+                    "How do I troubleshoot Azure Application Gateway backend pools?",
+                    "Show me tasks for Azure AKS cluster diagnostics"
                 ]
             },
             {
-                "category": "Keywords & Libraries",
+                "category": "AWS Cloud",
+                "icon": "aws",
                 "queries": [
-                    "How do I run kubectl commands?",
-                    "What library handles CLI operations?",
-                    "How do I parse JSON output?",
-                    "How do I use the AWS CLI in codebundles?"
+                    "Find tasks for AWS EKS cluster health monitoring",
+                    "What codebundles help with CloudWatch metric analysis?",
+                    "How do I troubleshoot AWS EC2 instance issues?",
+                    "Show me tasks for AWS Lambda function debugging"
                 ]
             },
             {
-                "category": "Platform-Specific",
+                "category": "Development Help",
+                "icon": "code",
                 "queries": [
-                    "Find Azure monitoring tasks",
-                    "What Kubernetes health checks are available?",
-                    "Show me GCP resource management tools",
-                    "Find database troubleshooting tasks"
+                    "How do I run kubectl commands in a codebundle?",
+                    "What's the difference between SLI and TaskSet codebundles?",
+                    "How do I configure secrets and kubeconfig in meta.yaml?",
+                    "Show me examples of parsing JSON output in Robot Framework"
                 ]
             },
             {
-                "category": "General",
+                "category": "Database & Monitoring",
+                "icon": "database",
                 "queries": [
-                    "What codebundles are available for monitoring?",
-                    "Getting started with codebundle development",
-                    "Show me tasks for PostgreSQL",
-                    "What tasks require minimal permissions?"
+                    "Find tasks for PostgreSQL connection and query issues",
+                    "What codebundles check Prometheus and Grafana health?",
+                    "How do I monitor database replication and availability?",
+                    "Show me tasks for Redis cache troubleshooting"
+                ]
+            },
+            {
+                "category": "Getting Started",
+                "icon": "rocket",
+                "queries": [
+                    "What are the most popular codebundles for SRE teams?",
+                    "Show me simple health check examples to learn from",
+                    "What tasks work with minimal cloud permissions?",
+                    "List all available codecollections and their focus areas"
                 ]
             }
         ]
@@ -493,12 +672,14 @@ async def _generate_llm_answer(
     ai_service: AIEnhancementService,
     question: str,
     mcp_context: str,
-    relevant_tasks: List[RelevantTask]
+    relevant_tasks: List[RelevantTask],
+    conversation_history: Optional[List[ConversationMessage]] = None
 ) -> str:
     """
     Generate a natural language answer using the AI service.
     
     Takes the MCP search results and synthesizes a helpful response.
+    Includes conversation history for context-aware follow-up questions.
     """
     try:
         client = ai_service._get_ai_client()
@@ -517,24 +698,52 @@ You have access to:
 3. Libraries - Robot Framework keyword libraries (RW.CLI, RW.K8s, etc.)
 4. Examples - sample codebundles and configurations
 
+FORMATTING RULES:
+- Always use **bold** for CodeBundle names (e.g., **azure-appservice-webapp-ops**)
+- Use bullet points for listing tasks or capabilities
+- Keep responses focused and scannable
+
 CRITICAL RULES:
 1. ONLY recommend resources that DIRECTLY ADDRESS the user's specific question
 2. For "how to" questions about configuration/development, prioritize documentation
 3. For troubleshooting/automation questions, recommend relevant codebundles
 4. Be STRICT about relevance - fewer accurate recommendations are better than many tangential ones
+5. IGNORE results that don't match the user's platform (e.g., don't show Kubernetes results for Azure App Service questions)
+6. REMEMBER the conversation history - if the user refers to "this codebundle" or "it", they mean the one discussed previously
+7. If the user asks about YOU or what YOU can do, answer about your capabilities, DON'T search for codebundles
+
+ASK CLARIFYING QUESTIONS when the query is ambiguous:
+- If the user asks about Azure App Service, ask: "Are you working with a Web App, Function App, or Container App?"
+- If the user asks about scaling, ask: "Do you want to scale up (more resources) or scale out (more instances)?"
+- If the user asks about databases, ask which database system (Postgres, MySQL, Redis, etc.)
+- Keep clarifying questions short and provide 2-3 options
 
 When recommending:
+- Always use **bold** for CodeBundle names
 - Explain what each resource does in plain language
 - For documentation, explain what the guide covers and include the URL
-- For codebundles, mention the name and collection so users can find it
+- For codebundles, mention the SPECIFIC TASKS it contains that are relevant
 - Be conversational and keep responses concise but informative
 
 If NO resources directly address the query:
-- Be honest: "I couldn't find a resource specifically for [user's need]"
-- Suggest the closest match IF it's genuinely useful
-- For codebundle requests, suggest creating a GitHub issue
-- For documentation gaps, point to https://docs.runwhen.com"""
+- Start your response with exactly: "[NO_MATCHING_CODEBUNDLE]"
+- Be honest: "I couldn't find a codebundle specifically for [user's need]"
+- Don't show marginally related results just to have something
+- Tell them they can request this automation by clicking the "Request CodeBundle" button below
+- Keep the response short since the button will handle the request"""
 
+        # Build messages array with conversation history
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add conversation history if available
+        if conversation_history:
+            for msg in conversation_history[-6:]:  # Keep last 6 messages for context (3 turns)
+                messages.append({
+                    "role": msg.role,
+                    "content": msg.content
+                })
+        
+        # Add current question with context
         user_prompt = f"""User Question: {question}
 
 Available CodeBundles from search (sorted by relevance score):
@@ -544,14 +753,14 @@ Available CodeBundles from search (sorted by relevance score):
 IMPORTANT: Only recommend codebundles that DIRECTLY solve the user's problem. 
 - If a codebundle doesn't specifically address their question, don't include it
 - If none are truly relevant, say so honestly
-- Quality over quantity - 1-2 good matches is better than 5 mediocre ones"""
+- Quality over quantity - 1-2 good matches is better than 5 mediocre ones
+- If the user is asking a follow-up about a previously mentioned codebundle, answer based on the conversation history"""
+
+        messages.append({"role": "user", "content": user_prompt})
 
         response = client.chat.completions.create(
             model=model_name,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
+            messages=messages,
             max_tokens=800,
             temperature=0.7
         )
@@ -578,6 +787,11 @@ def _build_task_context(tasks: List[RelevantTask]) -> str:
         ]
         if task.description:
             task_info.append(f"Description: {task.description}")
+        # Include actual tasks/capabilities - this is what users search for
+        if task.tasks:
+            task_info.append(f"Available Tasks: {', '.join(task.tasks[:8])}")
+        if task.slis:
+            task_info.append(f"Available SLIs: {', '.join(task.slis[:5])}")
         if task.support_tags:
             task_info.append(f"Tags: {', '.join(task.support_tags)}")
         task_info.append(f"Relevance: {task.relevance_score:.0%}")
@@ -664,23 +878,44 @@ def _parse_markdown_to_tasks(markdown: str) -> List[RelevantTask]:
         slug = ""
         git_url = ""
         
+        task_list = []  # Individual tasks within the codebundle
+        sli_list = []
+        in_tasks_section = False
+        in_capabilities_section = False
+        
         for line in lines[1:]:
             line = line.strip()
             if line.startswith('**Collection:**'):
                 collection = line.replace('**Collection:**', '').strip().strip('`')
+                in_tasks_section = False
+                in_capabilities_section = False
             elif line.startswith('**Platform:**'):
                 platform = line.replace('**Platform:**', '').strip()
+                in_tasks_section = False
+                in_capabilities_section = False
             elif line.startswith('**Description:**'):
                 description = line.replace('**Description:**', '').strip()
+                in_tasks_section = False
+                in_capabilities_section = False
+            elif line.startswith('**Available Tasks:**'):
+                in_tasks_section = True
+                in_capabilities_section = False
+            elif line.startswith('**Capabilities:**'):
+                in_tasks_section = False
+                in_capabilities_section = True
             elif line.startswith('**Tags:**'):
                 tags_str = line.replace('**Tags:**', '').strip()
                 tags = [t.strip() for t in tags_str.split(',') if t.strip()]
+                in_tasks_section = False
+                in_capabilities_section = False
             elif line.startswith('**Relevance:**'):
                 try:
                     score_str = line.replace('**Relevance:**', '').strip().rstrip('%')
                     score = float(score_str) / 100.0
                 except:
                     score = 0.5
+                in_tasks_section = False
+                in_capabilities_section = False
             elif line.startswith('**Source:**'):
                 # Extract URL from markdown link
                 match = re.search(r'\[.*?\]\((.*?)\)', line)
@@ -689,6 +924,13 @@ def _parse_markdown_to_tasks(markdown: str) -> List[RelevantTask]:
                     # Extract slug from git URL
                     if '/codebundles/' in git_url:
                         slug = git_url.split('/codebundles/')[-1].rstrip('/')
+                in_tasks_section = False
+                in_capabilities_section = False
+            elif line.startswith('- ') and (in_tasks_section or in_capabilities_section):
+                # This is a task item
+                task_item = line[2:].strip()
+                if task_item:
+                    task_list.append(task_item)
         
         if name:
             tasks.append(RelevantTask(
@@ -699,6 +941,8 @@ def _parse_markdown_to_tasks(markdown: str) -> List[RelevantTask]:
                 collection_slug=collection.lower().replace(' ', '-') if collection else "",
                 description=description,
                 support_tags=tags,
+                tasks=task_list,  # Individual tasks from the codebundle
+                slis=sli_list,
                 platform=platform,
                 relevance_score=score,
                 runbook_source_url=git_url

@@ -52,11 +52,11 @@ const Categories: React.FC = () => {
                 },
               }}
             >
-              <CardActionArea
-                component={Link}
-                to={`/categories/${category.name.toLowerCase()}`}
-                sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
-              >
+                <CardActionArea
+                  component={Link}
+                  to={`/all-tasks?category=${category.name}`}
+                  sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                >
                 <Box
                   component="img"
                   src={category.icon}

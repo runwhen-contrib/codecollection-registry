@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -30,13 +31,19 @@ import { apiService, Task, TasksResponse } from '../services/api';
 import { useCart } from '../contexts/CartContext';
 
 const AllTasks: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [supportTags, setSupportTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Get initial category from URL params
+  const initialCategory = searchParams.get('category');
+  
   // Filter states
-  const [selectedSupportTags, setSelectedSupportTags] = useState<string[]>([]);
+  const [selectedSupportTags, setSelectedSupportTags] = useState<string[]>(
+    initialCategory ? [initialCategory] : []
+  );
   const [supportTagSearch, setSupportTagSearch] = useState('');
   const [supportTagSearchInput, setSupportTagSearchInput] = useState('');
   const [selectedCollection, setSelectedCollection] = useState('');
@@ -492,6 +499,8 @@ const AllTasks: React.FC = () => {
                                     sli_count: group.tasks.filter(t => t.type === 'SLI').length,
                                     runbook_source_url: group.codebundle.runbook_source_url || '',
                                     created_at: new Date().toISOString(),
+                                    updated_at: new Date().toISOString(),
+                                    git_updated_at: null,
                                     configuration_type: {
                                       type: 'Manual' as const,
                                       has_generation_rules: false,

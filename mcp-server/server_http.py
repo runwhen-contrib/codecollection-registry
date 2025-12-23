@@ -4,6 +4,14 @@ RunWhen Registry MCP Server - HTTP/REST API Version
 
 Provides HTTP endpoints for MCP tools to enable client-server separation.
 This is the primary server for production deployments.
+
+Tools are now organized in the tools/ directory:
+- tools/base.py - Base classes and registry
+- tools/codebundle_tools.py - CodeBundle search/list/details
+- tools/collection_tools.py - CodeCollection tools
+- tools/library_tools.py - Library and keyword help
+- tools/documentation_tools.py - Documentation search
+- tools/github_issue.py - GitHub issue creation
 """
 import asyncio
 import json
@@ -19,7 +27,10 @@ import uvicorn
 from utils.data_loader import DataLoader
 from utils.search import SearchEngine
 from utils.semantic_search import get_semantic_search, SemanticSearch
-from tools.github_issue import get_github_tool, CodeBundleRequest
+
+# Import the tool registry
+from tools import register_all_tools, get_tool_registry
+from tools.github_issue import get_github_client, CodeBundleRequest
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -29,7 +40,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="RunWhen Registry MCP Server",
     description="HTTP API for querying RunWhen codecollection data, libraries, and documentation",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 # CORS middleware for cross-origin requests
@@ -54,6 +65,19 @@ def get_semantic_search_instance() -> SemanticSearch:
     if semantic_search is None:
         semantic_search = get_semantic_search()
     return semantic_search
+
+
+# Initialize tool registry on startup
+@app.on_event("startup")
+async def startup_event():
+    """Register all tools on startup"""
+    logger.info("Registering MCP tools...")
+    registry = register_all_tools(
+        semantic_search_getter=get_semantic_search_instance,
+        data_loader=data_loader,
+        search_engine=search_engine
+    )
+    logger.info(f"Registered {registry.count} tools")
 
 
 # ============================================================================
@@ -142,162 +166,49 @@ async def health_check():
 
 @app.get("/tools", response_model=ToolListResponse)
 async def list_tools():
-    """List all available MCP tools"""
-    tools = [
-        # === Semantic Search Tools (AI-powered) ===
-        {
-            "name": "find_codebundle",
-            "description": "Find codebundles for your use case. Describe what you need in natural language. Examples: 'troubleshoot Kubernetes pods', 'monitor AWS EKS', 'check database health'",
-            "parameters": {
-                "query": {"type": "string", "required": True, "description": "What you want to do"},
-                "platform": {"type": "string", "optional": True, "description": "Filter by platform: Kubernetes, AWS, Azure, GCP, Linux, Database"},
-                "collection": {"type": "string", "optional": True, "description": "Filter by collection slug"},
-                "max_results": {"type": "integer", "default": 5}
-            }
-        },
-        {
-            "name": "find_codecollection",
-            "description": "Find the right codecollection for your use case.",
-            "parameters": {
-                "query": {"type": "string", "required": True, "description": "What you're looking for"},
-                "max_results": {"type": "integer", "default": 3}
-            }
-        },
-        {
-            "name": "keyword_usage_help",
-            "description": "Get help on how to use RunWhen Robot Framework keywords in your codebundles. Ask questions like 'How do I run kubectl commands?' or 'How do I parse JSON output?'",
-            "parameters": {
-                "query": {"type": "string", "required": True, "description": "Question about keyword/library usage"},
-                "category": {"type": "string", "enum": ["cli", "kubernetes", "aws", "azure", "all"], "default": "all"}
-            }
-        },
-        {
-            "name": "find_documentation",
-            "description": "Find documentation, guides, examples, and FAQs for CodeBundle development. Ask how-to questions or search for specific topics.",
-            "parameters": {
-                "query": {"type": "string", "required": True, "description": "What you want to learn about (e.g., 'how to use secrets', 'meta.yaml format')"},
-                "category": {"type": "string", "enum": ["documentation", "examples", "libraries", "faq", "all"], "default": "all"},
-                "max_results": {"type": "integer", "default": 5}
-            }
-        },
-        # === Basic Search Tools (keyword-based) ===
-        {
-            "name": "list_codebundles",
-            "description": "List all codebundles and codecollections. Supports filtering by collection and output formatting.",
-            "parameters": {
-                "format": {"type": "string", "enum": ["markdown", "json", "summary"], "default": "markdown"},
-                "collection_slug": {"type": "string", "optional": True}
-            }
-        },
-        {
-            "name": "search_codebundles",
-            "description": "Keyword-based search for codebundles by keywords, tags, or platform. For semantic search, use recommend_codebundle instead.",
-            "parameters": {
-                "query": {"type": "string", "required": True},
-                "tags": {"type": "array", "items": "string", "optional": True},
-                "platform": {"type": "string", "optional": True},
-                "max_results": {"type": "integer", "default": 10}
-            }
-        },
-        {
-            "name": "get_codebundle_details",
-            "description": "Get detailed information about a specific codebundle",
-            "parameters": {
-                "slug": {"type": "string", "required": True},
-                "collection_slug": {"type": "string", "optional": True}
-            }
-        },
-        {
-            "name": "list_codecollections",
-            "description": "List all available codecollections",
-            "parameters": {
-                "format": {"type": "string", "enum": ["markdown", "json", "summary"], "default": "markdown"}
-            }
-        },
-        {
-            "name": "find_library_info",
-            "description": "Find information about libraries (keyword search). For more natural queries, use library_usage_help.",
-            "parameters": {
-                "query": {"type": "string", "required": True},
-                "category": {"type": "string", "enum": ["cli", "python", "shell", "all"], "default": "all"}
-            }
-        },
-        {
-            "name": "get_development_requirements",
-            "description": "Get development requirements, best practices, and documentation for specific features",
-            "parameters": {
-                "feature": {"type": "string", "required": True}
-            }
-        },
-        # === Action Tools ===
-        {
-            "name": "request_codebundle",
-            "description": "Request a new CodeBundle from the community by creating a GitHub issue. Use this when no existing CodeBundle matches the user's needs.",
-            "parameters": {
-                "platform": {"type": "string", "required": True, "description": "Cloud platform(s) this should support (e.g., 'ServiceNow', 'Kubernetes on AWS', 'Azure')"},
-                "tasks": {"type": "array", "items": "string", "required": True, "description": "List of key tasks that should be performed"},
-                "original_query": {"type": "string", "optional": True, "description": "The user's original search query"},
-                "context": {"type": "string", "optional": True, "description": "Additional context about the use case"},
-                "contact_ok": {"type": "boolean", "default": False, "description": "Whether the user is willing to be contacted for follow-up"}
-            }
-        },
-        {
-            "name": "check_existing_requests",
-            "description": "Check if there are existing CodeBundle requests similar to what the user needs",
-            "parameters": {
-                "search_term": {"type": "string", "required": True, "description": "Term to search for in existing issues"}
-            }
-        }
-    ]
-    
+    """List all available MCP tools from the registry"""
+    registry = get_tool_registry()
+    tools = registry.list_tools()
+    return ToolListResponse(tools=tools, count=len(tools))
+
+
+@app.get("/tools/by-category/{category}", response_model=ToolListResponse)
+async def list_tools_by_category(category: str):
+    """List tools filtered by category (search, info, action)"""
+    registry = get_tool_registry()
+    tools = registry.list_by_category(category)
     return ToolListResponse(tools=tools, count=len(tools))
 
 
 @app.post("/tools/call", response_model=ToolCallResponse)
 async def call_tool(request: ToolCallRequest):
-    """Call a specific MCP tool"""
+    """Call a specific MCP tool using the registry"""
     try:
         tool_name = request.tool_name
         arguments = request.arguments
         
         logger.info(f"Calling tool: {tool_name} with arguments: {arguments}")
         
-        # Route to appropriate handler
-        # Semantic search tools (AI-powered)
-        if tool_name == "find_codebundle":
-            result = await handle_find_codebundle(arguments)
-        elif tool_name == "find_codecollection":
-            result = await handle_find_codecollection(arguments)
-        elif tool_name == "keyword_usage_help":
-            result = await handle_keyword_usage_help(arguments)
-        elif tool_name == "find_documentation":
-            result = await handle_find_documentation(arguments)
-        # Basic search tools (keyword-based)
-        elif tool_name == "list_codebundles":
-            result = await handle_list_codebundles(arguments)
-        elif tool_name == "search_codebundles":
-            result = await handle_search_codebundles(arguments)
-        elif tool_name == "get_codebundle_details":
-            result = await handle_get_codebundle_details(arguments)
-        elif tool_name == "list_codecollections":
-            result = await handle_list_codecollections(arguments)
-        elif tool_name == "find_library_info":
-            result = await handle_find_library_info(arguments)
-        elif tool_name == "get_development_requirements":
-            result = await handle_get_development_requirements(arguments)
-        # Action tools
-        elif tool_name == "request_codebundle":
-            result = await handle_request_codebundle(arguments)
-        elif tool_name == "check_existing_requests":
-            result = await handle_check_existing_requests(arguments)
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown tool: {tool_name}")
+        # Use the tool registry
+        registry = get_tool_registry()
         
-        return ToolCallResponse(
-            success=True,
-            result=result,
-            metadata={"tool": tool_name, "timestamp": datetime.utcnow().isoformat()}
-        )
+        try:
+            result = await registry.execute(tool_name, arguments)
+            return ToolCallResponse(
+                success=True,
+                result=result,
+                metadata={"tool": tool_name, "timestamp": datetime.utcnow().isoformat()}
+            )
+        except ValueError as e:
+            # Unknown tool
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            logger.error(f"Tool execution failed: {e}", exc_info=True)
+            return ToolCallResponse(
+                success=False,
+                error=str(e),
+                metadata={"tool": tool_name}
+            )
         
     except HTTPException:
         raise
@@ -308,6 +219,58 @@ async def call_tool(request: ToolCallRequest):
             error=str(e),
             metadata={"tool": request.tool_name}
         )
+
+
+# =============================================================================
+# Legacy Tool Handlers (for backward compatibility with existing handler functions)
+# These will be removed once all code uses the registry directly
+# =============================================================================
+
+# Legacy handler imports for REST endpoints that don't use the registry yet
+async def _legacy_call_tool(tool_name: str, arguments: Dict[str, Any]) -> str:
+    """Legacy tool call - uses registry"""
+    registry = get_tool_registry()
+    return await registry.execute(tool_name, arguments)
+
+
+# Backward compatibility aliases for direct handler calls
+async def handle_find_codebundle(arguments: Dict[str, Any]) -> str:
+    return await _legacy_call_tool("find_codebundle", arguments)
+
+async def handle_find_codecollection(arguments: Dict[str, Any]) -> str:
+    return await _legacy_call_tool("find_codecollection", arguments)
+
+async def handle_keyword_usage_help(arguments: Dict[str, Any]) -> str:
+    return await _legacy_call_tool("keyword_usage_help", arguments)
+
+async def handle_find_documentation(arguments: Dict[str, Any]) -> str:
+    return await _legacy_call_tool("find_documentation", arguments)
+
+async def handle_list_codebundles(arguments: Dict[str, Any]) -> str:
+    return await _legacy_call_tool("list_codebundles", arguments)
+
+async def handle_search_codebundles(arguments: Dict[str, Any]) -> str:
+    return await _legacy_call_tool("search_codebundles", arguments)
+
+async def handle_get_codebundle_details(arguments: Dict[str, Any]) -> str:
+    return await _legacy_call_tool("get_codebundle_details", arguments)
+
+async def handle_list_codecollections(arguments: Dict[str, Any]) -> str:
+    return await _legacy_call_tool("list_codecollections", arguments)
+
+async def handle_find_library_info(arguments: Dict[str, Any]) -> str:
+    return await _legacy_call_tool("find_library_info", arguments)
+
+async def handle_get_development_requirements(arguments: Dict[str, Any]) -> str:
+    return await _legacy_call_tool("get_development_requirements", arguments)
+
+async def handle_request_codebundle(arguments: Dict[str, Any]) -> str:
+    return await _legacy_call_tool("request_codebundle", arguments)
+
+async def handle_check_existing_requests(arguments: Dict[str, Any]) -> str:
+    return await _legacy_call_tool("check_existing_requests", arguments)
+
+
 
 
 # ============================================================================
@@ -397,459 +360,40 @@ async def get_dev_requirements(feature: str):
     return {"result": result, "feature": feature}
 
 
-# ============================================================================
-# Semantic Search Tool Handlers (AI-powered)
-# ============================================================================
-
-async def handle_find_codebundle(arguments: Dict[str, Any]) -> str:
-    """Handle find_codebundle tool call"""
-    query = arguments.get("query", "")
-    platform = arguments.get("platform")
-    collection = arguments.get("collection")
-    max_results = arguments.get("max_results", 10)
-    
-    if not query:
-        return "Error: query is required"
-    
-    ss = get_semantic_search_instance()
-    
-    if not ss.is_available:
-        # Fall back to keyword search
-        logger.info("Semantic search unavailable, falling back to keyword search")
-        return await handle_search_codebundles({
-            "query": query,
-            "platform": platform,
-            "max_results": max_results
-        })
-    
-    recommendations = ss.recommend_codebundles(
-        query=query,
-        platform=platform,
-        collection=collection,
-        max_results=max_results
-    )
-    
-    if not recommendations:
-        return f"No codebundles found matching: {query}\n\nTry rephrasing your query or using broader terms."
-    
-    output = f"# CodeBundles for: {query}\n\n"
-    output += f"Found {len(recommendations)} matching codebundle(s):\n\n"
-    
-    for i, rec in enumerate(recommendations, 1):
-        output += f"## {i}. {rec.display_name}\n\n"
-        output += f"**Collection:** `{rec.collection_slug}`\n\n"
-        output += f"**Platform:** {rec.platform}\n\n"
-        output += f"**Description:** {rec.description}\n\n"
-        if rec.tags:
-            output += f"**Tags:** {', '.join(rec.tags)}\n\n"
-        output += f"**Relevance:** {rec.score:.0%}\n\n"
-        # Use registry URL - frontend handles full path construction
-        output += f"**Source:** [View in Registry]({rec.git_url})\n\n"
-        output += "---\n\n"
-    
-    return output
-
-
-async def handle_find_codecollection(arguments: Dict[str, Any]) -> str:
-    """Handle find_codecollection tool call"""
-    query = arguments.get("query", "")
-    max_results = arguments.get("max_results", 3)
-    
-    if not query:
-        return "Error: query is required"
-    
-    ss = get_semantic_search_instance()
-    
-    if not ss.is_available:
-        # Fall back to listing all collections
-        return await handle_list_codecollections({"format": "markdown"})
-    
-    recommendations = ss.recommend_codecollections(
-        query=query,
-        max_results=max_results
-    )
-    
-    if not recommendations:
-        return f"No codecollections found matching: {query}"
-    
-    output = f"# CodeCollections for: {query}\n\n"
-    
-    for i, rec in enumerate(recommendations, 1):
-        output += f"## {i}. {rec['name']}\n\n"
-        output += f"**Slug:** `{rec['slug']}`\n\n"
-        output += f"**Description:** {rec['description']}\n\n"
-        output += f"**Repository:** [{rec['git_url']}]({rec['git_url']})\n\n"
-        output += f"**Relevance:** {rec['score']:.0%}\n\n"
-        output += "---\n\n"
-    
-    return output
-
-
-async def handle_keyword_usage_help(arguments: Dict[str, Any]) -> str:
-    """Handle keyword_usage_help tool call"""
-    query = arguments.get("query", "")
-    category = arguments.get("category", "all")
-    
-    if not query:
-        return "Error: query is required"
-    
-    ss = get_semantic_search_instance()
-    
-    if not ss.is_available:
-        # Fall back to keyword search
-        return await handle_find_library_info({
-            "query": query,
-            "category": category
-        })
-    
-    results = ss.search_libraries(
-        query=query,
-        category=category if category != "all" else None,
-        max_results=5
-    )
-    
-    if not results:
-        return f"No keyword libraries found matching: {query}\n\nTry different keywords or browse all keyword libraries."
-    
-    output = f"# Keyword Usage Help: {query}\n\n"
-    output += f"Found {len(results)} relevant keyword library/libraries:\n\n"
-    
-    for i, lib in enumerate(results, 1):
-        output += f"## {i}. {lib['name']}\n\n"
-        output += f"**Category:** {lib['category']}\n\n"
-        if lib.get('import_path'):
-            output += f"**Import:** `from {lib['import_path']} import {lib['name']}`\n\n"
-        if lib.get('collection_slug'):
-            output += f"**Collection:** `{lib['collection_slug']}`\n\n"
-        output += f"**Description:** {lib['description']}\n\n"
-        if lib.get('git_url'):
-            output += f"**Source:** [View on GitHub]({lib['git_url']})\n\n"
-        output += f"**Relevance:** {lib['score']:.0%}\n\n"
-        output += "---\n\n"
-    
-    return output
-
-
-async def handle_find_documentation(arguments: Dict[str, Any]) -> str:
-    """Handle find_documentation tool call"""
-    query = arguments.get("query", "")
-    category = arguments.get("category", "all")
-    max_results = arguments.get("max_results", 10)
-    
-    if not query:
-        return "Error: query is required"
-    
-    ss = get_semantic_search_instance()
-    
-    if not ss.is_available:
-        return "Documentation search is not available. Vector store not initialized."
-    
-    results = ss.search_documentation(
-        query=query,
-        category=category if category != "all" else None,
-        max_results=max_results
-    )
-    
-    if not results:
-        return f"No documentation found matching: {query}\n\nTry different keywords or check the official RunWhen documentation at https://docs.runwhen.com"
-    
-    output = f"# Documentation: {query}\n\n"
-    output += f"Found {len(results)} relevant resource(s):\n\n"
-    
-    for i, doc in enumerate(results, 1):
-        output += f"## {i}. {doc['name']}\n\n"
-        output += f"**Category:** {doc['category']}\n\n"
-        if doc.get('description'):
-            output += f"**Description:** {doc['description']}\n\n"
-        if doc.get('topics'):
-            output += f"**Topics:** {', '.join(doc['topics'])}\n\n"
-        if doc.get('url'):
-            output += f"**Link:** [{doc['url']}]({doc['url']})\n\n"
-        output += f"**Relevance:** {doc['score']:.0%}\n\n"
-        output += "---\n\n"
-    
-    return output
-
-
-# ============================================================================
-# Tool Handler Functions (keyword-based)
-# ============================================================================
-
-async def handle_list_codebundles(arguments: Dict[str, Any]) -> str:
-    """Handle list_codebundles tool call"""
-    format_type = arguments.get("format", "markdown")
-    collection_slug = arguments.get("collection_slug")
-    
-    # Load data
-    codebundles = data_loader.load_codebundles()
-    collections = data_loader.load_codecollections()
-    
-    # Filter by collection if specified
-    if collection_slug:
-        codebundles = [cb for cb in codebundles if cb.get("collection_slug") == collection_slug]
-    
-    # Format output
-    if format_type == "json":
-        result = json.dumps({
-            "codecollections": collections,
-            "codebundles": codebundles,
-            "total_collections": len(collections),
-            "total_codebundles": len(codebundles)
-        }, indent=2)
-    
-    elif format_type == "summary":
-        result = f"# RunWhen Registry Summary\n\n"
-        result += f"**Total CodeCollections:** {len(collections)}\n"
-        result += f"**Total CodeBundles:** {len(codebundles)}\n\n"
+@app.get("/api/docs/list", response_model=Dict[str, Any])
+async def list_managed_docs():
+    """List all managed documentation from docs.yaml"""
+    try:
+        from tools.documentation_tools import get_doc_manager
         
-        for cc in collections:
-            cc_bundles = [cb for cb in codebundles if cb.get("collection_slug") == cc["slug"]]
-            result += f"- **{cc['name']}** ({cc['slug']}): {len(cc_bundles)} codebundles\n"
-    
-    else:  # markdown
-        result = "# RunWhen CodeCollections and CodeBundles\n\n"
+        doc_manager = get_doc_manager()
+        categories = doc_manager.list_categories()
+        all_urls = doc_manager.get_all_urls()
         
-        for cc in collections:
-            cc_bundles = [cb for cb in codebundles if cb.get("collection_slug") == cc["slug"]]
-            
-            result += f"## {cc['name']}\n\n"
-            result += f"**Slug:** `{cc['slug']}`\n\n"
-            result += f"**Description:** {cc.get('description', 'N/A')}\n\n"
-            result += f"**CodeBundles ({len(cc_bundles)}):**\n\n"
-            
-            if cc_bundles:
-                for cb in cc_bundles:
-                    result += f"### {cb.get('display_name', cb.get('name'))}\n\n"
-                    result += f"- **Slug:** `{cb['slug']}`\n"
-                    result += f"- **Description:** {cb.get('description', 'N/A')}\n"
-                    result += f"- **Platform:** {cb.get('platform', 'N/A')}\n\n"
-    
-    return result
+        # Group by category
+        by_category = {}
+        for cat in categories:
+            docs = doc_manager.get_by_category(cat)
+            by_category[cat] = [
+                {"name": d.name, "url": d.url, "description": d.description[:100] + "..." if len(d.description) > 100 else d.description}
+                for d in docs
+            ]
+        
+        return {
+            "total": len(all_urls),
+            "categories": categories,
+            "docs_by_category": by_category
+        }
+    except Exception as e:
+        logger.error(f"Error listing docs: {e}")
+        return {"error": str(e), "total": 0, "categories": []}
 
 
-async def handle_search_codebundles(arguments: Dict[str, Any]) -> str:
-    """Handle search_codebundles tool call"""
-    query = arguments.get("query", "")
-    tags = arguments.get("tags", [])
-    platform = arguments.get("platform")
-    max_results = arguments.get("max_results", 10)
-    
-    codebundles = data_loader.load_codebundles()
-    
-    results = search_engine.search_codebundles(
-        codebundles=codebundles,
-        query=query,
-        tags=tags,
-        platform=platform,
-        max_results=max_results
-    )
-    
-    if not results:
-        return f"No codebundles found matching query: {query}"
-    
-    output = f"# Search Results for: {query}\n\nFound {len(results)} relevant codebundle(s):\n\n"
-    
-    for i, cb in enumerate(results, 1):
-        output += f"## {i}. {cb.get('display_name', cb.get('name'))}\n\n"
-        output += f"- **Slug:** `{cb['slug']}`\n"
-        output += f"- **Collection:** {cb.get('collection_slug', 'N/A')}\n"
-        output += f"- **Description:** {cb.get('description', 'N/A')}\n"
-        output += f"- **Platform:** {cb.get('platform', 'N/A')}\n\n"
-    
-    return output
-
-
-async def handle_get_codebundle_details(arguments: Dict[str, Any]) -> str:
-    """Handle get_codebundle_details tool call"""
-    slug = arguments.get("slug")
-    collection_slug = arguments.get("collection_slug")
-    
-    cb = data_loader.get_codebundle_by_slug(slug, collection_slug)
-    
-    if not cb:
-        return f"Codebundle not found: {slug}"
-    
-    output = f"# {cb.get('display_name', cb.get('name'))}\n\n"
-    output += f"**Slug:** `{cb['slug']}`\n\n"
-    output += f"## Description\n\n{cb.get('description', 'No description available')}\n\n"
-    
-    return output
-
-
-async def handle_list_codecollections(arguments: Dict[str, Any]) -> str:
-    """Handle list_codecollections tool call"""
-    format_type = arguments.get("format", "markdown")
-    collections = data_loader.load_codecollections()
-    
-    if format_type == "json":
-        return json.dumps({"codecollections": collections}, indent=2)
-    
-    result = "# RunWhen CodeCollections\n\n"
-    for cc in collections:
-        result += f"## {cc['name']}\n\n"
-        result += f"- **Slug:** `{cc['slug']}`\n"
-        result += f"- **Description:** {cc.get('description', 'N/A')}\n\n"
-    
-    return result
-
-
-async def handle_find_library_info(arguments: Dict[str, Any]) -> str:
-    """Handle find_library_info tool call"""
-    query = arguments.get("query", "")
-    category = arguments.get("category", "all")
-    
-    libraries = data_loader.load_libraries()
-    results = search_engine.search_libraries(
-        libraries=libraries,
-        query=query,
-        category=category,
-        max_results=5
-    )
-    
-    if not results:
-        return f"No libraries found matching: {query}"
-    
-    output = f"# Library Search Results: {query}\n\n"
-    for i, lib in enumerate(results, 1):
-        output += f"## {i}. {lib['name']}\n\n"
-        output += f"**Description:** {lib.get('description', 'N/A')}\n\n"
-    
-    return output
-
-
-async def handle_get_development_requirements(arguments: Dict[str, Any]) -> str:
-    """Handle get_development_requirements tool call"""
-    feature = arguments.get("feature", "").lower()
-    
-    resources = data_loader.load_documentation_resources()
-    results = search_engine.search_documentation(resources, feature, max_results=5)
-    
-    if not results:
-        return f"No documentation found for feature: {feature}"
-    
-    output = f"# Development Requirements: {feature}\n\n"
-    for i, doc in enumerate(results, 1):
-        output += f"## {i}. {doc['title']}\n\n"
-        output += f"**Description:** {doc.get('description', 'N/A')}\n\n"
-    
-    return output
-
-
-# ============================================================================
-# GitHub Issue Tool Handlers
-# ============================================================================
-
-async def handle_request_codebundle(arguments: Dict[str, Any]) -> str:
-    """Handle request_codebundle tool call - creates a GitHub issue for a new CodeBundle request"""
-    platform = arguments.get("platform", "")
-    tasks = arguments.get("tasks", [])
-    original_query = arguments.get("original_query", "")
-    context = arguments.get("context", "")
-    contact_ok = arguments.get("contact_ok", False)
-    
-    if not platform:
-        return "Error: 'platform' is required. Please specify which cloud platform(s) this CodeBundle should support."
-    
-    if not tasks:
-        return "Error: 'tasks' is required. Please provide a list of key tasks that should be performed."
-    
-    # Ensure tasks is a list
-    if isinstance(tasks, str):
-        tasks = [tasks]
-    
-    github_tool = get_github_tool()
-    
-    if not github_tool.is_configured():
-        return """⚠️ GitHub integration is not configured.
-
-To enable automatic issue creation, set the GITHUB_TOKEN environment variable with a token that has 'repo' scope.
-
-In the meantime, you can manually create an issue at:
-https://github.com/runwhen-contrib/codecollection-registry/issues/new?template=codebundle-wanted.yaml
-
-**Your request details:**
-- **Platform:** {platform}
-- **Tasks:** {tasks}
-- **Context:** {context}
-""".format(platform=platform, tasks=", ".join(tasks), context=context or "None")
-    
-    # Check for existing similar issues first
-    existing = github_tool.check_existing_issues(platform)
-    if existing:
-        existing_list = "\n".join([f"- [{issue['title']}]({issue['url']})" for issue in existing[:3]])
-        return f"""Found existing similar requests:
-
-{existing_list}
-
-Would you like to:
-1. Comment on an existing issue instead
-2. Create a new issue anyway (use request_codebundle with the same parameters again)
-
-To create anyway, confirm you've reviewed the existing issues."""
-    
-    # Create the request
-    request = CodeBundleRequest(
-        platform=platform,
-        tasks=tasks,
-        original_query=original_query,
-        context=context,
-        contact_ok=contact_ok
-    )
-    
-    result = github_tool.create_issue(request)
-    
-    if result["success"]:
-        return f"""✅ **CodeBundle Request Created Successfully!**
-
-**Issue:** [{result['title']}]({result['issue_url']})
-**Issue Number:** #{result['issue_number']}
-
-The RunWhen community will review your request. You can track progress at:
-{result['issue_url']}
-
-Thank you for helping improve the CodeCollection Registry!"""
-    else:
-        return f"""❌ **Failed to create GitHub issue**
-
-Error: {result['error']}
-
-You can manually create the issue at:
-https://github.com/runwhen-contrib/codecollection-registry/issues/new?template=codebundle-wanted.yaml
-
-**Your request details:**
-- **Platform:** {platform}
-- **Tasks:** {", ".join(tasks)}
-- **Context:** {context or "None"}"""
-
-
-async def handle_check_existing_requests(arguments: Dict[str, Any]) -> str:
-    """Handle check_existing_requests tool call - searches for existing CodeBundle requests"""
-    search_term = arguments.get("search_term", "")
-    
-    if not search_term:
-        return "Error: 'search_term' is required."
-    
-    github_tool = get_github_tool()
-    
-    # Search doesn't require authentication
-    existing = github_tool.check_existing_issues(search_term)
-    
-    if not existing:
-        return f"""No existing CodeBundle requests found for "{search_term}".
-
-Would you like to create a new request? Use the `request_codebundle` tool with:
-- **platform**: The cloud platform(s) this should support
-- **tasks**: Key tasks that should be automated
-- **context**: Any additional helpful context"""
-    
-    output = f"# Existing CodeBundle Requests for \"{search_term}\"\n\n"
-    for issue in existing:
-        output += f"- **#{issue['number']}**: [{issue['title']}]({issue['url']})\n"
-        output += f"  Created: {issue['created_at'][:10]}\n\n"
-    
-    output += "\nIf none of these match your needs, you can create a new request with the `request_codebundle` tool."
-    
-    return output
+@app.get("/api/docs/search", response_model=Dict[str, Any])
+async def search_docs_api(query: str, limit: int = 5):
+    """Search managed documentation (REST endpoint)"""
+    result = await handle_find_documentation({"query": query, "max_results": limit})
+    return {"result": result, "query": query}
 
 
 # ============================================================================

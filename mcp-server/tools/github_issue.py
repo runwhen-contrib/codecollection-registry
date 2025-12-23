@@ -1,5 +1,5 @@
 """
-GitHub Issue Creation Tool
+GitHub Issue Tools
 
 Creates CodeBundle request issues on GitHub when semantic search
 fails to find matching codebundles.
@@ -13,6 +13,8 @@ import httpx
 import logging
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
+
+from .base import BaseTool, ToolDefinition, ToolParameter
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +33,9 @@ class CodeBundleRequest:
     contact_ok: bool = False         # Willing to be contacted?
 
 
-class GitHubIssueTool:
+class GitHubIssueClient:
     """
-    Creates CodeBundle request issues on GitHub.
+    Low-level client for GitHub issue operations.
     
     Requires GITHUB_TOKEN environment variable with repo scope.
     """
@@ -185,13 +187,155 @@ class GitHubIssueTool:
 
 
 # Singleton instance
-_github_tool: Optional[GitHubIssueTool] = None
+_github_client: Optional[GitHubIssueClient] = None
 
 
-def get_github_tool() -> GitHubIssueTool:
-    """Get or create the GitHub tool singleton."""
-    global _github_tool
-    if _github_tool is None:
-        _github_tool = GitHubIssueTool()
-    return _github_tool
+def get_github_client() -> GitHubIssueClient:
+    """Get or create the GitHub client singleton."""
+    global _github_client
+    if _github_client is None:
+        _github_client = GitHubIssueClient()
+    return _github_client
 
+
+# Legacy alias for backward compatibility
+def get_github_tool() -> GitHubIssueClient:
+    """Legacy alias for get_github_client"""
+    return get_github_client()
+
+
+# =============================================================================
+# MCP Tool Classes
+# =============================================================================
+
+class RequestCodeBundleTool(BaseTool):
+    """
+    Request a new CodeBundle by creating a GitHub issue.
+    Use this when no existing CodeBundle matches the user's needs.
+    """
+    
+    @property
+    def definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            name="request_codebundle",
+            description="Request a new CodeBundle from the community by creating a GitHub issue. Use this when no existing CodeBundle matches the user's needs.",
+            category="action",
+            parameters=[
+                ToolParameter(
+                    name="platform",
+                    type="string",
+                    description="Cloud platform(s) this should support (e.g., 'ServiceNow', 'Kubernetes on AWS', 'Azure')",
+                    required=True
+                ),
+                ToolParameter(
+                    name="tasks",
+                    type="array",
+                    description="List of key tasks that should be performed",
+                    required=True,
+                    items="string"
+                ),
+                ToolParameter(
+                    name="original_query",
+                    type="string",
+                    description="The user's original search query",
+                    required=False
+                ),
+                ToolParameter(
+                    name="context",
+                    type="string",
+                    description="Additional context about the use case",
+                    required=False
+                ),
+                ToolParameter(
+                    name="contact_ok",
+                    type="boolean",
+                    description="Whether the user is willing to be contacted for follow-up",
+                    required=False,
+                    default=False
+                )
+            ]
+        )
+    
+    async def execute(
+        self,
+        platform: str,
+        tasks: List[str],
+        original_query: Optional[str] = None,
+        context: Optional[str] = None,
+        contact_ok: bool = False
+    ) -> str:
+        """Create a GitHub issue for a new CodeBundle request"""
+        client = get_github_client()
+        
+        if not client.is_configured():
+            return "**GitHub integration not configured.**\n\nPlease set GITHUB_TOKEN in environment variables to enable issue creation."
+        
+        request = CodeBundleRequest(
+            platform=platform,
+            tasks=tasks,
+            original_query=original_query,
+            context=context,
+            contact_ok=contact_ok
+        )
+        
+        result = client.create_issue(request)
+        
+        if result["success"]:
+            return f"""# CodeBundle Request Created!
+
+Your request has been submitted successfully.
+
+**Issue:** #{result['issue_number']}
+**URL:** [{result['issue_url']}]({result['issue_url']})
+
+The RunWhen community will review your request and may reach out if additional information is needed.
+
+Thank you for helping improve the CodeCollection!"""
+        else:
+            return f"""# Failed to Create Request
+
+An error occurred while creating the GitHub issue:
+
+**Error:** {result['error']}
+
+You can manually create an issue at:
+https://github.com/{REPO_OWNER}/{REPO_NAME}/issues/new?template=codebundle-wanted.yaml"""
+
+
+class CheckExistingRequestsTool(BaseTool):
+    """Check if there are existing CodeBundle requests similar to what the user needs."""
+    
+    @property
+    def definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            name="check_existing_requests",
+            description="Check if there are existing CodeBundle requests similar to what the user needs",
+            category="info",
+            parameters=[
+                ToolParameter(
+                    name="search_term",
+                    type="string",
+                    description="Term to search for in existing issues",
+                    required=True
+                )
+            ]
+        )
+    
+    async def execute(self, search_term: str) -> str:
+        """Check for existing CodeBundle requests"""
+        client = get_github_client()
+        
+        existing = client.check_existing_issues(search_term)
+        
+        if existing:
+            output = f"# Existing CodeBundle Requests for: {search_term}\n\n"
+            output += f"Found {len(existing)} related open issue(s):\n\n"
+            
+            for issue in existing:
+                output += f"- **#{issue['number']}** - [{issue['title']}]({issue['url']})\n"
+                output += f"  Created: {issue['created_at'][:10]}\n\n"
+            
+            output += "\nConsider commenting on an existing issue if it matches your needs, or create a new request if yours is different."
+            return output
+        else:
+            return f"No existing open requests found for '{search_term}'.\n\nYou can create a new CodeBundle request using the request_codebundle tool."

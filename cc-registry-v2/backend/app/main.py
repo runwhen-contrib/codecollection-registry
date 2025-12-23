@@ -244,11 +244,12 @@ async def get_all_tasks(
                 # Parse comma-separated tags
                 tag_list = [tag.strip() for tag in support_tags.split(',') if tag.strip()]
                 if tag_list:
-                    # Use PostgreSQL JSON contains operator for each tag (AND logic)
-                    for tag in tag_list:
-                        query = query.filter(
-                            func.cast(Codebundle.support_tags, JSONB).op('@>')([tag])
-                        )
+                    # Use PostgreSQL JSON contains operator with OR logic (match ANY tag)
+                    tag_conditions = [
+                        func.cast(Codebundle.support_tags, JSONB).op('@>')([tag])
+                        for tag in tag_list
+                    ]
+                    query = query.filter(or_(*tag_conditions))
             
             # Search in display names and descriptions
             if search:
@@ -562,6 +563,152 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
             status_code=500,
             content={"detail": "Internal server error"}
         )
+
+@app.get("/api/v1/registry/recent-codebundles")
+async def get_recent_codebundles():
+    """Get the 10 most recently updated codebundles"""
+    try:
+        from app.core.database import SessionLocal
+        from app.models import CodeCollection, Codebundle
+        from sqlalchemy import desc
+        
+        db = SessionLocal()
+        try:
+            # Get recent codebundles ordered by git_updated_at (or updated_at as fallback)
+            codebundles = db.query(Codebundle).filter(
+                Codebundle.is_active == True
+            ).order_by(
+                desc(Codebundle.git_updated_at.isnot(None)),  # Prioritize those with git dates
+                desc(Codebundle.git_updated_at),
+                desc(Codebundle.updated_at)
+            ).limit(10).all()
+            
+            result = []
+            for cb in codebundles:
+                collection = db.query(CodeCollection).filter(
+                    CodeCollection.id == cb.codecollection_id
+                ).first()
+                
+                result.append({
+                    "id": cb.id,
+                    "name": cb.name,
+                    "slug": cb.slug,
+                    "display_name": cb.display_name or cb.name,
+                    "description": cb.description[:150] + "..." if cb.description and len(cb.description) > 150 else cb.description,
+                    "collection_name": collection.name if collection else "Unknown",
+                    "collection_slug": collection.slug if collection else "",
+                    "platform": cb.discovery_platform or "Unknown",
+                    "task_count": cb.task_count or 0,
+                    "git_updated_at": cb.git_updated_at.isoformat() if cb.git_updated_at else None,
+                    "updated_at": cb.updated_at.isoformat() if cb.updated_at else None,
+                })
+            
+            return result
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error getting recent codebundles: {e}")
+        return []
+
+
+@app.get("/api/v1/registry/tag-icons")
+async def get_tag_icons():
+    """Get tag-to-icon mappings from map-tag-icons.yaml"""
+    import yaml
+    import os
+    
+    # Try multiple possible locations for the yaml file
+    possible_paths = [
+        "/app/map-tag-icons.yaml",
+        "/workspaces/codecollection-registry/map-tag-icons.yaml",
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "map-tag-icons.yaml"),
+        "map-tag-icons.yaml"
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            try:
+                with open(path, 'r') as f:
+                    data = yaml.safe_load(f)
+                    # Convert to a more usable format: {TAG: icon_url}
+                    icon_map = {}
+                    for item in data.get('icons', []):
+                        url = item.get('url', '')
+                        for tag in item.get('tags', []):
+                            icon_map[tag.upper()] = url
+                    return {"icons": icon_map}
+            except Exception as e:
+                logger.error(f"Error reading tag icons from {path}: {e}")
+                continue
+    
+    # Fallback to hardcoded defaults if file not found
+    logger.warning("map-tag-icons.yaml not found, using defaults")
+    return {
+        "icons": {
+            "KUBERNETES": "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/kubernetes-icon-color.svg",
+            "GKE": "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/gcp/google_kubernetes_engine/google_kubernetes_engine.svg",
+            "AKS": "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/azure/containers/10023-icon-service-Kubernetes-Services.svg",
+            "EKS": "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/amazon-eks.svg",
+            "OPENSHIFT": "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/OpenShift-LogoType.svg",
+            "GCP": "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/google-cloud-platform.svg",
+            "AWS": "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Amazon_Web_Services_Logo.svg",
+            "AZURE": "https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/azure-icon.svg",
+        }
+    }
+
+
+@app.get("/api/v1/registry/stats")
+async def get_registry_stats():
+    """Get registry-wide statistics for the homepage"""
+    try:
+        from app.core.database import SessionLocal
+        from app.models import CodeCollection, Codebundle
+        from sqlalchemy import func
+        
+        db = SessionLocal()
+        try:
+            # Count collections
+            collections_count = db.query(CodeCollection).filter(CodeCollection.is_active == True).count()
+            
+            # Count codebundles and sum tasks
+            codebundles_count = db.query(Codebundle).filter(Codebundle.is_active == True).count()
+            
+            # Sum all tasks
+            total_tasks = db.query(func.sum(Codebundle.task_count)).filter(Codebundle.is_active == True).scalar() or 0
+            
+            # Sum all SLIs
+            total_slis = db.query(func.sum(Codebundle.sli_count)).filter(Codebundle.is_active == True).scalar() or 0
+            
+            # Get tasks over time (by collection for now - simulated growth data)
+            # In production, you'd track this in a separate table
+            tasks_over_time = [
+                {"month": "Jan 2024", "tasks": int(total_tasks * 0.4)},
+                {"month": "Feb 2024", "tasks": int(total_tasks * 0.5)},
+                {"month": "Mar 2024", "tasks": int(total_tasks * 0.6)},
+                {"month": "Apr 2024", "tasks": int(total_tasks * 0.7)},
+                {"month": "May 2024", "tasks": int(total_tasks * 0.75)},
+                {"month": "Jun 2024", "tasks": int(total_tasks * 0.8)},
+                {"month": "Jul 2024", "tasks": int(total_tasks * 0.85)},
+                {"month": "Aug 2024", "tasks": int(total_tasks * 0.9)},
+                {"month": "Sep 2024", "tasks": int(total_tasks * 0.92)},
+                {"month": "Oct 2024", "tasks": int(total_tasks * 0.95)},
+                {"month": "Nov 2024", "tasks": int(total_tasks * 0.98)},
+                {"month": "Dec 2024", "tasks": int(total_tasks)},
+            ]
+            
+            return {
+                "collections": collections_count,
+                "codebundles": codebundles_count,
+                "tasks": int(total_tasks),
+                "slis": int(total_slis),
+                "tasks_over_time": tasks_over_time
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        return {"collections": 0, "codebundles": 0, "tasks": 0, "slis": 0, "tasks_over_time": []}
+
 
 if __name__ == "__main__":
     import uvicorn

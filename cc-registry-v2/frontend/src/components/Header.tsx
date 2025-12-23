@@ -6,20 +6,26 @@ import {
   Button,
   Box,
   IconButton,
-  Badge,
   Menu,
   MenuItem,
   Avatar,
   Divider,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Search as SearchIcon,
   Menu as MenuIcon,
-  DynamicForm as DynamicFormIcon,
+  MoreVert as MoreVertIcon,
   Login as LoginIcon,
   Logout as LogoutIcon,
   Person as PersonIcon,
+  Build as BuildIcon,
+  List as ListIcon,
+  KeyboardArrowDown as ArrowDownIcon,
+  Folder as FolderIcon,
+  Extension as ExtensionIcon,
+  Category as CategoryIcon,
 } from '@mui/icons-material';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -30,6 +36,8 @@ const Header: React.FC = () => {
   const { itemCount } = useCart();
   const { isAuthenticated, user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [moreMenuAnchor, setMoreMenuAnchor] = React.useState<null | HTMLElement>(null);
+  const [browseMenuAnchor, setBrowseMenuAnchor] = React.useState<null | HTMLElement>(null);
 
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -39,11 +47,37 @@ const Header: React.FC = () => {
     setAnchorEl(null);
   };
 
+  const handleMoreMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setMoreMenuAnchor(event.currentTarget);
+  };
+
+  const handleMoreMenuClose = () => {
+    setMoreMenuAnchor(null);
+  };
+
+  const handleBrowseMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setBrowseMenuAnchor(event.currentTarget);
+  };
+
+  const handleBrowseMenuClose = () => {
+    setBrowseMenuAnchor(null);
+  };
+
   const handleLogout = () => {
     logout();
     handleUserMenuClose();
     navigate('/');
   };
+
+  const handleMenuNavigate = (path: string) => {
+    navigate(path);
+    handleMoreMenuClose();
+    handleBrowseMenuClose();
+  };
+
+  const isBrowseActive = ['/collections', '/codebundles', '/categories'].some(
+    path => location.pathname.startsWith(path)
+  );
 
   return (
     <AppBar position="static" sx={{ backgroundColor: '#2f80ed' }}>
@@ -63,7 +97,7 @@ const Header: React.FC = () => {
             CodeCollection Registry
           </Typography>
           
-          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 2 }}>
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>
             <Button
               component={Link}
               to="/"
@@ -77,28 +111,6 @@ const Header: React.FC = () => {
             </Button>
             <Button
               component={Link}
-              to="/collections"
-              color="inherit"
-              sx={{
-                color: 'white',
-                fontWeight: location.pathname === '/collections' ? 'bold' : 'normal',
-              }}
-            >
-              Collections
-            </Button>
-            <Button
-              component={Link}
-              to="/codebundles"
-              color="inherit"
-              sx={{
-                color: 'white',
-                fontWeight: location.pathname === '/codebundles' ? 'bold' : 'normal',
-              }}
-            >
-              CodeBundles
-            </Button>
-            <Button
-              component={Link}
               to="/all-tasks"
               color="inherit"
               sx={{
@@ -108,17 +120,52 @@ const Header: React.FC = () => {
             >
               All Tasks
             </Button>
+            
+            {/* Browse Dropdown */}
             <Button
-              component={Link}
-              to="/categories"
               color="inherit"
+              onClick={handleBrowseMenuOpen}
+              endIcon={<ArrowDownIcon />}
               sx={{
                 color: 'white',
-                fontWeight: location.pathname === '/categories' ? 'bold' : 'normal',
+                fontWeight: isBrowseActive ? 'bold' : 'normal',
               }}
             >
-              Categories
+              Browse
             </Button>
+            <Menu
+              anchorEl={browseMenuAnchor}
+              open={Boolean(browseMenuAnchor)}
+              onClose={handleBrowseMenuClose}
+              anchorOrigin={{
+                vertical: 'bottom',
+                horizontal: 'left',
+              }}
+              transformOrigin={{
+                vertical: 'top',
+                horizontal: 'left',
+              }}
+            >
+              <MenuItem onClick={() => handleMenuNavigate('/collections')}>
+                <ListItemIcon>
+                  <FolderIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>CodeCollections</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => handleMenuNavigate('/codebundles')}>
+                <ListItemIcon>
+                  <ExtensionIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>CodeBundles</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => handleMenuNavigate('/categories')}>
+                <ListItemIcon>
+                  <CategoryIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Categories</ListItemText>
+              </MenuItem>
+            </Menu>
+
             <Button
               component={Link}
               to="/chat"
@@ -126,83 +173,91 @@ const Header: React.FC = () => {
               sx={{
                 color: 'white',
                 fontWeight: location.pathname === '/chat' ? 'bold' : 'normal',
-                backgroundColor: 'rgba(76, 175, 80, 0.2)',
-                '&:hover': {
-                  backgroundColor: 'rgba(76, 175, 80, 0.3)',
-                }
               }}
             >
-              🤖 Chat
+              RunWhen Assistant
             </Button>
-            <Button
-              component={Link}
-              to="/config-builder"
-              color="inherit"
-              sx={{
-                color: 'white',
-                fontWeight: location.pathname === '/config-builder' ? 'bold' : 'normal',
-              }}
-            >
-              Config Builder
-            </Button>
+            
             {isAuthenticated && (
-              <>
-                <Button
-                  component={Link}
-                  to="/admin"
-                  color="inherit"
-                  sx={{
-                    color: 'white',
-                    fontWeight: location.pathname === '/admin' ? 'bold' : 'normal',
-                    backgroundColor: 'rgba(255,255,255,0.1)',
-                    '&:hover': {
-                      backgroundColor: 'rgba(255,255,255,0.2)',
-                    }
-                  }}
-                >
-                  Admin
-                </Button>
-                <Button
-                  component={Link}
-                  to="/tasks"
-                  color="inherit"
-                  sx={{
-                    color: 'white',
-                    fontWeight: location.pathname === '/tasks' ? 'bold' : 'normal',
-                    backgroundColor: 'rgba(255,255,255,0.1)',
-                    '&:hover': {
-                      backgroundColor: 'rgba(255,255,255,0.2)',
-                    }
-                  }}
-                >
-                  Tasks
-                </Button>
-              </>
+              <Button
+                component={Link}
+                to="/admin"
+                color="inherit"
+                sx={{
+                  color: 'white',
+                  fontWeight: location.pathname === '/admin' ? 'bold' : 'normal',
+                  backgroundColor: 'rgba(255,255,255,0.1)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.2)',
+                  }
+                }}
+              >
+                Admin
+              </Button>
             )}
           </Box>
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <IconButton 
+          {/* More Menu - Hidden features */}
+          <IconButton
             color="inherit"
-            component={Link}
-            to="/config-builder"
+            onClick={handleMoreMenuOpen}
             sx={{
+              opacity: 0.7,
               '&:hover': {
+                opacity: 1,
                 backgroundColor: 'rgba(255,255,255,0.1)',
               }
             }}
           >
-            <Badge badgeContent={itemCount} color="error">
-              <DynamicFormIcon />
-            </Badge>
+            <MoreVertIcon />
           </IconButton>
-          <IconButton color="inherit">
-            <SearchIcon />
-          </IconButton>
+          <Menu
+            anchorEl={moreMenuAnchor}
+            open={Boolean(moreMenuAnchor)}
+            onClose={handleMoreMenuClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            <MenuItem onClick={() => handleMenuNavigate('/config-builder')}>
+              <ListItemIcon>
+                <BuildIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Config Builder</ListItemText>
+              {itemCount > 0 && (
+                <Typography variant="caption" sx={{ ml: 1, color: 'primary.main' }}>
+                  ({itemCount})
+                </Typography>
+              )}
+            </MenuItem>
+            <Divider />
+            {!isAuthenticated && (
+              <MenuItem onClick={() => handleMenuNavigate('/login')}>
+                <ListItemIcon>
+                  <LoginIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Login</ListItemText>
+              </MenuItem>
+            )}
+            {isAuthenticated && (
+              <MenuItem onClick={() => handleMenuNavigate('/tasks')}>
+                <ListItemIcon>
+                  <ListIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Task Manager</ListItemText>
+              </MenuItem>
+            )}
+          </Menu>
           
-          {/* Authentication Section */}
-          {isAuthenticated ? (
+          {/* User Menu (when authenticated) */}
+          {isAuthenticated && (
             <>
               <IconButton
                 color="inherit"
@@ -243,22 +298,6 @@ const Header: React.FC = () => {
                 </MenuItem>
               </Menu>
             </>
-          ) : (
-            <Button
-              component={Link}
-              to="/login"
-              color="inherit"
-              startIcon={<LoginIcon />}
-              sx={{
-                color: 'white',
-                border: '1px solid rgba(255,255,255,0.3)',
-                '&:hover': {
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                }
-              }}
-            >
-              Login
-            </Button>
           )}
           
           <IconButton

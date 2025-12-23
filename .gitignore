@@ -116,3 +116,4 @@ celerybeat.pid
 *.secret
 hack/mcp/data/**
 hack/mcp/data/**/*
+mcp-server/data/**

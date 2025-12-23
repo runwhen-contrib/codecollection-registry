@@ -10,7 +10,8 @@ import {
   CircularProgress,
   Collapse,
   Link,
-  Avatar
+  Avatar,
+  Button
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -20,7 +21,8 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   GitHub as GitHubIcon,
-  OpenInNew as OpenInNewIcon
+  OpenInNew as OpenInNewIcon,
+  AddCircleOutline as RequestIcon
 } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -33,6 +35,7 @@ interface ChatMessage {
   timestamp: Date;
   response?: ChatResponse;
   loading?: boolean;
+  userQuery?: string;  // For bot messages, stores the user's original query
 }
 
 const Chat: React.FC = () => {
@@ -88,7 +91,8 @@ const Chat: React.FC = () => {
       type: 'bot',
       content: '',
       timestamp: new Date(),
-      loading: true
+      loading: true,
+      userQuery: text  // Store the user's query for the GitHub issue button
     };
 
     setMessages(prev => [...prev, userMessage, botMessage]);
@@ -99,10 +103,20 @@ const Chat: React.FC = () => {
     try {
       let response: ChatResponse;
       try {
+        // Build conversation history from previous messages (last 6 = 3 turns)
+        const conversationHistory = messages
+          .filter(m => !m.loading && m.content)
+          .slice(-6)
+          .map(m => ({
+            role: (m.type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+            content: m.content
+          }));
+        
         response = await chatApi.query({
           question: text,
-          context_limit: 5,
-          include_enhanced_descriptions: true
+          context_limit: 8,
+          include_enhanced_descriptions: true,
+          conversation_history: conversationHistory
         });
         
         setMessages(prev => prev.map(msg => 
@@ -300,25 +314,62 @@ const Chat: React.FC = () => {
             )}
 
             {examples && (
-              <Box sx={{ mt: 4 }}>
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
-                  Try asking:
+              <Box sx={{ mt: 4, maxWidth: 900, mx: 'auto' }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
+                  Try asking about:
                 </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
-                  {examples.examples.slice(0, 2).flatMap(cat => 
-                    cat.queries.slice(0, 2).map((query, idx) => (
-                      <Chip
-                        key={`${cat.category}-${idx}`}
-                        label={query}
-                        variant="outlined"
-                        onClick={() => handleSendMessage(query)}
+                <Box sx={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' },
+                  gap: 2 
+                }}>
+                  {examples.examples.slice(0, 6).map((cat, catIdx) => (
+                    <Paper 
+                      key={cat.category}
+                      elevation={0}
+                      sx={{ 
+                        p: 2, 
+                        borderRadius: 2,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        '&:hover': { borderColor: 'primary.main', boxShadow: 1 }
+                      }}
+                    >
+                      <Typography 
+                        variant="caption" 
                         sx={{ 
-                          cursor: 'pointer',
-                          '&:hover': { backgroundColor: 'action.hover' }
+                          fontWeight: 600, 
+                          color: 'primary.main',
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.5
                         }}
-                      />
-                    ))
-                  )}
+                      >
+                        {cat.category}
+                      </Typography>
+                      <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        {cat.queries.slice(0, 2).map((query, idx) => (
+                          <Box
+                            key={`${cat.category}-${idx}`}
+                            onClick={() => handleSendMessage(query)}
+                            sx={{ 
+                              cursor: 'pointer',
+                              py: 0.75,
+                              px: 1,
+                              borderRadius: 1,
+                              fontSize: '0.85rem',
+                              color: 'text.secondary',
+                              '&:hover': { 
+                                backgroundColor: 'action.hover',
+                                color: 'text.primary'
+                              }
+                            }}
+                          >
+                            {query}
+                          </Box>
+                        ))}
+                      </Box>
+                    </Paper>
+                  ))}
                 </Box>
               </Box>
             )}
@@ -388,16 +439,29 @@ const Chat: React.FC = () => {
                             )}
                           </IconButton>
                           
-                          {message.content.includes('No Matching Tasks') && (
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleCreateGitHubIssue(message.content)}
-                              sx={{ p: 0.5 }}
-                              title="Create GitHub Issue"
-                            >
-                              <GitHubIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                          )}
+                        </Box>
+                      )}
+
+                      {/* Show Request CodeBundle button when no match found */}
+                      {message.response?.no_match && (
+                        <Box sx={{ mt: 2 }}>
+                          <Button
+                            variant="contained"
+                            startIcon={<RequestIcon />}
+                            onClick={() => handleCreateGitHubIssue(message.userQuery || message.content)}
+                            sx={{
+                              backgroundColor: '#1976d2',
+                              color: 'white',
+                              textTransform: 'none',
+                              fontWeight: 500,
+                              '&:hover': { backgroundColor: '#1565c0' }
+                            }}
+                          >
+                            Request this CodeBundle
+                          </Button>
+                          <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.secondary' }}>
+                            Opens a pre-filled GitHub issue to request this automation
+                          </Typography>
                         </Box>
                       )}
 
@@ -425,63 +489,67 @@ const Chat: React.FC = () => {
                           </Box>
                           
                           <Collapse in={expandedTasks.has(message.id)}>
-                            <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
                               {message.response.relevant_tasks.map((task, index) => (
-                                <Paper 
+                                <Box 
                                   key={index} 
-                                  variant="outlined" 
-                                  sx={{ p: 2, backgroundColor: 'background.paper' }}
+                                  sx={{ 
+                                    p: 1.5,
+                                    borderRadius: 1,
+                                    border: '1px solid',
+                                    borderColor: index === 0 ? 'primary.light' : 'divider',
+                                    backgroundColor: index === 0 ? 'rgba(25, 118, 210, 0.04)' : 'background.paper',
+                                    transition: 'all 0.15s',
+                                    '&:hover': { borderColor: 'primary.main', backgroundColor: 'rgba(25, 118, 210, 0.06)' }
+                                  }}
                                 >
-                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                      {task.codebundle_name}
-                                    </Typography>
-                                    <Chip 
-                                      label={`${Math.round(task.relevance_score * 100)}%`} 
-                                      size="small"
-                                      sx={{ 
-                                        height: 20, 
-                                        fontSize: '0.7rem',
-                                        backgroundColor: task.relevance_score > 0.7 ? 'success.light' : 'grey.200'
-                                      }}
-                                    />
-                                  </Box>
-                                  
-                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                                    {task.collection_name} {task.platform && `• ${task.platform}`}
-                                  </Typography>
-                                  
-                                  <Typography variant="body2" sx={{ mb: 1.5, color: 'text.secondary' }}>
-                                    {task.description}
-                                  </Typography>
-                                  
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                    {task.support_tags.slice(0, 3).map((tag, tagIdx) => (
+                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                                      <Typography 
+                                        variant="body2" 
+                                        sx={{ 
+                                          fontWeight: 600,
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        {task.codebundle_name}
+                                      </Typography>
                                       <Chip 
-                                        key={tagIdx} 
-                                        label={tag} 
-                                        size="small" 
-                                        sx={{ height: 20, fontSize: '0.7rem' }}
+                                        label={`${Math.round(task.relevance_score * 100)}%`} 
+                                        size="small"
+                                        sx={{ 
+                                          height: 18,
+                                          fontSize: '0.65rem',
+                                          fontWeight: 600,
+                                          backgroundColor: task.relevance_score >= 0.65 ? 'success.main' : task.relevance_score >= 0.6 ? 'warning.light' : 'grey.300',
+                                          color: task.relevance_score >= 0.65 ? 'white' : 'text.primary'
+                                        }}
                                       />
-                                    ))}
-                                    
+                                    </Box>
                                     {task.runbook_source_url && (
                                       <Link 
                                         href={task.runbook_source_url} 
-                                        target="_blank"
                                         sx={{ 
                                           display: 'flex', 
                                           alignItems: 'center', 
-                                          gap: 0.5, 
                                           fontSize: '0.75rem',
-                                          ml: 'auto'
+                                          flexShrink: 0,
+                                          color: 'primary.main',
+                                          textDecoration: 'none',
+                                          '&:hover': { textDecoration: 'underline' }
                                         }}
                                       >
-                                        View <OpenInNewIcon sx={{ fontSize: 12 }} />
+                                        View
                                       </Link>
                                     )}
                                   </Box>
-                                </Paper>
+                                  
+                                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                                    {task.collection_name} • {task.platform}
+                                  </Typography>
+                                </Box>
                               ))}
                             </Box>
                           </Collapse>

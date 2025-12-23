@@ -540,7 +540,7 @@ class CodeCollectionIndexer:
         logger.info(f"  Output: {output_file}")
     
     def _create_embedding_document(self, cb: CodeBundle) -> str:
-        """Create a rich document for embedding"""
+        """Create a rich document for embedding - includes detailed task info for better search"""
         parts = [
             f"Name: {cb.display_name}",
             f"Slug: {cb.slug}",
@@ -555,17 +555,19 @@ class CodeCollectionIndexer:
         if cb.support_tags:
             parts.append(f"Tags: {', '.join(cb.support_tags)}")
         
-        if cb.tasks:
-            parts.append(f"Tasks: {', '.join(cb.tasks[:10])}")
-        
+        # Include ALL capabilities (task names with documentation) - critical for search
+        # This is what users are actually searching for
         if cb.capabilities:
-            parts.append("Capabilities:")
-            for cap in cb.capabilities[:5]:
+            parts.append("Tasks and Capabilities:")
+            for cap in cb.capabilities[:20]:  # Increased from 5 to 20
                 parts.append(f"  - {cap}")
+        elif cb.tasks:
+            # Fallback to just task names if no capabilities
+            parts.append(f"Tasks: {', '.join(cb.tasks[:15])}")
         
         if cb.readme:
-            # Include truncated readme
-            parts.append(f"Documentation: {cb.readme[:1500]}")
+            # Include truncated readme for additional context
+            parts.append(f"Documentation: {cb.readme[:2000]}")
         
         return "\n".join(parts)
     

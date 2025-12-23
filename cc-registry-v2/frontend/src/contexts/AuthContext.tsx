@@ -65,12 +65,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     
     try {
-      // For now, implement simple admin login
-      // This will be replaced with proper backend authentication
-      if (email === 'admin@runwhen.com' && password === 'admin-dev-password') {
+      // Admin login - password from environment variable
+      const adminPassword = process.env.REACT_APP_ADMIN_PASSWORD || 'admin-dev-password';
+      const adminEmail = process.env.REACT_APP_ADMIN_EMAIL || 'admin@runwhen.com';
+      
+      if (email === adminEmail && password === adminPassword) {
         const userData: User = {
           id: 'admin-1',
-          email: 'admin@runwhen.com',
+          email: adminEmail,
           name: 'Administrator',
           domain: 'runwhen.com',
           roles: ['admin']
@@ -85,13 +87,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsLoading(false);
         return true;
       }
-      
-      // Future: Call backend authentication API
-      // const response = await fetch('/api/v1/auth/login', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ email, password })
-      // });
       
       setIsLoading(false);
       return false;

@@ -3,37 +3,67 @@ import {
   Box,
   Container,
   Typography,
-  Grid,
   Card,
   CardContent,
   CardActionArea,
-  Chip,
   CircularProgress,
   Alert,
+  Button,
+  Chip,
 } from '@mui/material';
+import { 
+  AutoAwesome as AutoAwesomeIcon,
+  MonetizationOn as MoneyIcon,
+  Update as UpdateIcon,
+} from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import { apiService, CodeCollection, CodeBundle } from '../services/api';
+import { apiService } from '../services/api';
+
+interface RegistryStats {
+  collections: number;
+  codebundles: number;
+  tasks: number;
+  slis: number;
+  tasks_over_time: Array<{ month: string; tasks: number }>;
+}
+
+interface RecentCodebundle {
+  id: number;
+  name: string;
+  slug: string;
+  display_name: string;
+  description: string;
+  collection_name: string;
+  collection_slug: string;
+  platform: string;
+  task_count: number;
+  git_updated_at: string | null;
+  updated_at: string | null;
+}
+
+// Default category names to display on homepage
+const CATEGORY_NAMES = ['KUBERNETES', 'GKE', 'AKS', 'EKS', 'OPENSHIFT', 'GCP', 'AWS', 'AZURE'];
 
 const Home: React.FC = () => {
-  const [collections, setCollections] = useState<CodeCollection[]>([]);
-  const [codebundles, setCodebundles] = useState<CodeBundle[]>([]);
+  const [stats, setStats] = useState<RegistryStats | null>(null);
+  const [recentCodebundles, setRecentCodebundles] = useState<RecentCodebundle[]>([]);
+  const [tagIcons, setTagIcons] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log('Fetching data from API...');
-        const [collectionsData, codebundlesData] = await Promise.all([
-          apiService.getCodeCollections(),
-          apiService.getCodeBundles({ limit: 6 }).then(response => response.codebundles),
+        const [statsData, recentData, iconsData] = await Promise.all([
+          apiService.getRegistryStats(),
+          apiService.getRecentCodebundles(),
+          apiService.getTagIcons()
         ]);
-        console.log('Collections data:', collectionsData);
-        console.log('Codebundles data:', codebundlesData);
-        setCollections(collectionsData);
-        setCodebundles(codebundlesData);
+        setStats(statsData);
+        setRecentCodebundles(recentData);
+        setTagIcons(iconsData.icons || {});
       } catch (err) {
-        console.error('Detailed error:', err);
+        console.error('Error fetching data:', err);
         setError(`Failed to load data: ${err}`);
       } finally {
         setLoading(false);
@@ -43,41 +73,28 @@ const Home: React.FC = () => {
     fetchData();
   }, []);
 
-  const categories = [
-    { name: 'KUBERNETES', icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/kubernetes-icon-color.svg' },
-    { name: 'GKE', icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/gcp/google_kubernetes_engine/google_kubernetes_engine.svg' },
-    { name: 'AKS', icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/azure/containers/10023-icon-service-Kubernetes-Services.svg' },
-    { name: 'EKS', icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/amazon-eks.svg' },
-    { name: 'OPENSHIFT', icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/OpenShift-LogoType.svg' },
-    { name: 'GCP', icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/google-cloud-platform.svg' },
-    { name: 'AWS', icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Amazon_Web_Services_Logo.svg' },
-    { name: 'CLOUDWATCH', icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/aws/cloudwatch.svg' },
-    { name: 'HTTP', icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/code_blocks.svg' },
-    { name: 'GITHUB', icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/github-mark.svg' },
-  ];
+  // Build categories from fetched tag icons
+  const categories = CATEGORY_NAMES.map(name => ({
+    name,
+    icon: tagIcons[name] || tagIcons[name.toUpperCase()] || ''
+  }));
 
-  const communityResources = [
-    {
-      title: 'Share an awesome command',
-      icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/share.svg',
-      link: 'https://github.com/runwhen-contrib/runwhen-local/issues/new?assignees=stewartshea&labels=runwhen-local%2Cawesome-command-contribution&projects=&template=awesome-command-contribution.yaml&title=%5Bawesome-command-contribution%5D+',
-    },
-    {
-      title: 'Join the (Paid) RunWhen Authors Program',
-      icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/code_blocks.svg',
-      link: 'https://docs.runwhen.com/public/v/runwhen-authors',
-    },
-    {
-      title: 'Request help from the community',
-      icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/help_center.svg',
-      link: 'https://github.com/runwhen-contrib/runwhen-local/issues/new?assignees=stewartshea&labels=runwhen-local%2Cnew-command-request&projects=&template=commands-wanted.yaml&title=%5Bnew-command-request%5D+',
-    },
-    {
-      title: 'Connect on Slack',
-      icon: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/slack_black.svg',
-      link: 'https://runwhen.slack.com/join/shared_invite/zt-1l7t3tdzl-IzB8gXDsWtHkT8C5nufm2A#/shared-invite/email',
-    },
-  ];
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return 'Unknown';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    // Handle future dates or same day (could be timezone differences)
+    if (diffDays < 0 || diffMs < 0) return 'Today';
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? 's' : ''} ago`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  };
 
   if (loading) {
     return (
@@ -85,9 +102,6 @@ const Home: React.FC = () => {
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
           <CircularProgress />
         </Box>
-        <Typography variant="body2" sx={{ textAlign: 'center', mt: 2 }}>
-          Loading data from API... (Check console for details)
-        </Typography>
       </Container>
     );
   }
@@ -96,22 +110,46 @@ const Home: React.FC = () => {
     return (
       <Container maxWidth="lg" sx={{ mt: 4 }}>
         <Alert severity="error">{error}</Alert>
-        <Typography variant="body2" sx={{ mt: 2 }}>
-          Collections: {collections.length}, Codebundles: {codebundles.length}
-        </Typography>
       </Container>
     );
   }
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      {/* Debug Info */}
-      <Box sx={{ mb: 2, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
-        <Typography variant="body2">
-          Debug: Collections: {collections.length}, Codebundles: {codebundles.length}, Loading: {loading.toString()}, Error: {error || 'None'}
-        </Typography>
+      {/* RunWhen Assistant - Clean Card */}
+      <Box sx={{ mb: 4 }}>
+        <Card
+          sx={{
+            background: '#fff',
+            border: '2px solid #2f80ed',
+            borderRadius: 2,
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              boxShadow: '0 4px 20px rgba(47, 128, 237, 0.2)',
+              transform: 'translateY(-1px)',
+            },
+          }}
+        >
+          <CardActionArea
+            component={Link}
+            to="/chat"
+            sx={{ p: 3 }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <AutoAwesomeIcon sx={{ fontSize: 32, color: '#2f80ed' }} />
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="h6" fontWeight="600" sx={{ color: '#333' }}>
+                  RunWhen Assistant
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#666' }}>
+                  Find CodeBundles, browse documentation, or request new tasks
+                </Typography>
+              </Box>
+              <Typography variant="h5" sx={{ color: '#2f80ed', display: { xs: 'none', sm: 'block' } }}>→</Typography>
+            </Box>
+          </CardActionArea>
+        </Card>
       </Box>
-      
 
       {/* Top Codebundle Categories */}
       <Box sx={{ mb: 4 }}>
@@ -138,7 +176,7 @@ const Home: React.FC = () => {
               >
                 <CardActionArea
                   component={Link}
-                  to={`/categories/${category.name.toLowerCase()}`}
+                  to={`/all-tasks?category=${category.name}`}
                   sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
                 >
                   <Box
@@ -188,105 +226,120 @@ const Home: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Two Column Layout */}
+      {/* Two Column Layout - Recent Updates and Statistics */}
       <Box sx={{ display: 'flex', gap: 4, flexDirection: { xs: 'column', lg: 'row' } }}>
-        {/* Featured CodeCollections */}
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h2" sx={{ mb: 2 }}>
-            Featured CodeCollections
-          </Typography>
+        {/* Recent Updates */}
+        <Box sx={{ flex: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <UpdateIcon sx={{ color: '#666' }} />
+            <Typography variant="h2">
+              Recent Updates
+            </Typography>
+          </Box>
           <Box sx={{ width: '100%', height: '2px', backgroundColor: '#e0e0e0', mb: 3 }} />
           
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-            {collections.map((collection) => (
-              <Box key={collection.id} sx={{ flex: '0 0 calc(100% - 8px)', '@media (min-width: 600px)': { flex: '0 0 calc(50% - 12px)' } }}>
-                <Card
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    minHeight: 80,
-                    '&:hover': {
-                      boxShadow: 4,
-                    },
-                  }}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {recentCodebundles.map((cb) => (
+              <Card
+                key={cb.id}
+                sx={{
+                  '&:hover': { boxShadow: 2 },
+                }}
+              >
+                <CardActionArea
+                  component={Link}
+                  to={`/collections/${cb.collection_slug}/codebundles/${cb.slug}`}
+                  sx={{ p: 2 }}
                 >
-                  <CardActionArea
-                    component={Link}
-                    to={`/collections/${collection.slug}`}
-                    sx={{ p: 2, display: 'flex', alignItems: 'center' }}
-                  >
-                    <Box
-                      component="img"
-                      src={collection.owner_icon || 'https://assets-global.website-files.com/64f9646ad0f39e9ee5c116c4/659f80c7391d64a0ec2a840e_icon_rw-platform.svg'}
-                      alt="Icon"
-                      sx={{
-                        width: 50,
-                        height: 50,
-                        mr: 2,
-                        borderRadius: 1.5,
-                        padding: 1,
-                      }}
-                    />
-                    <Box>
-                      <Typography variant="h6" fontWeight="bold">
-                        {collection.name}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography 
+                        variant="subtitle2" 
+                        fontWeight="600"
+                        sx={{ 
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {cb.display_name || cb.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {cb.collection_name} • {cb.task_count} task{cb.task_count !== 1 ? 's' : ''}
                       </Typography>
                     </Box>
-                  </CardActionArea>
-                </Card>
-              </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                      {cb.platform && cb.platform !== 'Unknown' && (
+                        <Chip 
+                          label={cb.platform} 
+                          size="small" 
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                      )}
+                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                        {formatDate(cb.git_updated_at || cb.updated_at)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardActionArea>
+              </Card>
             ))}
+            {recentCodebundles.length === 0 && (
+              <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                No recent updates found
+              </Typography>
+            )}
           </Box>
         </Box>
 
-        {/* Community Resources */}
+        {/* Statistics Sidebar */}
         <Box sx={{ flex: 1 }}>
           <Typography variant="h2" sx={{ mb: 2 }}>
-            Community Resources
+            Registry Stats
           </Typography>
           <Box sx={{ width: '100%', height: '2px', backgroundColor: '#e0e0e0', mb: 3 }} />
           
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {communityResources.map((resource, index) => (
-              <Box key={index}>
-                <Card
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    minHeight: 80,
-                    '&:hover': {
-                      boxShadow: 4,
-                    },
-                  }}
-                >
-                  <CardActionArea
-                    href={resource.link}
-                    target="_blank"
-                    rel="noopener"
-                    sx={{ p: 2, display: 'flex', alignItems: 'center' }}
-                  >
-                    <Box
-                      component="img"
-                      src={resource.icon}
-                      alt="Icon"
-                      sx={{
-                        width: 50,
-                        height: 50,
-                        mr: 2,
-                        borderRadius: 1.5,
-                        padding: 1,
-                      }}
-                    />
-                    <Box>
-                      <Typography variant="h6" fontWeight="bold">
-                        {resource.title}
-                      </Typography>
-                    </Box>
-                  </CardActionArea>
-                </Card>
+          <Card sx={{ mb: 2 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">CodeCollections</Typography>
+                  <Typography variant="h6" fontWeight="600">{stats?.collections || 0}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">CodeBundles</Typography>
+                  <Typography variant="h6" fontWeight="600">{stats?.codebundles || 0}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">Total Tasks</Typography>
+                  <Typography variant="h6" fontWeight="600" color="primary">{stats?.tasks || 0}</Typography>
+                </Box>
               </Box>
-            ))}
-          </Box>
+            </CardContent>
+          </Card>
+          
+          {/* Get Paid to Contribute Button */}
+          <Button
+            variant="outlined"
+            fullWidth
+            startIcon={<MoneyIcon />}
+            href="https://docs.runwhen.com/public/v/runwhen-authors"
+            target="_blank"
+            rel="noopener"
+            sx={{
+              borderColor: '#f5af19',
+              color: '#e67e00',
+              fontWeight: 600,
+              py: 1.5,
+              textTransform: 'none',
+              '&:hover': {
+                borderColor: '#e67e00',
+                backgroundColor: 'rgba(245, 175, 25, 0.08)',
+              },
+            }}
+          >
+            Get Paid to Contribute
+          </Button>
         </Box>
       </Box>
     </Container>

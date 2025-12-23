@@ -121,6 +121,11 @@ class VectorStore:
             documents.append(doc)
             
             # Store metadata (ChromaDB requires simple types)
+            # Include tasks and capabilities as JSON strings
+            import json
+            tasks = cb.get("tasks", [])
+            capabilities = cb.get("capabilities", [])
+            
             metadatas.append({
                 "slug": cb.get("slug", ""),
                 "collection_slug": cb.get("collection_slug", ""),
@@ -130,6 +135,8 @@ class VectorStore:
                 "platform": cb.get("platform", ""),
                 "author": cb.get("author", ""),
                 "tags": ",".join(cb.get("support_tags", [])[:10]),  # Store as comma-separated
+                "tasks": json.dumps(tasks[:15]),  # Store as JSON string (top 15 tasks)
+                "capabilities": json.dumps(capabilities[:10]),  # Store as JSON string (top 10)
             })
         
         collection.add(

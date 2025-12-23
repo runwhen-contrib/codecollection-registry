@@ -24,6 +24,14 @@ class RecommendationResult:
     tags: List[str]
     score: float
     git_url: str = ""
+    tasks: List[str] = None  # List of task names
+    capabilities: List[str] = None  # List of task:description strings
+    
+    def __post_init__(self):
+        if self.tasks is None:
+            self.tasks = []
+        if self.capabilities is None:
+            self.capabilities = []
     
     def to_markdown(self) -> str:
         """Convert to markdown format"""
@@ -37,6 +45,11 @@ class RecommendationResult:
             f"**Description:** {self.description}",
             f"",
         ]
+        if self.tasks:
+            lines.append("**Available Tasks:**")
+            for task in self.tasks[:10]:
+                lines.append(f"  - {task}")
+            lines.append("")
         if self.tags:
             lines.append(f"**Tags:** {', '.join(self.tags)}")
             lines.append("")
@@ -126,6 +139,24 @@ class SemanticSearch:
         recommendations = []
         for result in results:
             meta = result.metadata
+            # Parse tasks - may be stored as JSON string or list
+            tasks = meta.get('tasks', [])
+            if isinstance(tasks, str):
+                import json
+                try:
+                    tasks = json.loads(tasks)
+                except:
+                    tasks = []
+            
+            # Parse capabilities - may be stored as JSON string or list  
+            capabilities = meta.get('capabilities', [])
+            if isinstance(capabilities, str):
+                import json
+                try:
+                    capabilities = json.loads(capabilities)
+                except:
+                    capabilities = []
+            
             recommendations.append(RecommendationResult(
                 slug=meta.get('slug', ''),
                 collection_slug=meta.get('collection_slug', ''),
@@ -136,7 +167,9 @@ class SemanticSearch:
                 tags=meta.get('tags', '').split(',') if meta.get('tags') else [],
                 score=result.score,
                 # Use registry URL instead of GitHub
-                git_url=f"/collections/{meta.get('collection_slug', '')}/codebundles/{meta.get('slug', '')}"
+                git_url=f"/collections/{meta.get('collection_slug', '')}/codebundles/{meta.get('slug', '')}",
+                tasks=tasks,
+                capabilities=capabilities
             ))
         
         return recommendations

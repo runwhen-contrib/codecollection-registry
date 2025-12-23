@@ -447,10 +447,10 @@ const CodeBundleDetail: React.FC = () => {
 
               <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" color="text.secondary">
-                  Created
+                  Last Updated
                 </Typography>
                 <Typography variant="body1">
-                  {new Date(codebundle.created_at).toLocaleDateString()}
+                  {new Date(codebundle.git_updated_at || codebundle.updated_at).toLocaleDateString()}
                 </Typography>
               </Box>
 

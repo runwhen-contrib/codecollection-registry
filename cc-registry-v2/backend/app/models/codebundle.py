@@ -64,6 +64,7 @@ class Codebundle(Base):
     last_synced = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    git_updated_at = Column(DateTime)  # Last commit date from git for the codebundle folder
     
     # Relationships
     codecollection = relationship("CodeCollection", back_populates="codebundles")
