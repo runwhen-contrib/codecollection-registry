@@ -174,3 +174,4 @@ def get_tool_registry() -> ToolRegistry:
         _registry = ToolRegistry()
     return _registry
 
+

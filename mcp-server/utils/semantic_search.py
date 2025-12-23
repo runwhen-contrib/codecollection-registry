@@ -157,17 +157,19 @@ class SemanticSearch:
                 except:
                     capabilities = []
             
+            # Use 'name' for URL path (codebundle folder name without collection prefix)
+            codebundle_name = meta.get('name', meta.get('slug', ''))
             recommendations.append(RecommendationResult(
                 slug=meta.get('slug', ''),
                 collection_slug=meta.get('collection_slug', ''),
-                name=meta.get('name', ''),
-                display_name=meta.get('display_name', meta.get('name', '')),
+                name=codebundle_name,
+                display_name=meta.get('display_name', codebundle_name),
                 description=meta.get('description', ''),
                 platform=meta.get('platform', 'Unknown'),
                 tags=meta.get('tags', '').split(',') if meta.get('tags') else [],
                 score=result.score,
-                # Use registry URL instead of GitHub
-                git_url=f"/collections/{meta.get('collection_slug', '')}/codebundles/{meta.get('slug', '')}",
+                # Use registry URL with 'name' (folder name) not 'slug' (which has collection prefix)
+                git_url=f"/collections/{meta.get('collection_slug', '')}/codebundles/{codebundle_name}",
                 tasks=tasks,
                 capabilities=capabilities
             ))
