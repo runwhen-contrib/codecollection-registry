@@ -235,6 +235,35 @@ codecollection-registry/
 
 Visit http://localhost:8001/docs for interactive API documentation.
 
+## Configuration
+
+### Database and Redis
+
+The application supports flexible configuration for both database and Redis connections:
+
+- **Database**: Standalone PostgreSQL or managed services (Azure Database, AWS RDS)
+  - Option 1: Complete `DATABASE_URL`
+  - Option 2: Individual components (`DB_HOST`, `DB_USER`, `DB_PASSWORD`, etc.)
+
+- **Redis**: Standalone Redis or Redis Sentinel for high availability
+  - Option 1: Complete `REDIS_URL`
+  - Option 2: Redis Sentinel (`REDIS_SENTINEL_HOSTS`, `REDIS_SENTINEL_MASTER`, etc.)
+
+**See [DATABASE_REDIS_CONFIG.md](DATABASE_REDIS_CONFIG.md) for complete configuration guide.**
+
+### Azure OpenAI
+
+The application requires Azure OpenAI credentials for two purposes:
+
+- **GPT/Chat**: Used by backend for AI enhancement features
+- **Embeddings**: Used by MCP server for semantic search
+
+**See [AZURE_OPENAI_SETUP.md](AZURE_OPENAI_SETUP.md) for configuration details.**
+
+### Secrets Configuration
+
+All secrets are managed via Kubernetes secrets. See [k8s/secrets-example.yaml](k8s/secrets-example.yaml) for examples.
+
 ## Deployment
 
 ### Container Images
@@ -303,6 +332,7 @@ For detailed deployment instructions, see:
 - **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Quick command reference
 - **[WORKFLOWS_SEPARATED.md](WORKFLOWS_SEPARATED.md)** - Why workflows are separate
 - **[MCP_SERVER_INTEGRATION.md](MCP_SERVER_INTEGRATION.md)** - MCP server integration guide
+- **[AZURE_OPENAI_SETUP.md](AZURE_OPENAI_SETUP.md)** - Azure OpenAI configuration guide
 - **[k8s/README.md](k8s/README.md)** - Kubernetes deployment details
 - **[k8s/CONTAINER_BUILD.md](k8s/CONTAINER_BUILD.md)** - Container build workflow
 - **[GCR_SETUP.md](GCR_SETUP.md)** - Google Cloud Registry setup

@@ -29,19 +29,13 @@ spec:
         - beat
         - --loglevel=info
         env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: cc-registry-secrets
-              key: database-url
-        - name: REDIS_URL
-          valueFrom:
-            secretKeyRef:
-              name: cc-registry-secrets
-              key: redis-url
         - name: ENVIRONMENT
           value: "production"
         envFrom:
+        # Load all database and Redis configuration (supports both URL and component-based config)
+        - secretRef:
+            name: cc-registry-secrets
+        # Load Azure OpenAI credentials
         - secretRef:
             name: azure-openai-credentials
         volumeMounts:
@@ -128,17 +122,33 @@ spec:
           name: http
           protocol: TCP
         env:
-        - name: CELERY_BROKER_URL
-          valueFrom:
-            secretKeyRef:
-              name: cc-registry-secrets
-              key: redis-url
         - name: FLOWER_PORT
           value: "5555"
+        envFrom:
+        # Load Redis configuration for Celery broker
+        - secretRef:
+            name: cc-registry-secrets
         command:
-        - celery
-        - flower
-        - --broker=$(CELERY_BROKER_URL)
+        - sh
+        - -c
+        - |
+          # Construct broker URL from environment (supports both direct URL and Sentinel)
+          if [ -n "$REDIS_URL" ]; then
+            CELERY_BROKER_URL="$REDIS_URL"
+          elif [ -n "$REDIS_SENTINEL_HOSTS" ]; then
+            # For Flower with Sentinel, we need to construct the URL
+            SENTINEL_HOSTS=$(echo "$REDIS_SENTINEL_HOSTS" | sed 's/,/;/g')
+            if [ -n "$REDIS_PASSWORD" ]; then
+              CELERY_BROKER_URL="sentinel://:${REDIS_PASSWORD}@${SENTINEL_HOSTS}"
+            else
+              CELERY_BROKER_URL="sentinel://${SENTINEL_HOSTS}"
+            fi
+          else
+            echo "ERROR: Neither REDIS_URL nor REDIS_SENTINEL_HOSTS is set"
+            exit 1
+          fi
+          
+          exec celery flower --broker="$CELERY_BROKER_URL"
         resources:
           requests:
             memory: "128Mi"

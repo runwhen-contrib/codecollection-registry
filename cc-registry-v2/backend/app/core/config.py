@@ -1,10 +1,16 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+from pydantic import field_validator, model_validator
 
 
 class Settings(BaseSettings):
-    # Database
-    DATABASE_URL: str = "postgresql://user:password@database:5432/codecollection_registry"
+    # Database - can be configured via URL or individual components
+    DATABASE_URL: Optional[str] = None
+    DB_HOST: Optional[str] = None
+    DB_PORT: Optional[int] = 5432
+    DB_USER: Optional[str] = None
+    DB_PASSWORD: Optional[str] = None
+    DB_NAME: Optional[str] = None
     
     # GitHub Integration
     GITHUB_TOKEN: str = "your_github_token_here"
@@ -17,8 +23,12 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
-    # Redis
-    REDIS_URL: str = "redis://redis:6379/0"
+    # Redis - can be configured via URL or Sentinel
+    REDIS_URL: Optional[str] = None
+    REDIS_SENTINEL_HOSTS: Optional[str] = None  # Comma-separated: "host1:26379,host2:26379,host3:26379"
+    REDIS_SENTINEL_MASTER: Optional[str] = "mymaster"
+    REDIS_PASSWORD: Optional[str] = None
+    REDIS_DB: int = 0
     
     # AI Integration
     OPENAI_API_KEY: Optional[str] = None
@@ -44,6 +54,30 @@ class Settings(BaseSettings):
     # API Settings
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "CodeCollection Registry"
+    
+    @model_validator(mode='after')
+    def construct_urls(self):
+        """Construct DATABASE_URL and REDIS_URL from components if not provided"""
+        # Build DATABASE_URL from components if not provided
+        if not self.DATABASE_URL:
+            if all([self.DB_HOST, self.DB_USER, self.DB_PASSWORD, self.DB_NAME]):
+                self.DATABASE_URL = f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+            else:
+                # Fallback to default for development
+                self.DATABASE_URL = "postgresql://user:password@database:5432/codecollection_registry"
+        
+        # Build REDIS_URL from Sentinel config or components if not provided
+        if not self.REDIS_URL:
+            if self.REDIS_SENTINEL_HOSTS:
+                # For Redis Sentinel, we'll use a sentinel:// URL format
+                # Format: sentinel://[:password@]host1:port1,host2:port2/service_name/db_number
+                auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
+                self.REDIS_URL = f"sentinel://{auth}{self.REDIS_SENTINEL_HOSTS}/{self.REDIS_SENTINEL_MASTER}/{self.REDIS_DB}"
+            else:
+                # Fallback to default for development
+                self.REDIS_URL = "redis://redis:6379/0"
+        
+        return self
     
     class Config:
         env_file = ".env"

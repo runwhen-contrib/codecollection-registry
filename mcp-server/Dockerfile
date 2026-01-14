@@ -28,5 +28,7 @@ RUN useradd -m -u 1000 mcp && \
 USER mcp
 
 # Default command (can be overridden)
-CMD ["python", "server.py"]
+# Use server_http.py for Kubernetes/production deployments
+# Use server.py for stdio/desktop integration
+CMD ["python", "server_http.py"]
 

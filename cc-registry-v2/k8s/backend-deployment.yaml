@@ -27,16 +27,6 @@ spec:
           name: http
           protocol: TCP
         env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: cc-registry-secrets
-              key: database-url
-        - name: REDIS_URL
-          valueFrom:
-            secretKeyRef:
-              name: cc-registry-secrets
-              key: redis-url
         - name: ENVIRONMENT
           value: "production"
         - name: MCP_SERVER_URL
@@ -46,6 +36,10 @@ spec:
         - name: AI_ENHANCEMENT_ENABLED
           value: "true"
         envFrom:
+        # Load all database and Redis configuration (supports both URL and component-based config)
+        - secretRef:
+            name: cc-registry-secrets
+        # Load Azure OpenAI credentials
         - secretRef:
             name: azure-openai-credentials
         volumeMounts:

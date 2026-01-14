@@ -174,16 +174,9 @@ The MCP server maintains:
 
 ### Required Secrets
 
-#### Azure OpenAI (Optional - for AI features)
+#### Azure OpenAI (Required for Semantic Search)
 
-If using AI-powered search, configure Azure OpenAI:
-
-**Docker Compose:**
-```bash
-# Create az.secret file
-cp mcp-server/env.example mcp-server/az.secret
-# Edit with your Azure OpenAI credentials
-```
+The MCP server requires Azure OpenAI **embedding credentials** for semantic search:
 
 **Kubernetes:**
 ```yaml
@@ -193,11 +186,31 @@ kind: Secret
 metadata:
   name: azure-openai-credentials
 stringData:
-  AZURE_OPENAI_API_KEY: "your-key"
+  # For embeddings/semantic search (MCP server)
+  AZURE_OPENAI_EMBEDDING_API_KEY: "your-embedding-key"
+  AZURE_OPENAI_EMBEDDING_ENDPOINT: "https://your-instance.openai.azure.com/"
+  AZURE_OPENAI_EMBEDDING_DEPLOYMENT: "text-embedding-3-small"
+  AZURE_OPENAI_EMBEDDING_API_VERSION: "2024-02-15-preview"
+  
+  # For GPT/chat features (backend)
+  AZURE_OPENAI_API_KEY: "your-gpt-key"
   AZURE_OPENAI_ENDPOINT: "https://your-instance.openai.azure.com/"
   AZURE_OPENAI_DEPLOYMENT_NAME: "gpt-4"
   AZURE_OPENAI_API_VERSION: "2024-02-15-preview"
 ```
+
+**📚 See [AZURE_OPENAI_SETUP.md](AZURE_OPENAI_SETUP.md) for complete setup guide**
+
+**Docker Compose:**
+```bash
+# Create az.secret file
+cp mcp-server/env.example mcp-server/az.secret
+# Edit with your Azure OpenAI credentials
+```
+
+**Alternative: Local Embeddings (No Azure Costs)**
+
+If Azure OpenAI credentials are not provided, MCP server automatically falls back to local embeddings using `sentence-transformers`. This is slower but free and works offline.
 
 ### Data Initialization
 
