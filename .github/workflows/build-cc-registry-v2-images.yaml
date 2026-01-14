@@ -34,8 +34,8 @@ on:
 
 env:
   # Google Cloud / GCR Configuration
-  GCP_PROJECT_ID: runwhen-nonprod-shared  # Update with your GCP project
-  GCR_REGISTRY: us-docker.pkg.dev/runwhen-nonprod-shared/public-images  # Update with your registry
+  GCP_PROJECT_ID: runwhen-nonprod-shared
+  GCR_REGISTRY: us-docker.pkg.dev/runwhen-nonprod-shared/public-images  
   IMAGE_PREFIX: cc-registry-v2
 
 permissions:
@@ -111,8 +111,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_PROVIDER }}
+          service_account: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_SA }}
 
       - name: Configure Docker for GCR
         run: gcloud --quiet auth configure-docker us-docker.pkg.dev
@@ -160,8 +160,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_PROVIDER }}
+          service_account: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_SA }}
 
       - name: Configure Docker for GCR
         run: gcloud --quiet auth configure-docker us-docker.pkg.dev
@@ -196,8 +196,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_PROVIDER }}
+          service_account: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_SA }}
 
       - name: Configure Docker for GCR
         run: gcloud --quiet auth configure-docker us-docker.pkg.dev
@@ -245,8 +245,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_PROVIDER }}
+          service_account: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_SA }}
 
       - name: Configure Docker for GCR
         run: gcloud --quiet auth configure-docker us-docker.pkg.dev
@@ -285,8 +285,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_PROVIDER }}
+          service_account: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_SA }}
 
       - name: Configure Docker for GCR
         run: gcloud --quiet auth configure-docker us-docker.pkg.dev
@@ -338,8 +338,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_PROVIDER }}
+          service_account: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_SA }}
 
       - name: Configure Docker for GCR
         run: gcloud --quiet auth configure-docker us-docker.pkg.dev
