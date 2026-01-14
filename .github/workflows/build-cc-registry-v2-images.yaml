@@ -2,6 +2,7 @@ name: Build CC-Registry-V2 Container Images
 
 on:
   # Trigger on pull requests that affect cc-registry-v2
+  push: 
   pull_request:
     paths:
       - 'cc-registry-v2/**'
