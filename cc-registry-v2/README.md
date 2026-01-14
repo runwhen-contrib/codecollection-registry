@@ -9,15 +9,25 @@ A modern, scalable registry for RunWhen CodeCollections with AI-powered enhancem
 │   Frontend  │    │   Backend   │    │   Worker    │
 │   (React)   │◄──►│  (FastAPI)  │◄──►│  (Celery)   │
 │   Port 3000 │    │  Port 8001  │    │             │
-└─────────────┘    └─────────────┘    └─────────────┘
-                           │                   │
-                           ▼                   ▼
-                   ┌─────────────┐    ┌─────────────┐
-                   │  Database   │    │    Redis    │
-                   │(PostgreSQL) │    │ (Message    │
-                   │  Port 5432  │    │  Broker)    │
-                   └─────────────┘    │  Port 6379  │
-                                      └─────────────┘
+└─────────────┘    └──────┬──────┘    └─────────────┘
+                          │                   │
+                          │                   │
+             ┌────────────┴────┬──────────────┘
+             │                 │
+             ▼                 ▼
+    ┌─────────────┐    ┌─────────────┐
+    │ MCP Server  │    │    Redis    │
+    │ (Semantic   │    │ (Message    │
+    │  Search)    │    │  Broker)    │
+    │  Port 8000  │    │  Port 6379  │
+    └─────────────┘    └─────────────┘
+             │
+             ▼
+    ┌─────────────┐
+    │  Database   │
+    │(PostgreSQL) │
+    │  Port 5432  │
+    └─────────────┘
 ```
 
 ## Services
@@ -50,6 +60,12 @@ A modern, scalable registry for RunWhen CodeCollections with AI-powered enhancem
 - **Purpose**: Message broker for Celery
 - **Port**: 6379
 - **Features**: Task queuing, caching, session storage
+
+### 🔍 MCP Server Service (`/mcp-server`)
+- **Technology**: FastAPI + Vector Store
+- **Purpose**: Semantic search and knowledge base
+- **Port**: 8000
+- **Features**: CodeBundle search, library lookup, AI-powered search
 
 ## Quick Start
 
@@ -84,6 +100,7 @@ A modern, scalable registry for RunWhen CodeCollections with AI-powered enhancem
    - Backend API: http://localhost:8001
    - API Documentation: http://localhost:8001/docs
    - Task Monitor (Flower): http://localhost:5555
+   - MCP Server: http://localhost:8000 (optional - see [MCP Server Integration](MCP_SERVER_INTEGRATION.md))
 
 ### Service Management
 
@@ -222,27 +239,38 @@ Visit http://localhost:8001/docs for interactive API documentation.
 
 ### Container Images
 
-Container images are automatically built via GitHub Actions workflow on:
+Container images are automatically built via GitHub Actions workflows on:
 - Pull requests (build only, not pushed)
 - Manual dispatch with custom options
-- Push to main branch (tagged as `latest`)
+- Push to main branch
 
-Images are available at:
-```
-ghcr.io/<owner>/<repo>/cc-registry-v2-backend:<tag>
-ghcr.io/<owner>/<repo>/cc-registry-v2-frontend:<tag>
-ghcr.io/<owner>/<repo>/cc-registry-v2-worker:<tag>
-```
+**Two separate workflows:**
 
-**Build and push images locally:**
+1. **CC-Registry-V2 Workflow** - Builds 3 images:
+   ```
+   us-docker.pkg.dev/<project>/<repo>/cc-registry-v2-backend:<tag>
+   us-docker.pkg.dev/<project>/<repo>/cc-registry-v2-frontend:<tag>
+   us-docker.pkg.dev/<project>/<repo>/cc-registry-v2-worker:<tag>
+   ```
+
+2. **MCP Server Workflow** - Builds 1 image:
+   ```
+   us-docker.pkg.dev/<project>/<repo>/runwhen-mcp-server:<tag>
+   ```
+
+**Why separate?** MCP server is a standalone component with its own release cycle. See [WORKFLOWS_SEPARATED.md](WORKFLOWS_SEPARATED.md) for details.
+
+**Build and push images:**
 ```bash
-# Build all images
-task image:build
+# Build cc-registry-v2 images
+gh workflow run build-cc-registry-v2-images.yaml \
+  -f push_images=true \
+  -f tag=v2.1.0
 
-# Build, tag, and push to registry
-export REGISTRY="ghcr.io/your-org/your-repo"
-export TAG="v1.0.0"
-task image:publish REGISTRY=$REGISTRY TAG=$TAG
+# Build MCP server separately
+gh workflow run build-mcp-server.yaml \
+  -f push_images=true \
+  -f tag=v1.3.0
 ```
 
 ### Kubernetes Deployment
@@ -273,8 +301,11 @@ For detailed deployment instructions, see:
 
 - **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Complete deployment guide
 - **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Quick command reference
+- **[WORKFLOWS_SEPARATED.md](WORKFLOWS_SEPARATED.md)** - Why workflows are separate
+- **[MCP_SERVER_INTEGRATION.md](MCP_SERVER_INTEGRATION.md)** - MCP server integration guide
 - **[k8s/README.md](k8s/README.md)** - Kubernetes deployment details
 - **[k8s/CONTAINER_BUILD.md](k8s/CONTAINER_BUILD.md)** - Container build workflow
+- **[GCR_SETUP.md](GCR_SETUP.md)** - Google Cloud Registry setup
 - **[Taskfile.yml](Taskfile.yml)** - Available task commands
 - **[docker-compose.yml](docker-compose.yml)** - Local development setup
 

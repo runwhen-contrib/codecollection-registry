@@ -466,11 +466,13 @@ jobs:
                     `**Tag:** \`${tag}\`\n` +
                     `**Architectures:** ${arch}\n\n` +
                     `### Images:\n` +
-                    `- \`${registry}/${prefix}-backend:${tag}\`\n` +
-                    `- \`${registry}/${prefix}-frontend:${tag}\`\n` +
-                    `- \`${registry}/${prefix}-worker:${tag}\`\n\n` +
+                    `- \`${registry}/${prefix}-backend:${tag}\` - FastAPI backend\n` +
+                    `- \`${registry}/${prefix}-frontend:${tag}\` - React frontend\n` +
+                    `- \`${registry}/${prefix}-worker:${tag}\` - Celery worker/scheduler\n\n` +
+                    `**Note:** MCP Server is built separately via its own workflow.\n\n` +
                     `### Pull Images:\n` +
                     `\`\`\`bash\n` +
+                    `gcloud auth configure-docker us-docker.pkg.dev\n` +
                     `docker pull ${registry}/${prefix}-backend:${tag}\n` +
                     `docker pull ${registry}/${prefix}-frontend:${tag}\n` +
                     `docker pull ${registry}/${prefix}-worker:${tag}\n` +
@@ -509,11 +511,13 @@ jobs:
           echo "**Registry:** ${{ env.GCR_REGISTRY }}" >> $GITHUB_STEP_SUMMARY
           echo "**Multi-arch:** ${{ github.event.inputs.build_multiarch == 'true' && 'Yes (amd64 + arm64)' || 'No (amd64 only)' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Component | amd64 | arm64 | Manifest |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|-------|-------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend   | ${{ needs.build-backend-amd64.result }} | ${{ needs.build-backend-arm64.result || 'skipped' }} | ${{ needs.publish-manifests.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend  | ${{ needs.build-frontend-amd64.result }} | ${{ needs.build-frontend-arm64.result || 'skipped' }} | ${{ needs.publish-manifests.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Worker    | ${{ needs.build-worker-amd64.result }} | ${{ needs.build-worker-arm64.result || 'skipped' }} | ${{ needs.publish-manifests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Component  | amd64 | arm64 | Manifest |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|-------|-------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend    | ${{ needs.build-backend-amd64.result }} | ${{ needs.build-backend-arm64.result || 'skipped' }} | ${{ needs.publish-manifests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend   | ${{ needs.build-frontend-amd64.result }} | ${{ needs.build-frontend-arm64.result || 'skipped' }} | ${{ needs.publish-manifests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Worker     | ${{ needs.build-worker-amd64.result }} | ${{ needs.build-worker-arm64.result || 'skipped' }} | ${{ needs.publish-manifests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Note: MCP Server is built separately via its own workflow_" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Check if any required builds failed
@@ -528,10 +532,13 @@ jobs:
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "### Pull Images:" >> $GITHUB_STEP_SUMMARY
               echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+              echo "gcloud auth configure-docker us-docker.pkg.dev" >> $GITHUB_STEP_SUMMARY
               echo "docker pull ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ needs.generate-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
               echo "docker pull ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_PREFIX }}-frontend:${{ needs.generate-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
               echo "docker pull ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ needs.generate-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
               echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "_MCP Server: See separate workflow_" >> $GITHUB_STEP_SUMMARY
             fi
           fi
 

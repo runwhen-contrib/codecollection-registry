@@ -7,6 +7,7 @@ namespace: codecollection-registry
 resources:
   - database-deployment.yaml
   - redis-deployment.yaml
+  - mcp-server-deployment.yaml
   - backend-deployment.yaml
   - frontend-deployment.yaml
   - worker-deployment.yaml
@@ -35,6 +36,9 @@ images:
   - name: ghcr.io/OWNER/REPO/cc-registry-v2-worker
     newName: ghcr.io/OWNER/REPO/cc-registry-v2-worker
     newTag: latest
+  - name: ghcr.io/OWNER/REPO/cc-registry-v2-mcp-server
+    newName: ghcr.io/OWNER/REPO/cc-registry-v2-mcp-server
+    newTag: latest
 
 # Resource name prefix
 namePrefix: ""
@@ -44,6 +48,8 @@ nameSuffix: ""
 
 # Replicas - can be overridden per environment
 replicas:
+  - name: mcp-server
+    count: 2
   - name: cc-registry-backend
     count: 2
   - name: cc-registry-frontend

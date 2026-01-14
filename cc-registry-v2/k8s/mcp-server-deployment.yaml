@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-server
+  namespace: codecollection-registry
+  labels:
+    app: cc-registry
+    component: mcp-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cc-registry
+      component: mcp-server
+  template:
+    metadata:
+      labels:
+        app: cc-registry
+        component: mcp-server
+    spec:
+      containers:
+      - name: mcp-server
+        image: ghcr.io/OWNER/REPO/cc-registry-v2-mcp-server:latest  # Replace OWNER/REPO
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: MCP_LOG_LEVEL
+          value: "INFO"
+        envFrom:
+        - secretRef:
+            name: azure-openai-credentials
+            optional: true
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        - name: repos
+          mountPath: /app/data/repos
+          readOnly: true
+        - name: codecollections-yaml
+          mountPath: /app/codecollections.yaml
+          subPath: codecollections.yaml
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: mcp-server-data
+      - name: repos
+        configMap:
+          name: mcp-repos
+          optional: true
+      - name: codecollections-yaml
+        configMap:
+          name: codecollections-config
+      imagePullSecrets:
+      - name: ghcr-pull-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-server
+  namespace: codecollection-registry
+  labels:
+    app: cc-registry
+    component: mcp-server
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: cc-registry
+    component: mcp-server
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mcp-server-data
+  namespace: codecollection-registry
+  labels:
+    app: cc-registry
+    component: mcp-server
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: your-storage-class  # Uncomment and set if needed
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: codecollections-config
+  namespace: codecollection-registry
+data:
+  codecollections.yaml: |
+    # CodeCollections configuration
+    # Add your codecollections here
+    collections: []

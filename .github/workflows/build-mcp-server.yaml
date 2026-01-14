@@ -1,0 +1,349 @@
+name: Build MCP Server Container Images
+
+on:
+  # Trigger on pull requests that affect mcp-server
+  push:
+    branches:
+    paths:
+      - 'mcp-server/**'
+      - '.github/workflows/build-mcp-server.yaml'
+  pull_request:
+    paths:
+      - 'mcp-server/**'
+      - '.github/workflows/build-mcp-server.yaml'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      push_images:
+        description: 'Push images to registry'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      tag:
+        description: 'Custom tag for images (default: branch-sha)'
+        required: false
+        type: string
+      build_multiarch:
+        description: 'Build multi-architecture images (amd64 + arm64)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  # Google Cloud / GCR Configuration
+  GCP_PROJECT_ID: runwhen-nonprod-shared
+  GCR_REGISTRY: us-docker.pkg.dev/runwhen-nonprod-shared/public-images
+  IMAGE_NAME: runwhen-mcp-server
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+  security-events: write
+  actions: read
+
+jobs:
+  # Security scanning
+  scan-repo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Optional: Uncomment to enable Trivy scanning
+      # - name: Run Trivy vulnerability scanner
+      #   uses: aquasecurity/trivy-action@0.20.0
+      #   with:
+      #     scan-type: 'fs'
+      #     scan-ref: 'mcp-server'
+      #     ignore-unfixed: true
+      #     format: 'sarif'
+      #     output: 'trivy-results-mcp.sarif'
+      #     severity: 'CRITICAL,HIGH'
+      # 
+      # - name: Upload Trivy results to GitHub Security
+      #   uses: github/codeql-action/upload-sarif@v3
+      #   with:
+      #     sarif_file: 'trivy-results-mcp.sarif'
+
+  # Generate tag for all builds
+  generate-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      should_push: ${{ steps.push.outputs.should_push }}
+    steps:
+      - name: Generate tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="$(echo $GITHUB_REF_NAME | sed 's/[^a-zA-Z0-9]/-/g')-${GITHUB_SHA::8}"
+          fi
+          echo "TAG=${TAG}" | tee -a $GITHUB_ENV
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+      
+      - name: Determine push behavior
+        id: push
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if [ "${{ github.event.inputs.push_images }}" = "true" ]; then
+              echo "should_push=true" >> $GITHUB_OUTPUT
+            else
+              echo "should_push=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "should_push=true" >> $GITHUB_OUTPUT
+          fi
+
+  # Build MCP Server (amd64)
+  build-amd64:
+    name: Build MCP Server (amd64)
+    runs-on: ubuntu-latest
+    needs: [generate-tag, scan-repo]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_PROVIDER }}
+          service_account: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_SA }}
+
+      - name: Configure Docker for GCR
+        run: gcloud --quiet auth configure-docker us-docker.pkg.dev
+
+      - name: Set up Docker Buildx
+        run: |
+          docker buildx create --use --name multiarch-builder || docker buildx use multiarch-builder
+          docker buildx inspect --bootstrap
+
+      - name: Build and push MCP Server (amd64)
+        if: needs.generate-tag.outputs.should_push == 'true'
+        run: |
+          cd mcp-server
+          docker buildx build \
+            --platform linux/amd64 \
+            --push \
+            --tag "${{ env.GCR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.generate-tag.outputs.tag }}-amd64" \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            --build-arg GITHUB_SHA="${GITHUB_SHA}" \
+            --build-arg GITHUB_REF="${GITHUB_REF}" \
+            -f Dockerfile .
+
+      - name: Build MCP Server (amd64) - No push
+        if: needs.generate-tag.outputs.should_push == 'false'
+        run: |
+          cd mcp-server
+          docker buildx build \
+            --platform linux/amd64 \
+            --tag "${{ env.GCR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.generate-tag.outputs.tag }}-amd64" \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            -f Dockerfile .
+
+  # Build MCP Server (arm64) - optional
+  build-arm64:
+    name: Build MCP Server (arm64)
+    runs-on: ubuntu-24.04-arm
+    needs: [generate-tag, scan-repo]
+    if: github.event.inputs.build_multiarch == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_PROVIDER }}
+          service_account: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_SA }}
+
+      - name: Configure Docker for GCR
+        run: gcloud --quiet auth configure-docker us-docker.pkg.dev
+
+      - name: Set up Docker Buildx
+        run: |
+          docker buildx create --use --name multiarch-builder || docker buildx use multiarch-builder
+          docker buildx inspect --bootstrap
+
+      - name: Build and push MCP Server (arm64)
+        run: |
+          cd mcp-server
+          docker buildx build \
+            --platform linux/arm64 \
+            --push \
+            --tag "${{ env.GCR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.generate-tag.outputs.tag }}-arm64" \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            --build-arg GITHUB_SHA="${GITHUB_SHA}" \
+            --build-arg GITHUB_REF="${GITHUB_REF}" \
+            -f Dockerfile .
+
+  # Create multi-arch manifest
+  publish-manifest:
+    name: Publish Multi-Arch Manifest
+    runs-on: ubuntu-latest
+    needs: 
+      - generate-tag
+      - build-amd64
+      - build-arm64
+    if: |
+      always() && 
+      needs.generate-tag.outputs.should_push == 'true' &&
+      (needs.build-amd64.result == 'success' || needs.build-amd64.result == 'skipped')
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_PROVIDER }}
+          service_account: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_SA }}
+
+      - name: Configure Docker for GCR
+        run: gcloud --quiet auth configure-docker us-docker.pkg.dev
+
+      - name: Create and push manifest
+        run: |
+          TAG="${{ needs.generate-tag.outputs.tag }}"
+          FULL="${{ env.GCR_REGISTRY }}/${{ env.IMAGE_NAME }}"
+          
+          if [ "${{ github.event.inputs.build_multiarch }}" = "true" ]; then
+            # Multi-arch manifest
+            docker buildx imagetools create \
+              --tag "${FULL}:${TAG}" \
+              "${FULL}:${TAG}-amd64" \
+              "${FULL}:${TAG}-arm64"
+          else
+            # Single arch manifest (amd64 only)
+            docker buildx imagetools create \
+              --tag "${FULL}:${TAG}" \
+              "${FULL}:${TAG}-amd64"
+          fi
+          
+          docker buildx imagetools inspect "${FULL}:${TAG}"
+
+      - name: Comment on PR with image info
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = '${{ needs.generate-tag.outputs.tag }}';
+            const registry = '${{ env.GCR_REGISTRY }}';
+            const image = '${{ env.IMAGE_NAME }}';
+            const multiarch = '${{ github.event.inputs.build_multiarch }}' === 'true';
+            const arch = multiarch ? 'linux/amd64, linux/arm64' : 'linux/amd64';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🐳 MCP Server Image Built Successfully\n\n` +
+                    `**Registry:** \`${registry}\`\n` +
+                    `**Image:** \`${registry}/${image}:${tag}\`\n` +
+                    `**Tag:** \`${tag}\`\n` +
+                    `**Architectures:** ${arch}\n\n` +
+                    `### Pull Image:\n` +
+                    `\`\`\`bash\n` +
+                    `gcloud auth configure-docker us-docker.pkg.dev\n` +
+                    `docker pull ${registry}/${image}:${tag}\n` +
+                    `\`\`\`\n\n` +
+                    `### Use in Kubernetes:\n` +
+                    `\`\`\`yaml\n` +
+                    `image: ${registry}/${image}:${tag}\n` +
+                    `\`\`\``
+            });
+
+      # Optional: Slack notification
+      # - name: Notify Slack
+      #   uses: slackapi/slack-github-action@v1
+      #   with:
+      #     channel-id: "#mcp-server-builds"
+      #     slack-message: "✅ MCP Server image pushed to ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.generate-tag.outputs.tag }}"
+      #   env:
+      #     SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+  summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: 
+      - scan-repo
+      - generate-tag
+      - build-amd64
+      - build-arm64
+      - publish-manifest
+    if: always()
+    steps:
+      - name: Check build results
+        run: |
+          echo "## MCP Server Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ needs.generate-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry:** ${{ env.GCR_REGISTRY }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Multi-arch:** ${{ github.event.inputs.build_multiarch == 'true' && 'Yes (amd64 + arm64)' || 'No (amd64 only)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Architecture | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| amd64        | ${{ needs.build-amd64.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| arm64        | ${{ needs.build-arm64.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Manifest     | ${{ needs.publish-manifest.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if build failed
+          if [ "${{ needs.build-amd64.result }}" != "success" ]; then
+            echo "❌ Build failed!" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ Build successful!" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ needs.generate-tag.outputs.should_push }}" = "true" ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Pull Image:" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+              echo "gcloud auth configure-docker us-docker.pkg.dev" >> $GITHUB_STEP_SUMMARY
+              echo "docker pull ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.generate-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+  # Final notification (optional)
+  notify:
+    name: Send Notification
+    runs-on: ubuntu-latest
+    needs: 
+      - summary
+      - generate-tag
+    if: always()
+    steps:
+      - name: Set Workflow Status
+        id: status
+        run: |
+          if [[ "${{ needs.summary.result }}" == "success" ]]; then
+            echo "status=✅ Success" >> $GITHUB_ENV
+            echo "color=good" >> $GITHUB_ENV
+          else
+            echo "status=❌ Failure" >> $GITHUB_ENV
+            echo "color=danger" >> $GITHUB_ENV
+          fi
+
+      # Optional: Uncomment to enable Slack notifications
+      # - name: Send Slack Notification
+      #   uses: slackapi/slack-github-action@v1
+      #   with:
+      #     channel-id: "#mcp-server-builds"
+      #     slack-message: |
+      #       ${{ env.status }} - Workflow *${{ github.workflow }}* 
+      #       Repository: *${{ github.repository }}*
+      #       Branch: *${{ github.ref_name }}*
+      #       Tag: *${{ needs.generate-tag.outputs.tag }}*
+      #       View Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      #   env:
+      #     SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
