@@ -1,0 +1,160 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cc-registry-scheduler
+  namespace: codecollection-registry
+  labels:
+    app: cc-registry
+    component: scheduler
+spec:
+  replicas: 1  # Only one scheduler should run
+  selector:
+    matchLabels:
+      app: cc-registry
+      component: scheduler
+  template:
+    metadata:
+      labels:
+        app: cc-registry
+        component: scheduler
+    spec:
+      containers:
+      - name: scheduler
+        image: ghcr.io/OWNER/REPO/cc-registry-v2-worker:latest  # Replace OWNER/REPO
+        imagePullPolicy: Always
+        command:
+        - celery
+        - -A
+        - app.tasks.celery_app
+        - beat
+        - --loglevel=info
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: cc-registry-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: cc-registry-secrets
+              key: redis-url
+        - name: ENVIRONMENT
+          value: "production"
+        envFrom:
+        - secretRef:
+            name: azure-openai-credentials
+        volumeMounts:
+        - name: backend-code
+          mountPath: /app
+          readOnly: true
+        - name: celerybeat-schedule
+          mountPath: /tmp
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+      volumes:
+      - name: backend-code
+        emptyDir: {}
+      - name: celerybeat-schedule
+        emptyDir: {}
+      imagePullSecrets:
+      - name: ghcr-pull-secret
+      initContainers:
+      - name: copy-backend-code
+        image: ghcr.io/OWNER/REPO/cc-registry-v2-backend:latest  # Replace OWNER/REPO
+        command: ['sh', '-c', 'cp -r /app/* /shared-app/']
+        volumeMounts:
+        - name: backend-code
+          mountPath: /shared-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cc-registry-flower
+  namespace: codecollection-registry
+  labels:
+    app: cc-registry
+    component: flower
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5555
+    targetPort: 5555
+    protocol: TCP
+    name: http
+  selector:
+    app: cc-registry
+    component: flower
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cc-registry-flower
+  namespace: codecollection-registry
+  labels:
+    app: cc-registry
+    component: flower
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cc-registry
+      component: flower
+  template:
+    metadata:
+      labels:
+        app: cc-registry
+        component: flower
+    spec:
+      containers:
+      - name: flower
+        image: mher/flower:2.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5555
+          name: http
+          protocol: TCP
+        env:
+        - name: CELERY_BROKER_URL
+          valueFrom:
+            secretKeyRef:
+              name: cc-registry-secrets
+              key: redis-url
+        - name: FLOWER_PORT
+          value: "5555"
+        command:
+        - celery
+        - flower
+        - --broker=$(CELERY_BROKER_URL)
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5555
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5555
+          initialDelaySeconds: 10
+          periodSeconds: 5

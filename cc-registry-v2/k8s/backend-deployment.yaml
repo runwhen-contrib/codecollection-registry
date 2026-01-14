@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cc-registry-backend
+  namespace: codecollection-registry
+  labels:
+    app: cc-registry
+    component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cc-registry
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: cc-registry
+        component: backend
+    spec:
+      containers:
+      - name: backend
+        image: ghcr.io/OWNER/REPO/cc-registry-v2-backend:latest  # Replace OWNER/REPO
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8001
+          name: http
+          protocol: TCP
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: cc-registry-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: cc-registry-secrets
+              key: redis-url
+        - name: ENVIRONMENT
+          value: "production"
+        - name: MCP_SERVER_URL
+          value: "http://mcp-server:8000"
+        - name: AI_SERVICE_PROVIDER
+          value: "azure-openai"
+        - name: AI_ENHANCEMENT_ENABLED
+          value: "true"
+        envFrom:
+        - secretRef:
+            name: azure-openai-credentials
+        volumeMounts:
+        - name: tag-icons
+          mountPath: /app/map-tag-icons.yaml
+          subPath: map-tag-icons.yaml
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 8001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+      volumes:
+      - name: tag-icons
+        configMap:
+          name: tag-icon-mappings
+      imagePullSecrets:
+      - name: ghcr-pull-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cc-registry-backend
+  namespace: codecollection-registry
+  labels:
+    app: cc-registry
+    component: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8001
+    targetPort: 8001
+    protocol: TCP
+    name: http
+  selector:
+    app: cc-registry
+    component: backend

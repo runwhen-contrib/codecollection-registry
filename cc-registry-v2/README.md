@@ -218,6 +218,90 @@ codecollection-registry/
 
 Visit http://localhost:8001/docs for interactive API documentation.
 
+## Deployment
+
+### Container Images
+
+Container images are automatically built via GitHub Actions workflow on:
+- Pull requests (build only, not pushed)
+- Manual dispatch with custom options
+- Push to main branch (tagged as `latest`)
+
+Images are available at:
+```
+ghcr.io/<owner>/<repo>/cc-registry-v2-backend:<tag>
+ghcr.io/<owner>/<repo>/cc-registry-v2-frontend:<tag>
+ghcr.io/<owner>/<repo>/cc-registry-v2-worker:<tag>
+```
+
+**Build and push images locally:**
+```bash
+# Build all images
+task image:build
+
+# Build, tag, and push to registry
+export REGISTRY="ghcr.io/your-org/your-repo"
+export TAG="v1.0.0"
+task image:publish REGISTRY=$REGISTRY TAG=$TAG
+```
+
+### Kubernetes Deployment
+
+Deploy to Kubernetes test cluster:
+
+```bash
+# Update image references
+task k8s:update-images REGISTRY=ghcr.io/your-org/your-repo TAG=v1.0.0
+
+# Deploy to cluster
+task k8s:deploy
+
+# Check status
+task k8s:status
+
+# View logs
+task k8s:logs SERVICE=backend
+```
+
+For detailed deployment instructions, see:
+- 📚 [Deployment Guide](DEPLOYMENT_GUIDE.md) - Complete deployment walkthrough
+- 🚀 [Quick Reference](QUICK_REFERENCE.md) - Command cheat sheet
+- ☸️ [Kubernetes Manifests](k8s/README.md) - K8s deployment details
+- 🐳 [Container Build](k8s/CONTAINER_BUILD.md) - Image build workflow
+
+## Documentation
+
+- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Complete deployment guide
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Quick command reference
+- **[k8s/README.md](k8s/README.md)** - Kubernetes deployment details
+- **[k8s/CONTAINER_BUILD.md](k8s/CONTAINER_BUILD.md)** - Container build workflow
+- **[Taskfile.yml](Taskfile.yml)** - Available task commands
+- **[docker-compose.yml](docker-compose.yml)** - Local development setup
+
+## Available Commands
+
+```bash
+task --list                  # Show all available commands
+
+# Local Development
+task start                   # Start all services
+task stop                    # Stop all services
+task logs                    # View logs
+task status                  # Check status
+task health                  # Health check
+
+# Container Images
+task image:build             # Build all images
+task image:publish           # Build, tag, and push images
+
+# Kubernetes
+task k8s:deploy              # Deploy to K8s
+task k8s:status              # Check K8s status
+task k8s:logs                # View K8s logs
+task k8s:restart             # Restart K8s deployment
+task k8s:rollback            # Rollback K8s deployment
+```
+
 ## Contributing
 
 1. Fork the repository
@@ -225,6 +309,43 @@ Visit http://localhost:8001/docs for interactive API documentation.
 3. Make your changes
 4. Add tests
 5. Submit a pull request
+6. Wait for CI/CD checks to pass
+
+The GitHub Actions workflow will automatically build container images for your PR.
+
+## Troubleshooting
+
+### Common Issues
+
+**Services not starting:**
+```bash
+task status          # Check service status
+task logs            # View logs
+docker-compose ps    # Check container status
+```
+
+**Port conflicts:**
+```bash
+# Stop services using the ports
+lsof -i :3000        # Check what's using port 3000
+lsof -i :8001        # Check what's using port 8001
+```
+
+**Database issues:**
+```bash
+# Reset database
+docker-compose down -v
+docker-compose up -d database
+```
+
+**Image build failures:**
+```bash
+# Clean docker cache
+docker system prune -af
+task clean:all
+```
+
+For more troubleshooting help, see the [Deployment Guide](DEPLOYMENT_GUIDE.md).
 
 ## License
 

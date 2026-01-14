@@ -1,0 +1,82 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: codecollection-registry
+
+# Resources to deploy
+resources:
+  - database-deployment.yaml
+  - redis-deployment.yaml
+  - backend-deployment.yaml
+  - frontend-deployment.yaml
+  - worker-deployment.yaml
+  - scheduler-deployment.yaml
+  - secrets-example.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: cc-registry-v2
+  app.kubernetes.io/part-of: codecollection-registry
+  app.kubernetes.io/managed-by: kustomize
+
+# Common annotations
+commonAnnotations:
+  version: "2.0"
+  deployed-by: "kustomize"
+
+# Image replacement - update these with your actual image registry and tags
+images:
+  - name: ghcr.io/OWNER/REPO/cc-registry-v2-backend
+    newName: ghcr.io/OWNER/REPO/cc-registry-v2-backend
+    newTag: latest
+  - name: ghcr.io/OWNER/REPO/cc-registry-v2-frontend
+    newName: ghcr.io/OWNER/REPO/cc-registry-v2-frontend
+    newTag: latest
+  - name: ghcr.io/OWNER/REPO/cc-registry-v2-worker
+    newName: ghcr.io/OWNER/REPO/cc-registry-v2-worker
+    newTag: latest
+
+# Resource name prefix
+namePrefix: ""
+
+# Resource name suffix
+nameSuffix: ""
+
+# Replicas - can be overridden per environment
+replicas:
+  - name: cc-registry-backend
+    count: 2
+  - name: cc-registry-frontend
+    count: 2
+  - name: cc-registry-worker
+    count: 3
+  - name: cc-registry-scheduler
+    count: 1
+
+# ConfigMap generator
+configMapGenerator:
+  - name: app-config
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=info
+
+# Secret generator (for non-sensitive defaults)
+# secretGenerator:
+#   - name: app-secrets
+#     literals:
+#       - placeholder=value
+
+# Patches for environment-specific customization
+# patchesStrategicMerge:
+#   - patches/production.yaml
+
+# JSON patches
+# patchesJson6902:
+#   - target:
+#       version: v1
+#       kind: Deployment
+#       name: cc-registry-backend
+#     patch: |-
+#       - op: replace
+#         path: /spec/replicas
+#         value: 3

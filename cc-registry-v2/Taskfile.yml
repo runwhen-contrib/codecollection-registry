@@ -137,6 +137,86 @@ tasks:
         echo "Backend:" && curl -s http://localhost:8001/api/v1/health | jq -r '.status' && echo "✅ Backend OK" || echo "❌ Backend down"
         echo "Frontend:" && curl -s http://localhost:3000 > /dev/null && echo "✅ Frontend OK" || echo "❌ Frontend down"
 
+  # Container image commands
+  image:build:
+    desc: Build all container images with tags
+    cmds:
+      - echo "🐳 Building container images..."
+      - docker build -t cc-registry-v2-backend:{{.TAG}} ./backend
+      - docker build -t cc-registry-v2-frontend:{{.TAG}} ./frontend
+      - docker build -t cc-registry-v2-worker:{{.TAG}} ./worker
+      - echo "✅ All images built successfully"
+    vars:
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:build:backend:
+    desc: Build backend image
+    cmds:
+      - echo "🐳 Building backend image..."
+      - docker build -t cc-registry-v2-backend:{{.TAG}} ./backend
+    vars:
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:build:frontend:
+    desc: Build frontend image
+    cmds:
+      - echo "🐳 Building frontend image..."
+      - docker build -t cc-registry-v2-frontend:{{.TAG}} ./frontend
+    vars:
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:build:worker:
+    desc: Build worker image
+    cmds:
+      - echo "🐳 Building worker image..."
+      - cp backend/requirements.txt worker/requirements.txt
+      - docker build -t cc-registry-v2-worker:{{.TAG}} ./worker
+    vars:
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:tag:
+    desc: Tag images for registry push (set REGISTRY and TAG vars)
+    cmds:
+      - echo "🏷️  Tagging images for {{.REGISTRY}}..."
+      - docker tag cc-registry-v2-backend:latest {{.REGISTRY}}/cc-registry-v2-backend:{{.TAG}}
+      - docker tag cc-registry-v2-frontend:latest {{.REGISTRY}}/cc-registry-v2-frontend:{{.TAG}}
+      - docker tag cc-registry-v2-worker:latest {{.REGISTRY}}/cc-registry-v2-worker:{{.TAG}}
+      - echo "✅ Images tagged"
+    vars:
+      REGISTRY: '{{.REGISTRY | default "ghcr.io/OWNER/REPO"}}'
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:push:
+    desc: Push images to registry (set REGISTRY and TAG vars)
+    cmds:
+      - echo "📤 Pushing images to {{.REGISTRY}}..."
+      - docker push {{.REGISTRY}}/cc-registry-v2-backend:{{.TAG}}
+      - docker push {{.REGISTRY}}/cc-registry-v2-frontend:{{.TAG}}
+      - docker push {{.REGISTRY}}/cc-registry-v2-worker:{{.TAG}}
+      - echo "✅ Images pushed successfully"
+    vars:
+      REGISTRY: '{{.REGISTRY | default "ghcr.io/OWNER/REPO"}}'
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:publish:
+    desc: Build, tag, and push all images (set REGISTRY and TAG vars)
+    cmds:
+      - task: image:build
+        vars:
+          TAG: "{{.TAG}}"
+      - task: image:tag
+        vars:
+          REGISTRY: "{{.REGISTRY}}"
+          TAG: "{{.TAG}}"
+      - task: image:push
+        vars:
+          REGISTRY: "{{.REGISTRY}}"
+          TAG: "{{.TAG}}"
+      - echo "✅ All images published to {{.REGISTRY}}"
+    vars:
+      REGISTRY: '{{.REGISTRY | default "ghcr.io/OWNER/REPO"}}'
+      TAG: '{{.TAG | default "latest"}}'
+
   # Kubernetes preparation
   k8s:export:
     desc: Export Docker Compose to Kubernetes manifests (requires kompose)
@@ -144,24 +224,110 @@ tasks:
       - |
         if command -v kompose >/dev/null 2>&1; then
           echo "📦 Exporting to Kubernetes manifests..."
-          kompose convert -f {{.COMPOSE_FILE}} -o k8s/
-          echo "✅ Kubernetes manifests generated in k8s/ directory"
+          kompose convert -f {{.COMPOSE_FILE}} -o k8s/generated/
+          echo "✅ Kubernetes manifests generated in k8s/generated/ directory"
         else
           echo "❌ kompose not installed."
           echo "Install with: curl -L https://github.com/kubernetes/kompose/releases/latest/download/kompose-linux-amd64 -o kompose && chmod +x kompose && sudo mv kompose /usr/local/bin/"
         fi
 
+  k8s:update-images:
+    desc: Update image references in k8s manifests (set REGISTRY and TAG vars)
+    cmds:
+      - echo "🔄 Updating image references in k8s manifests..."
+      - |
+        cd k8s
+        find . -type f -name "*.yaml" ! -name "secrets-example.yaml" -exec sed -i \
+          's|ghcr.io/OWNER/REPO/cc-registry-v2-\(.*\):.*|{{.REGISTRY}}/cc-registry-v2-\1:{{.TAG}}|g' {} +
+      - echo "✅ Image references updated"
+    vars:
+      REGISTRY: '{{.REGISTRY | default "ghcr.io/OWNER/REPO"}}'
+      TAG: '{{.TAG | default "latest"}}'
+
+  k8s:validate:
+    desc: Validate Kubernetes manifests
+    cmds:
+      - echo "🔍 Validating Kubernetes manifests..."
+      - kubectl apply --dry-run=client -k k8s/
+      - echo "✅ Manifests are valid"
+
+  k8s:setup:
+    desc: Setup Kubernetes namespace and secrets
+    cmds:
+      - echo "🔧 Setting up Kubernetes namespace..."
+      - kubectl create namespace codecollection-registry --dry-run=client -o yaml | kubectl apply -f -
+      - echo "⚠️  Don't forget to create secrets! See k8s/secrets-example.yaml"
+      - echo "⚠️  Create image pull secret with: kubectl create secret docker-registry ghcr-pull-secret ..."
+
   k8s:deploy:
-    desc: Deploy to Kubernetes cluster
+    desc: Deploy to Kubernetes cluster using kustomize
     cmds:
       - echo "🚀 Deploying to Kubernetes..."
-      - kubectl apply -f k8s/
+      - kubectl apply -k k8s/
+      - echo "✅ Deployed successfully"
+      - echo "📊 Check status with: kubectl get all -n codecollection-registry"
+
+  k8s:deploy:quick:
+    desc: Build, push, and deploy to Kubernetes (set REGISTRY and TAG vars)
+    cmds:
+      - task: image:publish
+        vars:
+          REGISTRY: "{{.REGISTRY}}"
+          TAG: "{{.TAG}}"
+      - task: k8s:update-images
+        vars:
+          REGISTRY: "{{.REGISTRY}}"
+          TAG: "{{.TAG}}"
+      - task: k8s:deploy
+      - echo "✅ Complete deployment finished!"
+    vars:
+      REGISTRY: '{{.REGISTRY | default "ghcr.io/OWNER/REPO"}}'
+      TAG: '{{.TAG | default "latest"}}'
 
   k8s:undeploy:
     desc: Remove from Kubernetes cluster
     cmds:
       - echo "🗑️  Removing from Kubernetes..."
-      - kubectl delete -f k8s/
+      - kubectl delete -k k8s/
+      - echo "✅ Removed successfully"
+
+  k8s:status:
+    desc: Check deployment status in Kubernetes
+    cmds:
+      - echo "📊 Kubernetes Deployment Status:"
+      - kubectl get all -n codecollection-registry
+      - echo ""
+      - echo "🔍 Pod Status:"
+      - kubectl get pods -n codecollection-registry -o wide
+
+  k8s:logs:
+    desc: Show logs from Kubernetes deployment (set SERVICE var)
+    cmds:
+      - kubectl logs -f deployment/cc-registry-{{.SERVICE}} -n codecollection-registry
+    vars:
+      SERVICE: '{{.SERVICE | default "backend"}}'
+
+  k8s:restart:
+    desc: Restart Kubernetes deployment (set SERVICE var or 'all')
+    cmds:
+      - |
+        if [ "{{.SERVICE}}" = "all" ]; then
+          echo "🔄 Restarting all deployments..."
+          kubectl rollout restart deployment -n codecollection-registry
+        else
+          echo "🔄 Restarting {{.SERVICE}}..."
+          kubectl rollout restart deployment/cc-registry-{{.SERVICE}} -n codecollection-registry
+        fi
+    vars:
+      SERVICE: '{{.SERVICE | default "backend"}}'
+
+  k8s:rollback:
+    desc: Rollback Kubernetes deployment (set SERVICE var)
+    cmds:
+      - echo "⏪ Rolling back {{.SERVICE}}..."
+      - kubectl rollout undo deployment/cc-registry-{{.SERVICE}} -n codecollection-registry
+    vars:
+      SERVICE: '{{.SERVICE | default "backend"}}'
 
   # Setup commands
   setup:

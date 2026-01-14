@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cc-registry-frontend
+  namespace: codecollection-registry
+  labels:
+    app: cc-registry
+    component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cc-registry
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: cc-registry
+        component: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: ghcr.io/OWNER/REPO/cc-registry-v2-frontend:latest  # Replace OWNER/REPO
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        - name: REACT_APP_API_URL
+          value: "http://cc-registry-backend:8001/api/v1"
+        - name: NODE_OPTIONS
+          value: "--max-old-space-size=4096"
+        - name: GENERATE_SOURCEMAP
+          value: "false"
+        - name: SKIP_PREFLIGHT_CHECK
+          value: "true"
+        - name: DISABLE_ESLINT_PLUGIN
+          value: "true"
+        envFrom:
+        - secretRef:
+            name: frontend-credentials
+            optional: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+      imagePullSecrets:
+      - name: ghcr-pull-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cc-registry-frontend
+  namespace: codecollection-registry
+  labels:
+    app: cc-registry
+    component: frontend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: cc-registry
+    component: frontend
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cc-registry-frontend
+  namespace: codecollection-registry
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - cc-registry.example.com  # Replace with your domain
+    secretName: cc-registry-tls
+  rules:
+  - host: cc-registry.example.com  # Replace with your domain
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: cc-registry-backend
+            port:
+              number: 8001
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cc-registry-frontend
+            port:
+              number: 3000
