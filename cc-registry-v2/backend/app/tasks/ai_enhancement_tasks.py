@@ -91,7 +91,8 @@ def enhance_codebundle_task(self, codebundle_id: int):
         }
         
     except Exception as e:
-        logger.error(f"Error enhancing CodeBundle {codebundle_id}: {e}")
+        error_msg = str(e)
+        logger.error(f"Error enhancing CodeBundle {codebundle_id}: {error_msg}")
         
         # Update status to failed
         try:
@@ -103,8 +104,13 @@ def enhance_codebundle_task(self, codebundle_id: int):
         except Exception as db_error:
             logger.error(f"Error updating failed status: {db_error}")
         
-        self.update_state(state='FAILURE', meta={'error': str(e)})
-        raise
+        # Return error as dict instead of raising (JSON-serializable)
+        return {
+            'status': 'failed',
+            'codebundle_id': codebundle_id,
+            'error': error_msg,
+            'error_type': type(e).__name__
+        }
 
 
 @celery_app.task(bind=True)
@@ -240,9 +246,18 @@ def enhance_multiple_codebundles_task(self, codebundle_ids: List[int]):
         }
         
     except Exception as e:
-        logger.error(f"Error in batch enhancement: {e}")
-        self.update_state(state='FAILURE', meta={'error': str(e)})
-        raise
+        error_msg = str(e)
+        logger.error(f"Error in batch enhancement: {error_msg}")
+        
+        # Return error as dict instead of raising (JSON-serializable)
+        return {
+            'status': 'failed',
+            'total_processed': 0,
+            'completed': 0,
+            'failed': 0,
+            'error': error_msg,
+            'error_type': type(e).__name__
+        }
 
 
 @celery_app.task(bind=True)
@@ -358,9 +373,19 @@ def enhance_collection_codebundles_task(self, collection_slug: str):
         }
         
     except Exception as e:
-        logger.error(f"Error enhancing collection {collection_slug}: {e}")
-        self.update_state(state='FAILURE', meta={'error': str(e)})
-        raise
+        error_msg = str(e)
+        logger.error(f"Error enhancing collection {collection_slug}: {error_msg}")
+        
+        # Return error as dict instead of raising (JSON-serializable)
+        return {
+            'status': 'failed',
+            'collection_slug': collection_slug,
+            'total_processed': 0,
+            'completed': 0,
+            'failed': 0,
+            'error': error_msg,
+            'error_type': type(e).__name__
+        }
 
 
 @celery_app.task(bind=True)
@@ -480,8 +505,17 @@ def enhance_pending_codebundles_task(self, limit: Optional[int] = None):
         }
         
     except Exception as e:
-        logger.error(f"Error enhancing pending CodeBundles: {e}")
-        self.update_state(state='FAILURE', meta={'error': str(e)})
-        raise
+        error_msg = str(e)
+        logger.error(f"Error enhancing pending CodeBundles: {error_msg}")
+        
+        # Return error as dict instead of raising (JSON-serializable)
+        return {
+            'status': 'failed',
+            'total_processed': 0,
+            'completed': 0,
+            'failed': 0,
+            'error': error_msg,
+            'error_type': type(e).__name__
+        }
 
 

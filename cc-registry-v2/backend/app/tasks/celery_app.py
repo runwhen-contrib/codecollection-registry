@@ -71,6 +71,13 @@ celery_config = {
     "worker_max_tasks_per_child": 1000,
     "task_acks_late": True,
     "worker_disable_rate_limits": True,
+    # Exception handling configuration
+    "result_extended": True,  # Store extended task result metadata including exceptions
+    "result_serializer": "json",
+    "result_accept_content": ["json"],
+    # Store exception info properly
+    "task_send_sent_event": True,
+    "task_store_errors_even_if_ignored": True,
 }
 
 # Add transport options if using Sentinel
