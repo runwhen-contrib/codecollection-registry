@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cc-registry
+  namespace: registry-test
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+spec:
+  ingressClassName: "nginx"
+  tls:
+  - hosts:
+    - registry-test.${subdomain}.${domain}
+    secretName: cc-registry-tls
+  rules:
+  - host: registry-test.${subdomain}.${domain}
+    http:
+      paths:
+      # Backend API - MUST come before frontend catch-all
+      # This matches ALL paths starting with /api (including /api/v1/*)
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: cc-registry-backend
+            port:
+              number: 8001
+      
+      # Frontend - MUST be last (catch-all for all other paths)
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cc-registry-frontend
+            port:
+              number: 3000

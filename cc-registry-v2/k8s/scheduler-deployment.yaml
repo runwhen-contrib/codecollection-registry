@@ -28,6 +28,7 @@ spec:
         - app.tasks.celery_app
         - beat
         - --loglevel=info
+        - --schedule=/tmp/celerybeat-schedule
         env:
         - name: ENVIRONMENT
           value: "production"

@@ -28,7 +28,7 @@ spec:
           protocol: TCP
         env:
         - name: REACT_APP_API_URL
-          value: "http://cc-registry-backend:8001/api/v1"
+          value: "/api/v1"  # Relative URL - works through ingress with any domain
         - name: NODE_OPTIONS
           value: "--max-old-space-size=4096"
         - name: GENERATE_SOURCEMAP

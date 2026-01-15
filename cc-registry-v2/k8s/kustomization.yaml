@@ -12,6 +12,7 @@ resources:
   - frontend-deployment.yaml
   - worker-deployment.yaml
   - scheduler-deployment.yaml
+  - ingress.yaml
   - secrets-example.yaml
 
 # Common labels applied to all resources
