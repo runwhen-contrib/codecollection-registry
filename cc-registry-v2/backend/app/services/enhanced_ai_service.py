@@ -28,11 +28,32 @@ class EnhancedAIService:
         self.config = self._get_active_config()
         
     def _get_active_config(self) -> Optional[AIConfiguration]:
-        """Get the active AI configuration"""
-        return self.db.query(AIConfiguration).filter(
-            AIConfiguration.is_active == True,
-            AIConfiguration.enhancement_enabled == True
-        ).first()
+        """Get AI configuration from environment variables"""
+        if settings.AI_SERVICE_PROVIDER == "azure-openai":
+            if not (settings.AZURE_OPENAI_API_KEY and 
+                   settings.AZURE_OPENAI_ENDPOINT and 
+                   settings.AZURE_OPENAI_DEPLOYMENT_NAME):
+                return None
+            return AIConfiguration(
+                service_provider="azure-openai",
+                api_key=settings.AZURE_OPENAI_API_KEY,
+                model_name=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
+                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                azure_deployment_name=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
+                api_version=settings.AZURE_OPENAI_API_VERSION,
+                enhancement_enabled=settings.AI_ENHANCEMENT_ENABLED,
+                is_active=True
+            )
+        else:
+            if not settings.OPENAI_API_KEY:
+                return None
+            return AIConfiguration(
+                service_provider="openai",
+                api_key=settings.OPENAI_API_KEY,
+                model_name=settings.AI_MODEL,
+                enhancement_enabled=settings.AI_ENHANCEMENT_ENABLED,
+                is_active=True
+            )
     
     def is_enabled(self) -> bool:
         """Check if AI enhancement is enabled and configured"""
