@@ -2,6 +2,16 @@ name: Build CC-Registry-V2 Container Images
 
 on:
   # Trigger on pull requests that affect cc-registry-v2
+  workflow_dispatch: 
+    inputs:
+      push_images:
+        description: 'Push images to registry'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
   pull_request:
     paths:
       - 'cc-registry-v2/**'
