@@ -93,8 +93,10 @@ def enhance_codebundle_task(self, codebundle_id: int):
         }
         
     except Exception as e:
+        import traceback
         error_msg = str(e)
         logger.error(f"Error enhancing CodeBundle {codebundle_id}: {error_msg}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         
         # Update status to failed
         try:

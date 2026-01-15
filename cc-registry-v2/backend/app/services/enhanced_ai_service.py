@@ -349,7 +349,7 @@ Actual Tasks Found:
 
 Robot Framework Content:
 ```robot
-{context.get('robot_content', 'No robot content available')[:2000]}
+{(context.get('robot_content') or 'No robot content available')[:2000]}
 ```
 
 Related Files:
