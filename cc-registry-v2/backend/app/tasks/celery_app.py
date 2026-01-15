@@ -9,34 +9,30 @@ from app.core.config import settings
 def _configure_broker_url():
     """Configure broker URL for Redis or Redis Sentinel"""
     if settings.REDIS_SENTINEL_HOSTS and not (settings.REDIS_URL and settings.REDIS_URL.startswith('redis://')):
-        # Use Redis Sentinel configuration
-        # Parse sentinel hosts (format: "host1:port1,host2:port2,host3:port3")
-        sentinel_list = []
+        # For Sentinel, we use sentinel:// URL which Kombu/redis-py supports
+        # Format: sentinel://[:password@]host1:port1;host2:port2;host3:port3
+        # Then master_name and db are passed via transport_options
+        
+        # Parse and convert to semicolon-separated (Kombu format)
+        sentinel_hosts = []
         for host_port in settings.REDIS_SENTINEL_HOSTS.split(','):
-            host_port = host_port.strip()
-            if ':' in host_port:
-                host, port = host_port.rsplit(':', 1)
-                sentinel_list.append((host.strip(), int(port.strip())))
-            else:
-                sentinel_list.append((host_port.strip(), 26379))
+            sentinel_hosts.append(host_port.strip())
         
-        # For Celery with Sentinel, use redis:// URL but configure Sentinel via transport_options
-        # The URL format is: redis://[:password@]service-name/db
-        # Sentinel failover is handled by transport_options
+        sentinel_hosts_str = ';'.join(sentinel_hosts)
         password_part = f":{settings.REDIS_PASSWORD}@" if settings.REDIS_PASSWORD else ""
-        broker_url = f"redis://{password_part}{settings.REDIS_SENTINEL_MASTER}/{settings.REDIS_DB}"
         
-        # Set transport options for Sentinel
+        # sentinel:// URL with master_name and db in transport_options
+        broker_url = f"sentinel://{password_part}{sentinel_hosts_str}"
+        
+        # Transport options tell Kombu which master and db to use
         transport_options = {
             'master_name': settings.REDIS_SENTINEL_MASTER,
-            'sentinels': sentinel_list,  # List of (host, port) tuples
+            'db': int(settings.REDIS_DB),
             'sentinel_kwargs': {
-                'socket_timeout': 0.1,
-                'socket_connect_timeout': 0.1,
-                'socket_keepalive': True,
+                'socket_timeout': 1.0,
+                'socket_connect_timeout': 1.0,
                 'password': settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
             },
-            'db': settings.REDIS_DB,
         }
         
         return broker_url, transport_options
