@@ -7,7 +7,7 @@ metadata:
     app: cc-registry
     component: mcp-server
 spec:
-  replicas: 2
+  replicas: 1  # Single replica due to ReadWriteOnce PVC
   selector:
     matchLabels:
       app: cc-registry
@@ -18,6 +18,10 @@ spec:
         app: cc-registry
         component: mcp-server
     spec:
+      securityContext:
+        fsGroup: 1000  # Ensure mounted volumes are writable by user 1000
+        runAsUser: 1000
+        runAsNonRoot: true
       containers:
       - name: mcp-server
         image: ghcr.io/OWNER/REPO/cc-registry-v2-mcp-server:latest  # Replace OWNER/REPO
@@ -38,9 +42,6 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /app/data
-        - name: repos
-          mountPath: /app/data/repos
-          readOnly: true
         - name: codecollections-yaml
           mountPath: /app/codecollections.yaml
           subPath: codecollections.yaml
@@ -70,8 +71,6 @@ spec:
           failureThreshold: 3
         securityContext:
           allowPrivilegeEscalation: false
-          runAsNonRoot: true
-          runAsUser: 1000
           capabilities:
             drop:
             - ALL
@@ -79,11 +78,7 @@ spec:
       volumes:
       - name: data
         persistentVolumeClaim:
-          claimName: mcp-server-data
-      - name: repos
-        configMap:
-          name: mcp-repos
-          optional: true
+          claimName: mcp-server-data  # Writable storage for vectordb
       - name: codecollections-yaml
         configMap:
           name: codecollections-config
