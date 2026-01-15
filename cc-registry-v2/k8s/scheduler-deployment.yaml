@@ -118,38 +118,56 @@ spec:
       - name: flower
         image: mher/flower:2.0
         imagePullPolicy: IfNotPresent
+        command:
+        - sh
+        - -c
+        - |
+          set -ex
+          
+          echo "=== Flower Sentinel Configuration ==="
+          echo "REDIS_SENTINEL_HOSTS: $REDIS_SENTINEL_HOSTS"
+          echo "REDIS_SENTINEL_MASTER: $REDIS_SENTINEL_MASTER"
+          echo "REDIS_DB: $REDIS_DB"
+          
+          # Extract first sentinel for the broker URL placeholder
+          SENTINEL_HOST=$(echo "$REDIS_SENTINEL_HOSTS" | cut -d',' -f1 | cut -d':' -f1 | tr -d ' ')
+          SENTINEL_PORT=$(echo "$REDIS_SENTINEL_HOSTS" | cut -d',' -f1 | cut -d':' -f2 | tr -d ' ')
+          SENTINEL_PORT="${SENTINEL_PORT:-26379}"
+          DB="${REDIS_DB:-0}"
+          
+          # Construct broker URL - Celery/Kombu will use transport_options for Sentinel discovery
+          if [ ! -z "$REDIS_PASSWORD" ]; then
+            BROKER_URL="redis://:$REDIS_PASSWORD@$SENTINEL_HOST:$SENTINEL_PORT/$DB"
+          else
+            BROKER_URL="redis://$SENTINEL_HOST:$SENTINEL_PORT/$DB"
+          fi
+          
+          echo "Broker URL: redis://:**@$SENTINEL_HOST:$SENTINEL_PORT/$DB"
+          
+          # Pass Sentinel configuration via environment for Celery to pick up
+          export CELERY_BROKER_TRANSPORT_OPTIONS='{"master_name":"'$REDIS_SENTINEL_MASTER'","sentinels":[["'$SENTINEL_HOST'",'$SENTINEL_PORT']],"password":"'$REDIS_PASSWORD'","db":'$DB',"socket_timeout":1.0,"socket_connect_timeout":1.0}'
+          
+          echo "Transport options configured for Sentinel"
+          
+          exec celery --broker="$BROKER_URL" flower
         ports:
         - containerPort: 5555
           name: http
           protocol: TCP
         env:
+        - name: REDIS_SENTINEL_HOSTS
+          value: "redis-sentinel:26379"
+        - name: REDIS_SENTINEL_MASTER
+          value: "mymaster"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-sentinel
+              key: redis-password
+        - name: REDIS_DB
+          value: "0"
         - name: FLOWER_PORT
           value: "5555"
-        envFrom:
-        # Load Redis configuration for Celery broker
-        - secretRef:
-            name: cc-registry-secrets
-        command:
-        - sh
-        - -c
-        - |
-          # Construct broker URL from environment (supports both direct URL and Sentinel)
-          if [ -n "$REDIS_URL" ]; then
-            CELERY_BROKER_URL="$REDIS_URL"
-          elif [ -n "$REDIS_SENTINEL_HOSTS" ]; then
-            # For Flower with Sentinel, we need to construct the URL
-            SENTINEL_HOSTS=$(echo "$REDIS_SENTINEL_HOSTS" | sed 's/,/;/g')
-            if [ -n "$REDIS_PASSWORD" ]; then
-              CELERY_BROKER_URL="sentinel://:${REDIS_PASSWORD}@${SENTINEL_HOSTS}"
-            else
-              CELERY_BROKER_URL="sentinel://${SENTINEL_HOSTS}"
-            fi
-          else
-            echo "ERROR: Neither REDIS_URL nor REDIS_SENTINEL_HOSTS is set"
-            exit 1
-          fi
-          
-          exec celery flower --broker="$CELERY_BROKER_URL"
         resources:
           requests:
             memory: "128Mi"

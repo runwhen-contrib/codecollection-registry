@@ -539,12 +539,12 @@ async def run_ai_enhancement(
     limit: int = 10,
     collection_slug: str = None
 ):
-    """Trigger AI enhancement for pending codebundles"""
+    """Trigger AI enhancement for pending codebundles - queues tasks for workers"""
     try:
         from app.core.database import SessionLocal
         from app.models import Codebundle, CodeCollection
         from app.services.ai_service import AIEnhancementService
-        from datetime import datetime
+        from app.tasks.ai_enhancement_tasks import enhance_codebundle_task
         
         db = SessionLocal()
         try:
@@ -572,39 +572,32 @@ async def run_ai_enhancement(
             codebundles = query.limit(limit).all()
             
             if not codebundles:
-                return {"message": "No codebundles need enhancement", "enhanced": 0, "failed": 0}
+                return {"message": "No codebundles need enhancement", "queued": 0}
             
-            # Enhance codebundles
-            enhanced_count = 0
-            failed_count = 0
+            # Queue codebundles for async enhancement by workers
+            queued_tasks = []
             
             for cb in codebundles:
                 try:
-                    cb.enhancement_status = "processing"
+                    # Mark as pending and queue the task to workers
+                    cb.enhancement_status = "pending"
                     db.commit()
                     
-                    result = ai_service.enhance_codebundle(cb)
-                    
-                    cb.ai_enhanced_description = result["enhanced_description"]
-                    cb.access_level = result["access_level"]
-                    cb.minimum_iam_requirements = result["iam_requirements"]
-                    cb.ai_enhanced_metadata = result.get("enhancement_metadata", {})
-                    cb.enhancement_status = "completed"
-                    cb.last_enhanced = datetime.utcnow()
-                    
-                    db.commit()
-                    enhanced_count += 1
+                    # Delegate to Celery worker asynchronously
+                    task = enhance_codebundle_task.apply_async(args=[cb.id])
+                    queued_tasks.append({
+                        "codebundle_id": cb.id,
+                        "codebundle_name": cb.name,
+                        "task_id": task.id
+                    })
                     
                 except Exception as e:
-                    logger.error(f"Failed to enhance {cb.name}: {e}")
-                    cb.enhancement_status = "failed"
-                    db.commit()
-                    failed_count += 1
+                    logger.error(f"Failed to queue enhancement for {cb.name}: {e}")
             
             return {
-                "message": f"Enhanced {enhanced_count} codebundles",
-                "enhanced": enhanced_count,
-                "failed": failed_count,
+                "message": f"Queued {len(queued_tasks)} codebundles for AI enhancement",
+                "queued": len(queued_tasks),
+                "tasks": queued_tasks,
                 "remaining": query.count() - len(codebundles)
             }
             
