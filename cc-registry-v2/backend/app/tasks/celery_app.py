@@ -8,21 +8,33 @@ from app.core.config import settings
 
 def _configure_broker_url():
     """Configure broker URL for Redis or Redis Sentinel"""
-    if settings.REDIS_SENTINEL_HOSTS and not settings.REDIS_URL.startswith('redis://'):
+    if settings.REDIS_SENTINEL_HOSTS and not (settings.REDIS_URL and settings.REDIS_URL.startswith('redis://')):
         # Use Redis Sentinel configuration
-        # Celery format: sentinel://host1:port1;host2:port2;host3:port3
-        # We need to convert comma-separated to semicolon-separated
-        sentinel_hosts = settings.REDIS_SENTINEL_HOSTS.replace(',', ';')
-        auth = f":{settings.REDIS_PASSWORD}@" if settings.REDIS_PASSWORD else ""
-        broker_url = f"sentinel://{auth}{sentinel_hosts}"
+        # Parse sentinel hosts (format: "host1:port1,host2:port2,host3:port3")
+        sentinel_list = []
+        for host_port in settings.REDIS_SENTINEL_HOSTS.split(','):
+            host_port = host_port.strip()
+            if ':' in host_port:
+                host, port = host_port.rsplit(':', 1)
+                sentinel_list.append((host.strip(), int(port.strip())))
+            else:
+                sentinel_list.append((host_port.strip(), 26379))
+        
+        # For Celery with Sentinel, use redis:// URL but configure Sentinel via transport_options
+        # The URL format is: redis://[:password@]service-name/db
+        # Sentinel failover is handled by transport_options
+        password_part = f":{settings.REDIS_PASSWORD}@" if settings.REDIS_PASSWORD else ""
+        broker_url = f"redis://{password_part}{settings.REDIS_SENTINEL_MASTER}/{settings.REDIS_DB}"
         
         # Set transport options for Sentinel
         transport_options = {
             'master_name': settings.REDIS_SENTINEL_MASTER,
+            'sentinels': sentinel_list,  # List of (host, port) tuples
             'sentinel_kwargs': {
                 'socket_timeout': 0.1,
                 'socket_connect_timeout': 0.1,
                 'socket_keepalive': True,
+                'password': settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
             },
             'db': settings.REDIS_DB,
         }
