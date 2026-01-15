@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
+from dataclasses import dataclass
 
 from openai import OpenAI, AzureOpenAI
 from sqlalchemy.orm import Session
@@ -20,6 +21,19 @@ from app.services.ai_prompts import AIPrompts
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class AIConfig:
+    """Simple configuration object for AI service"""
+    service_provider: str
+    api_key: str
+    model_name: str
+    enhancement_enabled: bool
+    is_active: bool
+    azure_endpoint: Optional[str] = None
+    azure_deployment_name: Optional[str] = None
+    api_version: Optional[str] = None
+
+
 class EnhancedAIService:
     """Enhanced AI service with full logging and manual control"""
     
@@ -27,14 +41,14 @@ class EnhancedAIService:
         self.db = db_session
         self.config = self._get_active_config()
         
-    def _get_active_config(self) -> Optional[AIConfiguration]:
+    def _get_active_config(self) -> Optional[AIConfig]:
         """Get AI configuration from environment variables"""
         if settings.AI_SERVICE_PROVIDER == "azure-openai":
             if not (settings.AZURE_OPENAI_API_KEY and 
                    settings.AZURE_OPENAI_ENDPOINT and 
                    settings.AZURE_OPENAI_DEPLOYMENT_NAME):
                 return None
-            return AIConfiguration(
+            return AIConfig(
                 service_provider="azure-openai",
                 api_key=settings.AZURE_OPENAI_API_KEY,
                 model_name=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
@@ -47,7 +61,7 @@ class EnhancedAIService:
         else:
             if not settings.OPENAI_API_KEY:
                 return None
-            return AIConfiguration(
+            return AIConfig(
                 service_provider="openai",
                 api_key=settings.OPENAI_API_KEY,
                 model_name=settings.AI_MODEL,
@@ -219,6 +233,11 @@ class EnhancedAIService:
     def _get_robot_file_content(self, codebundle: Codebundle) -> Optional[str]:
         """Get the actual robot file content"""
         try:
+            # Check if codecollection is loaded
+            if not codebundle.codecollection:
+                logger.warning(f"CodeBundle {codebundle.slug} has no codecollection relationship loaded")
+                return None
+            
             # Look for robot file by slug
             robot_file = self.db.query(RawRepositoryData).filter(
                 RawRepositoryData.collection_slug == codebundle.codecollection.slug,
@@ -247,6 +266,11 @@ class EnhancedAIService:
     def _get_related_files(self, codebundle: Codebundle) -> List[Dict[str, str]]:
         """Get all files related to this codebundle"""
         try:
+            # Check if codecollection is loaded
+            if not codebundle.codecollection:
+                logger.warning(f"CodeBundle {codebundle.slug} has no codecollection relationship loaded")
+                return []
+            
             files = self.db.query(RawRepositoryData).filter(
                 RawRepositoryData.collection_slug == codebundle.codecollection.slug,
                 RawRepositoryData.file_path.like(f'%{codebundle.slug}%')

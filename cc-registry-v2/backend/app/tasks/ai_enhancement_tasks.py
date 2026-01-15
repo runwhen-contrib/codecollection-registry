@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from celery import current_task
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.models import Codebundle, AIConfiguration
@@ -34,8 +34,10 @@ def enhance_codebundle_task(self, codebundle_id: int):
     try:
         db = next(get_db())
         
-        # Get the codebundle
-        codebundle = db.query(Codebundle).filter(Codebundle.id == codebundle_id).first()
+        # Get the codebundle with codecollection relationship loaded
+        codebundle = db.query(Codebundle).options(
+            joinedload(Codebundle.codecollection)
+        ).filter(Codebundle.id == codebundle_id).first()
         if not codebundle:
             raise ValueError(f"CodeBundle with id {codebundle_id} not found")
         
@@ -137,8 +139,10 @@ def enhance_multiple_codebundles_task(self, codebundle_ids: List[int]):
             )
             
             try:
-                # Get the codebundle
-                codebundle = db.query(Codebundle).filter(Codebundle.id == codebundle_id).first()
+                # Get the codebundle with codecollection relationship loaded
+                codebundle = db.query(Codebundle).options(
+                    joinedload(Codebundle.codecollection)
+                ).filter(Codebundle.id == codebundle_id).first()
                 if not codebundle:
                     failed += 1
                     results.append({
@@ -268,8 +272,10 @@ def enhance_collection_codebundles_task(self, collection_slug: str):
     try:
         db = next(get_db())
         
-        # Get all codebundles in the collection
-        codebundles = db.query(Codebundle).join(Codebundle.codecollection).filter(
+        # Get all codebundles in the collection with codecollection relationship loaded
+        codebundles = db.query(Codebundle).join(Codebundle.codecollection).options(
+            joinedload(Codebundle.codecollection)
+        ).filter(
             Codebundle.codecollection.has(slug=collection_slug),
             Codebundle.is_active == True
         ).all()
@@ -396,8 +402,10 @@ def enhance_pending_codebundles_task(self, limit: Optional[int] = None):
     try:
         db = next(get_db())
         
-        # Get pending codebundles (including NULL values)
-        query = db.query(Codebundle).filter(
+        # Get pending codebundles (including NULL values) with codecollection relationship loaded
+        query = db.query(Codebundle).options(
+            joinedload(Codebundle.codecollection)
+        ).filter(
             (Codebundle.enhancement_status == "pending") | (Codebundle.enhancement_status.is_(None)),
             Codebundle.is_active == True
         )
