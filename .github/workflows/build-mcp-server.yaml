@@ -2,11 +2,6 @@ name: Build MCP Server Container Images
 
 on:
   # Trigger on pull requests that affect mcp-server
-  push:
-    branches:
-    paths:
-      - 'mcp-server/**'
-      - '.github/workflows/build-mcp-server.yaml'
   pull_request:
     paths:
       - 'mcp-server/**'
