@@ -1,6 +1,7 @@
 name: Build CC-Registry-V2 Container Images
 
 on:
+  push: 
   pull_request:
     paths:
       - 'cc-registry-v2/**'
