@@ -71,33 +71,21 @@ const Header: React.FC = () => {
   return (
     <AppBar position="static" sx={{ backgroundColor: '#2f80ed' }}>
       <Toolbar>
-        <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-          <Typography
-            variant="h6"
-            component={Link}
-            to="/"
-            sx={{
-              color: 'white',
-              textDecoration: 'none',
-              fontWeight: 'bold',
-              marginRight: 4,
-            }}
-          >
-            CodeCollection Registry
-          </Typography>
-          
+        <Typography
+          variant="h6"
+          component={Link}
+          to="/"
+          sx={{
+            color: 'white',
+            textDecoration: 'none',
+            fontWeight: 'bold',
+          }}
+        >
+          CodeCollection Registry
+        </Typography>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginLeft: 'auto' }}>
           <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>
-            <Button
-              component={Link}
-              to="/"
-              color="inherit"
-              sx={{
-                color: 'white',
-                fontWeight: location.pathname === '/' ? 'bold' : 'normal',
-              }}
-            >
-              Home
-            </Button>
             <Button
               component={Link}
               to="/all-tasks"
@@ -176,9 +164,6 @@ const Header: React.FC = () => {
               </Button>
             )}
           </Box>
-        </Box>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {/* More Menu - Hidden features */}
           <IconButton
             color="inherit"

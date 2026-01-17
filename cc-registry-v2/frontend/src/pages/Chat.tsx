@@ -11,7 +11,11 @@ import {
   Collapse,
   Link,
   Avatar,
-  Button
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -47,6 +51,10 @@ const Chat: React.FC = () => {
   const [examples, setExamples] = useState<ExampleQueries | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [requestContext, setRequestContext] = useState('');
+  const [currentRequestQuery, setCurrentRequestQuery] = useState('');
+  const [submittingRequest, setSubmittingRequest] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -179,9 +187,27 @@ const Chat: React.FC = () => {
     }
   };
 
-  const handleCreateGitHubIssue = async (userQuery: string) => {
+  const handleOpenRequestDialog = (userQuery: string) => {
+    setCurrentRequestQuery(userQuery);
+    setRequestContext('');
+    setRequestDialogOpen(true);
+  };
+
+  const handleCloseRequestDialog = () => {
+    setRequestDialogOpen(false);
+    setRequestContext('');
+    setCurrentRequestQuery('');
+  };
+
+  const handleSubmitRequest = async () => {
+    setSubmittingRequest(true);
     try {
-      const template = await githubApi.getIssueTemplate(userQuery);
+      // Combine the original query with additional context
+      const fullQuery = requestContext.trim() 
+        ? `${currentRequestQuery}\n\nAdditional context: ${requestContext}`
+        : currentRequestQuery;
+      
+      const template = await githubApi.getIssueTemplate(fullQuery);
       const issueData: TaskRequestIssue = {
         user_query: template.user_query,
         task_description: template.task_description,
@@ -191,9 +217,12 @@ const Chat: React.FC = () => {
       };
       const result = await githubApi.createTaskRequest(issueData);
       window.open(result.issue_url, '_blank');
+      handleCloseRequestDialog();
     } catch (error: any) {
       console.error('Error creating GitHub issue:', error);
       alert(error.response?.data?.detail || 'Error creating GitHub issue');
+    } finally {
+      setSubmittingRequest(false);
     }
   };
 
@@ -423,14 +452,16 @@ const Chat: React.FC = () => {
                           display: 'flex', 
                           alignItems: 'center', 
                           gap: 1, 
-                          mt: 2,
-                          opacity: 0.7,
-                          '&:hover': { opacity: 1 }
+                          mt: 2
                         }}>
                           <IconButton 
                             size="small" 
                             onClick={() => copyToClipboard(message.content, message.id)}
-                            sx={{ p: 0.5 }}
+                            sx={{ 
+                              p: 0.5,
+                              opacity: 0.7,
+                              '&:hover': { opacity: 1 }
+                            }}
                           >
                             {copiedId === message.id ? (
                               <CheckIcon sx={{ fontSize: 16 }} />
@@ -438,30 +469,59 @@ const Chat: React.FC = () => {
                               <CopyIcon sx={{ fontSize: 16 }} />
                             )}
                           </IconButton>
-                          
-                        </Box>
-                      )}
-
-                      {/* Show Request CodeBundle button when no match found */}
-                      {message.response?.no_match && (
-                        <Box sx={{ mt: 2 }}>
                           <Button
+                            size="small"
                             variant="contained"
-                            startIcon={<RequestIcon />}
-                            onClick={() => handleCreateGitHubIssue(message.userQuery || message.content)}
+                            startIcon={<RequestIcon sx={{ fontSize: 16 }} />}
+                            onClick={() => handleOpenRequestDialog(message.userQuery || message.content)}
                             sx={{
+                              textTransform: 'none',
+                              fontSize: '0.75rem',
                               backgroundColor: '#1976d2',
                               color: 'white',
-                              textTransform: 'none',
                               fontWeight: 500,
                               '&:hover': { backgroundColor: '#1565c0' }
                             }}
                           >
-                            Request this CodeBundle
+                            Request CodeBundle
                           </Button>
-                          <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.secondary' }}>
-                            Opens a pre-filled GitHub issue to request this automation
-                          </Typography>
+                        </Box>
+                      )}
+
+                      {/* Show prominent Request CodeBundle button when no match found */}
+                      {message.response?.no_match && (
+                        <Box sx={{ mt: 2 }}>
+                          <Alert 
+                            severity="info" 
+                            sx={{ 
+                              backgroundColor: 'rgba(25, 118, 210, 0.04)',
+                              border: '1px solid rgba(25, 118, 210, 0.2)'
+                            }}
+                            action={
+                              <Button
+                                variant="contained"
+                                size="small"
+                                startIcon={<RequestIcon />}
+                                onClick={() => handleOpenRequestDialog(message.userQuery || message.content)}
+                                sx={{
+                                  backgroundColor: '#1976d2',
+                                  color: 'white',
+                                  textTransform: 'none',
+                                  fontWeight: 500,
+                                  '&:hover': { 
+                                    backgroundColor: '#1565c0',
+                                    color: 'white'
+                                  }
+                                }}
+                              >
+                                Request CodeBundle
+                              </Button>
+                            }
+                          >
+                            <Typography variant="body2">
+                              Can't find what you're looking for? Request a new CodeBundle for this use case.
+                            </Typography>
+                          </Alert>
                         </Box>
                       )}
 
@@ -640,6 +700,75 @@ const Chat: React.FC = () => {
           </Typography>
         </Box>
       </Box>
+
+      {/* Request CodeBundle Dialog */}
+      <Dialog 
+        open={requestDialogOpen} 
+        onClose={handleCloseRequestDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Request a CodeBundle
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Your original query:
+            </Typography>
+            <Paper sx={{ p: 2, backgroundColor: 'grey.50', mb: 3 }}>
+              <Typography variant="body2">
+                {currentRequestQuery}
+              </Typography>
+            </Paper>
+            
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Add more context to help us understand your needs (optional):
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              value={requestContext}
+              onChange={(e) => setRequestContext(e.target.value)}
+              placeholder="e.g., I need this to work with AWS EKS clusters, integrate with PagerDuty alerts, and run every 5 minutes..."
+              variant="outlined"
+            />
+            
+            <Alert severity="info" sx={{ mt: 2 }}>
+              This will create a GitHub issue with your request. The more details you provide, the better we can help!
+            </Alert>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button 
+            onClick={handleCloseRequestDialog}
+            disabled={submittingRequest}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSubmitRequest}
+            variant="contained"
+            startIcon={submittingRequest ? <CircularProgress size={16} sx={{ color: 'white' }} /> : <RequestIcon />}
+            disabled={submittingRequest}
+            sx={{
+              backgroundColor: '#1976d2',
+              color: 'white',
+              '&:hover': { 
+                backgroundColor: '#1565c0',
+                color: 'white'
+              },
+              '&.Mui-disabled': {
+                backgroundColor: 'rgba(25, 118, 210, 0.6)',
+                color: 'white'
+              }
+            }}
+          >
+            {submittingRequest ? 'Creating...' : 'Submit Request'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
