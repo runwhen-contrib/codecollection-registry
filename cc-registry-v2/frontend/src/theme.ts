@@ -76,14 +76,6 @@ const theme = createTheme({
           borderRadius: '4px',
           fontWeight: 600,
         },
-        contained: {
-          backgroundColor: '#ffffff',
-          color: '#5282f1',
-          '&:hover': {
-            backgroundColor: '#f8ad4b',
-            color: '#ffffff',
-          },
-        },
       },
     },
     MuiCard: {

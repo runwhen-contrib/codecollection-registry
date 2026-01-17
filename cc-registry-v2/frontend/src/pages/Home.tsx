@@ -575,10 +575,12 @@ const Home: React.FC = () => {
                 fontSize: '15px',
                 fontWeight: 600,
                 backgroundColor: '#5282f1',
+                color: 'white',
                 px: 4,
                 py: 1.25,
                 '&:hover': {
-                  backgroundColor: '#3a5cb8'
+                  backgroundColor: '#3a5cb8',
+                  color: 'white'
                 }
               }}
             >

@@ -670,36 +670,46 @@ async def get_registry_stats():
             # Count collections
             collections_count = db.query(CodeCollection).filter(CodeCollection.is_active == True).count()
             
-            # Count codebundles and sum tasks
+            # Count codebundles
             codebundles_count = db.query(Codebundle).filter(Codebundle.is_active == True).count()
             
-            # Sum all tasks
-            total_tasks = db.query(func.sum(Codebundle.task_count)).filter(Codebundle.is_active == True).scalar() or 0
+            # Count actual tasks by iterating through codebundles (matches All Tasks page logic)
+            all_codebundles = db.query(Codebundle).filter(Codebundle.is_active == True).all()
+            total_tasks = 0
+            total_slis = 0
             
-            # Sum all SLIs
-            total_slis = db.query(func.sum(Codebundle.sli_count)).filter(Codebundle.is_active == True).scalar() or 0
+            for cb in all_codebundles:
+                # Count tasks
+                if cb.tasks:
+                    total_tasks += len(cb.tasks)
+                # Count SLIs
+                if cb.slis:
+                    total_slis += len(cb.slis)
+            
+            # Calculate combined total for tasks over time
+            total_items = total_tasks + total_slis
             
             # Get tasks over time (by collection for now - simulated growth data)
             # In production, you'd track this in a separate table
             tasks_over_time = [
-                {"month": "Jan 2024", "tasks": int(total_tasks * 0.4)},
-                {"month": "Feb 2024", "tasks": int(total_tasks * 0.5)},
-                {"month": "Mar 2024", "tasks": int(total_tasks * 0.6)},
-                {"month": "Apr 2024", "tasks": int(total_tasks * 0.7)},
-                {"month": "May 2024", "tasks": int(total_tasks * 0.75)},
-                {"month": "Jun 2024", "tasks": int(total_tasks * 0.8)},
-                {"month": "Jul 2024", "tasks": int(total_tasks * 0.85)},
-                {"month": "Aug 2024", "tasks": int(total_tasks * 0.9)},
-                {"month": "Sep 2024", "tasks": int(total_tasks * 0.92)},
-                {"month": "Oct 2024", "tasks": int(total_tasks * 0.95)},
-                {"month": "Nov 2024", "tasks": int(total_tasks * 0.98)},
-                {"month": "Dec 2024", "tasks": int(total_tasks)},
+                {"month": "Jan 2024", "tasks": int(total_items * 0.4)},
+                {"month": "Feb 2024", "tasks": int(total_items * 0.5)},
+                {"month": "Mar 2024", "tasks": int(total_items * 0.6)},
+                {"month": "Apr 2024", "tasks": int(total_items * 0.7)},
+                {"month": "May 2024", "tasks": int(total_items * 0.75)},
+                {"month": "Jun 2024", "tasks": int(total_items * 0.8)},
+                {"month": "Jul 2024", "tasks": int(total_items * 0.85)},
+                {"month": "Aug 2024", "tasks": int(total_items * 0.9)},
+                {"month": "Sep 2024", "tasks": int(total_items * 0.92)},
+                {"month": "Oct 2024", "tasks": int(total_items * 0.95)},
+                {"month": "Nov 2024", "tasks": int(total_items * 0.98)},
+                {"month": "Dec 2024", "tasks": int(total_items)},
             ]
             
             return {
                 "collections": collections_count,
                 "codebundles": codebundles_count,
-                "tasks": int(total_tasks),
+                "tasks": int(total_items),  # Total of tasks + SLIs to match All Tasks page
                 "slis": int(total_slis),
                 "tasks_over_time": tasks_over_time
             }
