@@ -139,14 +139,16 @@ async def query_codecollections(
         # Determine question type
         question_lower = query.question.lower()
         
-        # Detect follow-up questions that reference previous context
-        # These don't need a new semantic search
+        # Detect follow-up questions that reference the SAME previous codebundle
+        # These don't need a new semantic search, just use conversation context
+        # NOTE: Phrases like "what other" or "what else" indicate wanting DIFFERENT resources,
+        # so they should trigger a new search with conversation context, not a focused lookup
         is_followup_question = any(phrase in question_lower for phrase in [
             'this codebundle', 'this code bundle', 'that codebundle', 'that code bundle',
-            'what else can it', 'what else does it', 'what other', 'more about it',
+            'what else can it', 'what else does it', 'more about it',
             'same codebundle', 'same bundle', 'can it also', 'does it also',
-            'anything else', 'other tasks', 'other features', 'what else can this',
-            'what else does this', 'tell me more', 'more details'
+            'what else can this', 'what else does this', 'tell me more', 'more details',
+            'about this', 'about that', 'in this codebundle', 'in that codebundle'
         ]) and query.conversation_history and len(query.conversation_history) > 0
         
         # Keywords/library questions
@@ -285,9 +287,35 @@ I have access to:
             relevant_tasks = []
             sources_used = ["MCP Keyword Search"]
         else:
+            # Enhance search query with conversation context for better results
+            search_query = query.question
+            
+            # If this is a vague follow-up (e.g., "I was hoping for a different codebundle"),
+            # augment the search with context from the user's original question
+            if query.conversation_history and len(query.conversation_history) > 0:
+                # Check if current question is vague and needs context
+                vague_indicators = [
+                    'different', 'another', 'other', 'alternative', 'else',
+                    'something else', 'more options', 'other options'
+                ]
+                is_vague = any(indicator in question_lower for indicator in vague_indicators) and len(query.question.split()) < 15
+                
+                if is_vague:
+                    # Find the original user question for context
+                    original_question = None
+                    for msg in query.conversation_history:
+                        if msg.role == 'user':
+                            original_question = msg.content
+                            break
+                    
+                    if original_question:
+                        # Combine context: "different codebundle" + "kubernetes crashloopbackoff pods"
+                        search_query = f"{original_question} {query.question}"
+                        logger.info(f"Enhanced vague query with context: '{query.question}' -> '{search_query}'")
+            
             # Always search codebundles
             mcp_response = await mcp.find_codebundle(
-                query=query.question,
+                query=search_query,
                 platform=platform,
                 max_results=query.context_limit + 3  # Request more to filter
             )
@@ -711,12 +739,17 @@ CRITICAL RULES:
 5. IGNORE results that don't match the user's platform (e.g., don't show Kubernetes results for Azure App Service questions)
 6. REMEMBER the conversation history - if the user refers to "this codebundle" or "it", they mean the one discussed previously
 7. If the user asks about YOU or what YOU can do, answer about your capabilities, DON'T search for codebundles
+8. When you see kubectl output or command output, IMMEDIATELY ask clarifying questions before recommending specific codebundles
+9. For Kubernetes troubleshooting, always consider BOTH the workload level (Deployment/StatefulSet) AND pod level - don't assume one without asking
 
-ASK CLARIFYING QUESTIONS when the query is ambiguous:
+ASK CLARIFYING QUESTIONS PROACTIVELY when context is missing:
+- If kubectl output shows pods in error state (CrashLoopBackOff, Error, etc.), ask: "Are these standalone Pods or part of a Deployment, StatefulSet, or DaemonSet?"
 - If the user asks about Azure App Service, ask: "Are you working with a Web App, Function App, or Container App?"
 - If the user asks about scaling, ask: "Do you want to scale up (more resources) or scale out (more instances)?"
 - If the user asks about databases, ask which database system (Postgres, MySQL, Redis, etc.)
+- If the user mentions a generic resource (pods, containers, services), ask for the workload type (Deployment, StatefulSet, etc.)
 - Keep clarifying questions short and provide 2-3 options
+- ASK IMMEDIATELY in your first response if critical context is missing - don't wait for follow-ups
 
 When recommending:
 - Always use **bold** for CodeBundle names
@@ -724,6 +757,8 @@ When recommending:
 - For documentation, explain what the guide covers and include the URL
 - For codebundles, mention the SPECIFIC TASKS it contains that are relevant
 - Be conversational and keep responses concise but informative
+- If multiple layers of troubleshooting exist (e.g., Pod-level AND Deployment-level), mention both options
+- For Kubernetes issues, consider both workload-level (Deployment, StatefulSet) and resource-level (Pod, Container) codebundles
 
 If NO resources directly address the query:
 - Start your response with exactly: "[NO_MATCHING_CODEBUNDLE]"
