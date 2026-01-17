@@ -300,11 +300,11 @@ const Chat: React.FC = () => {
             />
             
             <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
-              CodeCollection Assistant
+              Eager Edgar
             </Typography>
             
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-              Ask me about available tasks and codebundles in the registry
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 600, mx: 'auto' }}>
+              Your Registry Chat assistant, specially trained on documentation, codebundles, authoring guidelines, and the entire CodeCollection ecosystem
             </Typography>
 
             {chatHealth && chatHealth.status !== 'healthy' && (
@@ -400,7 +400,7 @@ const Chat: React.FC = () => {
 
                 <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                   <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 600 }}>
-                    {message.type === 'user' ? 'You' : 'Assistant'}
+                    {message.type === 'user' ? 'You' : 'Eager Edgar'}
                   </Typography>
 
                   {message.loading ? (

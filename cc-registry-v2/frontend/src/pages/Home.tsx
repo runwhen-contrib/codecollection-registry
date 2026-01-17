@@ -116,7 +116,7 @@ const Home: React.FC = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      {/* RunWhen Assistant - Clean Card */}
+      {/* Registry Chat - Clean Card */}
       <Box sx={{ mb: 4 }}>
         <Card
           sx={{
@@ -139,10 +139,10 @@ const Home: React.FC = () => {
               <AutoAwesomeIcon sx={{ fontSize: 32, color: '#2f80ed' }} />
               <Box sx={{ flex: 1 }}>
                 <Typography variant="h6" fontWeight="600" sx={{ color: '#333' }}>
-                  RunWhen Assistant
+                  Registry Chat
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#666' }}>
-                  Find CodeBundles, browse documentation, or request new tasks
+                  Chat with Eager Edgar about CodeBundles, documentation, and authoring guidelines
                 </Typography>
               </Box>
               <Typography variant="h5" sx={{ color: '#2f80ed', display: { xs: 'none', sm: 'block' } }}>→</Typography>

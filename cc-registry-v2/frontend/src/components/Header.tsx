@@ -8,24 +8,13 @@ import {
   IconButton,
   Menu,
   MenuItem,
-  Avatar,
   Divider,
-  ListItemIcon,
-  ListItemText,
 } from '@mui/material';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Menu as MenuIcon,
-  MoreVert as MoreVertIcon,
-  Login as LoginIcon,
-  Logout as LogoutIcon,
-  Person as PersonIcon,
-  Build as BuildIcon,
-  List as ListIcon,
   KeyboardArrowDown as ArrowDownIcon,
-  Folder as FolderIcon,
-  Extension as ExtensionIcon,
-  Category as CategoryIcon,
+  MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -147,22 +136,13 @@ const Header: React.FC = () => {
               }}
             >
               <MenuItem onClick={() => handleMenuNavigate('/collections')}>
-                <ListItemIcon>
-                  <FolderIcon fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>CodeCollections</ListItemText>
+                CodeCollections
               </MenuItem>
               <MenuItem onClick={() => handleMenuNavigate('/codebundles')}>
-                <ListItemIcon>
-                  <ExtensionIcon fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>CodeBundles</ListItemText>
+                CodeBundles
               </MenuItem>
               <MenuItem onClick={() => handleMenuNavigate('/categories')}>
-                <ListItemIcon>
-                  <CategoryIcon fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>Categories</ListItemText>
+                Categories
               </MenuItem>
             </Menu>
 
@@ -175,7 +155,7 @@ const Header: React.FC = () => {
                 fontWeight: location.pathname === '/chat' ? 'bold' : 'normal',
               }}
             >
-              RunWhen Assistant
+              Registry Chat
             </Button>
             
             {isAuthenticated && (
@@ -227,10 +207,7 @@ const Header: React.FC = () => {
             }}
           >
             <MenuItem onClick={() => handleMenuNavigate('/config-builder')}>
-              <ListItemIcon>
-                <BuildIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Config Builder</ListItemText>
+              Config Builder
               {itemCount > 0 && (
                 <Typography variant="caption" sx={{ ml: 1, color: 'primary.main' }}>
                   ({itemCount})
@@ -240,18 +217,12 @@ const Header: React.FC = () => {
             <Divider />
             {!isAuthenticated && (
               <MenuItem onClick={() => handleMenuNavigate('/login')}>
-                <ListItemIcon>
-                  <LoginIcon fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>Login</ListItemText>
+                Login
               </MenuItem>
             )}
             {isAuthenticated && (
               <MenuItem onClick={() => handleMenuNavigate('/tasks')}>
-                <ListItemIcon>
-                  <ListIcon fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>Task Manager</ListItemText>
+                Task Manager
               </MenuItem>
             )}
           </Menu>
@@ -259,15 +230,17 @@ const Header: React.FC = () => {
           {/* User Menu (when authenticated) */}
           {isAuthenticated && (
             <>
-              <IconButton
+              <Button
                 color="inherit"
                 onClick={handleUserMenuOpen}
-                sx={{ ml: 1 }}
+                endIcon={<ArrowDownIcon />}
+                sx={{
+                  ml: 1,
+                  color: 'white',
+                }}
               >
-                <Avatar sx={{ width: 32, height: 32, bgcolor: 'rgba(255,255,255,0.2)' }}>
-                  <PersonIcon />
-                </Avatar>
-              </IconButton>
+                {user?.name || 'Account'}
+              </Button>
               <Menu
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
@@ -293,7 +266,6 @@ const Header: React.FC = () => {
                 </MenuItem>
                 <Divider />
                 <MenuItem onClick={handleLogout}>
-                  <LogoutIcon sx={{ mr: 1 }} />
                   Logout
                 </MenuItem>
               </Menu>
