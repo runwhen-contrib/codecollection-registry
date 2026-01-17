@@ -523,60 +523,60 @@ async def get_example_queries():
                 "category": "Kubernetes Operations",
                 "icon": "kubernetes",
                 "queries": [
-                    "Find tasks for troubleshooting pods stuck in CrashLoopBackOff",
-                    "How do I check deployment health and restart stuck rollouts?",
-                    "What codebundles help with node resource pressure?",
-                    "Find tasks to troubleshoot Kubernetes persistent volume issues"
+                    "My pods are stuck in CrashLoopBackOff, what should I check?",
+                    "Help me troubleshoot a deployment that won't roll out",
+                    "My nodes are under resource pressure, what can I do?",
+                    "I'm having persistent volume claim issues, how do I diagnose this?"
                 ]
             },
             {
                 "category": "Azure Cloud",
                 "icon": "azure",
                 "queries": [
-                    "What tasks can scale out Azure App Service instances?",
-                    "Find health checks for Azure databases and Redis caches",
-                    "How do I troubleshoot Azure Application Gateway backend pools?",
-                    "Show me tasks for Azure AKS cluster diagnostics"
+                    "How do I scale out my Azure App Service when traffic spikes?",
+                    "Can you help me check if my Azure SQL database is healthy?",
+                    "My Application Gateway backend pool is showing unhealthy, what's wrong?",
+                    "I need to diagnose issues with my AKS cluster"
                 ]
             },
             {
                 "category": "AWS Cloud",
                 "icon": "aws",
                 "queries": [
-                    "Find tasks for AWS EKS cluster health monitoring",
-                    "What codebundles help with CloudWatch metric analysis?",
-                    "How do I troubleshoot AWS EC2 instance issues?",
-                    "Show me tasks for AWS Lambda function debugging"
+                    "How can I monitor the health of my EKS cluster?",
+                    "I need help analyzing CloudWatch metrics for anomalies",
+                    "My EC2 instances are having performance issues, where do I start?",
+                    "Help me debug Lambda functions that are timing out"
                 ]
             },
             {
                 "category": "Development Help",
                 "icon": "code",
                 "queries": [
-                    "How do I run kubectl commands in a codebundle?",
+                    "I'm new to writing codebundles, how do I run kubectl commands?",
                     "What's the difference between SLI and TaskSet codebundles?",
-                    "How do I configure secrets and kubeconfig in meta.yaml?",
-                    "Show me examples of parsing JSON output in Robot Framework"
+                    "How do I properly configure secrets in my meta.yaml file?",
+                    "Can you show me how to parse JSON output in Robot Framework?"
                 ]
             },
             {
                 "category": "Database & Monitoring",
                 "icon": "database",
                 "queries": [
-                    "Find tasks for PostgreSQL connection and query issues",
-                    "What codebundles check Prometheus and Grafana health?",
-                    "How do I monitor database replication and availability?",
-                    "Show me tasks for Redis cache troubleshooting"
+                    "My Postgres connections are timing out, how do I troubleshoot this?",
+                    "Is there a way to check if Prometheus and Grafana are healthy?",
+                    "I need to verify database replication is working correctly",
+                    "Help me troubleshoot Redis cache connection issues"
                 ]
             },
             {
                 "category": "Getting Started",
                 "icon": "rocket",
                 "queries": [
-                    "What are the most popular codebundles for SRE teams?",
-                    "Show me simple health check examples to learn from",
-                    "What tasks work with minimal cloud permissions?",
-                    "List all available codecollections and their focus areas"
+                    "I'm new here, what are the most useful codebundles for SRE work?",
+                    "Show me some basic health check examples I can learn from",
+                    "What tasks can I run with minimal cloud permissions?",
+                    "Can you give me an overview of all the codecollections?"
                 ]
             }
         ]

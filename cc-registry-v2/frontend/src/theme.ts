@@ -3,14 +3,14 @@ import { createTheme } from '@mui/material/styles';
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#2f80ed',
-      light: '#5a9eff',
-      dark: '#1e5bb8',
+      main: '#5282f1',
+      light: '#7a9ff4',
+      dark: '#3a5cb8',
     },
     secondary: {
-      main: '#faa629',
-      light: '#ffb84d',
-      dark: '#e69500',
+      main: '#f8ad4b',
+      light: '#fac273',
+      dark: '#e69538',
     },
     background: {
       default: '#ffffff',
@@ -22,39 +22,39 @@ const theme = createTheme({
     },
   },
   typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
     h1: {
-      fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+      fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
       fontSize: '2.5rem',
       fontWeight: 700,
       color: '#858484',
     },
     h2: {
-      fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+      fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
       fontSize: '2rem',
       fontWeight: 600,
       color: '#858484',
     },
     h3: {
-      fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+      fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
       fontSize: '1.5rem',
       fontWeight: 600,
       color: '#858484',
     },
     h4: {
-      fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+      fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
       fontSize: '1.25rem',
       fontWeight: 600,
       color: '#858484',
     },
     h5: {
-      fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+      fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
       fontSize: '1.125rem',
       fontWeight: 600,
       color: '#858484',
     },
     h6: {
-      fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+      fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
       fontSize: '1rem',
       fontWeight: 600,
       color: '#858484',
@@ -78,9 +78,9 @@ const theme = createTheme({
         },
         contained: {
           backgroundColor: '#ffffff',
-          color: '#2f80ed',
+          color: '#5282f1',
           '&:hover': {
-            backgroundColor: '#faa629',
+            backgroundColor: '#f8ad4b',
             color: '#ffffff',
           },
         },
@@ -98,7 +98,7 @@ const theme = createTheme({
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundColor: '#2f80ed',
+          backgroundColor: '#5282f1',
           color: '#ffffff',
         },
       },

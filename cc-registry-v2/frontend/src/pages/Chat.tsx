@@ -30,6 +30,7 @@ import {
 } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useLocation } from 'react-router-dom';
 import { chatApi, githubApi, ChatResponse, ExampleQueries, TaskRequestIssue } from '../services/api';
 
 interface ChatMessage {
@@ -43,6 +44,7 @@ interface ChatMessage {
 }
 
 const Chat: React.FC = () => {
+  const location = useLocation();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
@@ -55,6 +57,7 @@ const Chat: React.FC = () => {
   const [requestContext, setRequestContext] = useState('');
   const [currentRequestQuery, setCurrentRequestQuery] = useState('');
   const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [initialQueryProcessed, setInitialQueryProcessed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -82,6 +85,17 @@ const Chat: React.FC = () => {
     };
     loadInitialData();
   }, []);
+
+  // Handle initial query from homepage search
+  useEffect(() => {
+    const state = location.state as { initialQuery?: string } | null;
+    if (state?.initialQuery && !initialQueryProcessed && chatHealth?.status === 'healthy') {
+      setInitialQueryProcessed(true);
+      handleSendMessage(state.initialQuery);
+      // Clear the state so it doesn't re-trigger
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, chatHealth, initialQueryProcessed]);
 
   const handleSendMessage = async (messageText?: string) => {
     const text = messageText || inputValue.trim();

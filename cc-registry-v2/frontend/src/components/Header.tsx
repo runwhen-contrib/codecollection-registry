@@ -69,20 +69,37 @@ const Header: React.FC = () => {
   );
 
   return (
-    <AppBar position="static" sx={{ backgroundColor: '#2f80ed' }}>
+    <AppBar position="static" sx={{ backgroundColor: '#5282f1' }}>
       <Toolbar>
-        <Typography
-          variant="h6"
+        <Box
           component={Link}
           to="/"
           sx={{
-            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
             textDecoration: 'none',
-            fontWeight: 'bold',
+            gap: 2,
           }}
         >
-          CodeCollection Registry
-        </Typography>
+          <Box
+            component="img"
+            src="/assets/white_runwhen_logo_transparent_bg.png"
+            alt="RunWhen Logo"
+            sx={{
+              height: 40,
+              width: 'auto',
+            }}
+          />
+          <Typography
+            variant="h6"
+            sx={{
+              color: 'white',
+              fontWeight: 'bold',
+            }}
+          >
+            CodeCollection Registry
+          </Typography>
+        </Box>
         
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginLeft: 'auto' }}>
           <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>
@@ -145,6 +162,22 @@ const Header: React.FC = () => {
             >
               Registry Chat
             </Button>
+
+            <Box sx={{ borderLeft: '1px solid rgba(255,255,255,0.3)', height: 20, mx: 1, alignSelf: 'center' }} />
+            
+            <Button
+              component="a"
+              href="https://docs.runwhen.com/public/live-demos"
+              target="_blank"
+              rel="noopener noreferrer"
+              color="inherit"
+              sx={{
+                color: 'white',
+                fontWeight: 'normal',
+              }}
+            >
+              Login
+            </Button>
             
             {isAuthenticated && (
               <Button
@@ -202,7 +235,7 @@ const Header: React.FC = () => {
             <Divider />
             {!isAuthenticated && (
               <MenuItem onClick={() => handleMenuNavigate('/login')}>
-                Login
+                Admin Login
               </MenuItem>
             )}
             {isAuthenticated && (
