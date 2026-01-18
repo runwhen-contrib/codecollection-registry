@@ -70,6 +70,8 @@ services:
   worker:
     build: ./worker
     container_name: registry-worker
+    env_file:
+      - az.secret  # Azure OpenAI credentials for AI enhancement
     environment:
       - DATABASE_URL=postgresql://user:password@database:5432/codecollection_registry
       - REDIS_URL=redis://redis:6379/0
@@ -90,6 +92,8 @@ services:
   scheduler:
     build: ./worker
     container_name: registry-scheduler
+    env_file:
+      - az.secret  # Azure OpenAI credentials for AI enhancement
     environment:
       - DATABASE_URL=postgresql://user:password@database:5432/codecollection_registry
       - REDIS_URL=redis://redis:6379/0

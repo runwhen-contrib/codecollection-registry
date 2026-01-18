@@ -428,6 +428,7 @@ const CodeBundleDetail: React.FC = () => {
               <Tabs value={mainTab} onChange={(e, newValue) => setMainTab(newValue)}>
                 <Tab label="Description" sx={{ textTransform: 'none' }} />
                 <Tab label="Tasks" sx={{ textTransform: 'none' }} />
+                <Tab label="Security" sx={{ textTransform: 'none' }} />
                 <Tab label="Updates" sx={{ textTransform: 'none' }} />
               </Tabs>
             </Box>
@@ -444,24 +445,6 @@ const CodeBundleDetail: React.FC = () => {
                         {codebundle.ai_enhanced_description}
                       </Typography>
                     </Box>
-                    {codebundle.ai_enhanced_metadata && (
-                      <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {codebundle.ai_enhanced_metadata.enhanced_at && (
-                            <>Enhanced: {new Date(codebundle.ai_enhanced_metadata.enhanced_at).toLocaleString()}</>
-                          )}
-                          {!codebundle.ai_enhanced_metadata.enhanced_at && codebundle.last_enhanced && (
-                            <>Enhanced: {new Date(codebundle.last_enhanced).toLocaleString()}</>
-                          )}
-                          {codebundle.ai_enhanced_metadata.model_used && (
-                            <> • Model: {codebundle.ai_enhanced_metadata.model_used}</>
-                          )}
-                          {codebundle.ai_enhanced_metadata.service_provider && (
-                            <> • Provider: {codebundle.ai_enhanced_metadata.service_provider}</>
-                          )}
-                        </Typography>
-                      </Box>
-                    )}
                   </Box>
                 )}
                 
@@ -579,8 +562,111 @@ const CodeBundleDetail: React.FC = () => {
               </CardContent>
             )}
             
-            {/* Updates Tab */}
+            {/* Security Tab */}
             {mainTab === 2 && (
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold' }}>
+                  Security & Access Requirements
+                </Typography>
+                
+                {/* Access Level */}
+                {codebundle.access_level && codebundle.access_level !== 'unknown' && (
+                  <Box sx={{ mb: 4 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                      <SecurityIcon sx={{ fontSize: '1.2rem', color: 'primary.main' }} />
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        Access Level
+                      </Typography>
+                    </Box>
+                    <Box sx={{ mb: 2 }}>
+                      <Chip 
+                        label={codebundle.access_level.toUpperCase()} 
+                        size="medium"
+                        color={
+                          codebundle.access_level === 'read-only' ? 'success' :
+                          codebundle.access_level === 'read-write' ? 'warning' : 'default'
+                        }
+                        sx={{ fontWeight: 600, fontSize: '0.875rem', px: 2, py: 2.5 }}
+                      />
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      {codebundle.access_level === 'read-only' 
+                        ? 'This CodeBundle requires read-only access to resources. It will not make changes to your infrastructure.'
+                        : codebundle.access_level === 'read-write'
+                        ? 'This CodeBundle requires read-write access and may modify resources in your infrastructure.'
+                        : 'Access level requirements for this CodeBundle.'}
+                    </Typography>
+                  </Box>
+                )}
+                
+                {/* IAM Requirements */}
+                {codebundle.minimum_iam_requirements && codebundle.minimum_iam_requirements.length > 0 && (
+                  <Box sx={{ mb: 4 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                      <ShieldIcon sx={{ fontSize: '1.2rem', color: 'primary.main' }} />
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        IAM Requirements
+                      </Typography>
+                      <Chip 
+                        label={`${codebundle.minimum_iam_requirements.length} permission${codebundle.minimum_iam_requirements.length !== 1 ? 's' : ''}`} 
+                        size="small" 
+                        color="primary"
+                        sx={{ ml: 1 }}
+                      />
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      The following IAM permissions are required to execute this CodeBundle:
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {codebundle.minimum_iam_requirements.map((req, index) => (
+                        <Card key={index} variant="outlined" sx={{ bgcolor: 'background.default' }}>
+                          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                              <CheckCircleIcon sx={{ fontSize: '1rem', color: 'success.main', mt: 0.25 }} />
+                              <Typography 
+                                variant="body2" 
+                                sx={{ 
+                                  fontFamily: 'monospace', 
+                                  fontSize: '0.875rem',
+                                  wordBreak: 'break-all'
+                                }}
+                              >
+                                {req}
+                              </Typography>
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+                
+                {/* Additional Security Information */}
+                <Box sx={{ mt: 4, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                    <InfoIcon sx={{ fontSize: '1rem', color: 'info.main', mt: 0.25 }} />
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                        Security Best Practices
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Always follow the principle of least privilege when granting IAM permissions. 
+                        Review these requirements with your security team before deployment.
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+                
+                {!codebundle.access_level && (!codebundle.minimum_iam_requirements || codebundle.minimum_iam_requirements.length === 0) && (
+                  <Alert severity="info">
+                    No specific security requirements have been documented for this CodeBundle.
+                  </Alert>
+                )}
+              </CardContent>
+            )}
+            
+            {/* Updates Tab */}
+            {mainTab === 3 && (
               <CardContent>
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                   Version History
