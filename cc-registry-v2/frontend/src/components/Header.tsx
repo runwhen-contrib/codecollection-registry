@@ -27,6 +27,7 @@ const Header: React.FC = () => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [moreMenuAnchor, setMoreMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [browseMenuAnchor, setBrowseMenuAnchor] = React.useState<null | HTMLElement>(null);
+  const [linksMenuAnchor, setLinksMenuAnchor] = React.useState<null | HTMLElement>(null);
 
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -52,6 +53,14 @@ const Header: React.FC = () => {
     setBrowseMenuAnchor(null);
   };
 
+  const handleLinksMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setLinksMenuAnchor(event.currentTarget);
+  };
+
+  const handleLinksMenuClose = () => {
+    setLinksMenuAnchor(null);
+  };
+
   const handleLogout = () => {
     logout();
     handleUserMenuClose();
@@ -64,7 +73,7 @@ const Header: React.FC = () => {
     handleBrowseMenuClose();
   };
 
-  const isBrowseActive = ['/collections', '/codebundles', '/categories'].some(
+  const isBrowseActive = ['/collections', '/codebundles', '/categories', '/all-tasks'].some(
     path => location.pathname.startsWith(path)
   );
 
@@ -103,18 +112,6 @@ const Header: React.FC = () => {
         
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginLeft: 'auto' }}>
           <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>
-            <Button
-              component={Link}
-              to="/all-tasks"
-              color="inherit"
-              sx={{
-                color: 'white',
-                fontWeight: location.pathname === '/all-tasks' ? 'bold' : 'normal',
-              }}
-            >
-              All Tasks
-            </Button>
-            
             {/* Browse Dropdown */}
             <Button
               color="inherit"
@@ -148,6 +145,62 @@ const Header: React.FC = () => {
               </MenuItem>
               <MenuItem onClick={() => handleMenuNavigate('/categories')}>
                 Categories
+              </MenuItem>
+              <MenuItem onClick={() => handleMenuNavigate('/all-tasks')}>
+                All Tasks
+              </MenuItem>
+            </Menu>
+
+            {/* Links Dropdown */}
+            <Button
+              color="inherit"
+              onClick={handleLinksMenuOpen}
+              endIcon={<ArrowDownIcon />}
+              sx={{
+                color: 'white',
+              }}
+            >
+              Links
+            </Button>
+            <Menu
+              anchorEl={linksMenuAnchor}
+              open={Boolean(linksMenuAnchor)}
+              onClose={handleLinksMenuClose}
+              anchorOrigin={{
+                vertical: 'bottom',
+                horizontal: 'left',
+              }}
+              transformOrigin={{
+                vertical: 'top',
+                horizontal: 'left',
+              }}
+            >
+              <MenuItem
+                component="a"
+                href="https://www.runwhen.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleLinksMenuClose}
+              >
+                Website
+              </MenuItem>
+              <MenuItem
+                component="a"
+                href="https://docs.runwhen.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleLinksMenuClose}
+              >
+                Documentation
+              </MenuItem>
+              <MenuItem
+                component="a"
+                href="https://github.com/runwhen-contrib"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleLinksMenuClose}
+              >
+                GitHub
               </MenuItem>
             </Menu>
 
