@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from typing import Optional
 from app.core.config import settings
 from app.core.database import engine, Base
 import logging
@@ -378,40 +379,81 @@ async def get_all_tasks(
         )
 
 @app.get("/api/v1/codebundles")
-async def list_codebundles(limit: int = Query(500, description="Number of codebundles to return"), offset: int = Query(0, description="Offset for pagination")):
-    """List codebundles with pagination"""
+async def list_codebundles(
+    limit: int = Query(50, description="Number of codebundles to return"), 
+    offset: int = Query(0, description="Offset for pagination"),
+    search: Optional[str] = Query(None, description="Search in name, display_name, or description"),
+    collection_id: Optional[int] = Query(None, description="Filter by collection ID"),
+    tags: Optional[str] = Query(None, description="Filter by support tags (comma-separated)"),
+    platform: Optional[str] = Query(None, description="Filter by platform"),
+    access_level: Optional[str] = Query(None, description="Filter by access level"),
+    has_auto_discovery: Optional[bool] = Query(None, description="Filter by auto-discovery capability"),
+    sort_by: Optional[str] = Query("name", description="Sort by: name, updated, tasks")
+):
+    """List codebundles with pagination, search, and filters"""
     try:
         from app.core.database import SessionLocal
         from app.models import Codebundle, CodeCollection
+        from sqlalchemy import or_, desc, func
         
         db = SessionLocal()
         try:
-            # Get total count
-            total_count = db.query(Codebundle).filter(Codebundle.is_active == True).count()
+            # Build base query
+            query = db.query(Codebundle).filter(Codebundle.is_active == True)
             
-            # Get paginated results with better distribution across collections
-            # Use ROW_NUMBER() to interleave results from different collections
-            from sqlalchemy import text
-            codebundles_query = text("""
-                SELECT cb.* FROM (
-                    SELECT *, 
-                           ROW_NUMBER() OVER (PARTITION BY codecollection_id ORDER BY name) as rn
-                    FROM codebundles 
-                    WHERE is_active = true
-                ) cb
-                ORDER BY cb.rn, cb.codecollection_id
-                LIMIT :limit OFFSET :offset
-            """)
+            # Apply search filter
+            if search:
+                search_term = f"%{search}%"
+                query = query.filter(
+                    or_(
+                        Codebundle.name.ilike(search_term),
+                        Codebundle.display_name.ilike(search_term),
+                        Codebundle.description.ilike(search_term),
+                        Codebundle.doc.ilike(search_term)
+                    )
+                )
             
-            result = db.execute(codebundles_query, {"limit": limit, "offset": offset})
-            codebundle_rows = result.fetchall()
+            # Apply collection filter
+            if collection_id:
+                query = query.filter(Codebundle.codecollection_id == collection_id)
             
-            # Convert to Codebundle objects
-            codebundles = []
-            for row in codebundle_rows:
-                cb = db.query(Codebundle).filter(Codebundle.id == row.id).first()
-                if cb:
-                    codebundles.append(cb)
+            # Apply tags filter (match any of the provided tags)
+            if tags:
+                tag_list = [tag.strip().upper() for tag in tags.split(',')]
+                # Match any codebundle that has at least one of the specified tags
+                tag_conditions = []
+                for tag in tag_list:
+                    tag_conditions.append(
+                        func.array_to_string(Codebundle.support_tags, ',').ilike(f'%{tag}%')
+                    )
+                if tag_conditions:
+                    query = query.filter(or_(*tag_conditions))
+            
+            # Apply platform filter
+            if platform:
+                query = query.filter(Codebundle.discovery_platform == platform)
+            
+            # Apply access level filter
+            if access_level:
+                query = query.filter(Codebundle.access_level == access_level)
+            
+            # Apply auto-discovery filter
+            if has_auto_discovery is not None:
+                query = query.filter(Codebundle.has_genrules == has_auto_discovery)
+            
+            # Get total count before pagination
+            total_count = query.count()
+            
+            # Apply sorting
+            if sort_by == "updated":
+                query = query.order_by(desc(Codebundle.git_updated_at), desc(Codebundle.updated_at))
+            elif sort_by == "tasks":
+                query = query.order_by(desc(Codebundle.task_count))
+            else:  # Default to name
+                query = query.order_by(Codebundle.name)
+            
+            # Apply pagination
+            codebundles = query.limit(limit).offset(offset).all()
             
             result = []
             for cb in codebundles:

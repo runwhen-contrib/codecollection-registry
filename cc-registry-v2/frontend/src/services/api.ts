@@ -355,6 +355,10 @@ export const apiService = {
     collection_id?: number;
     search?: string;
     tags?: string;
+    platform?: string;
+    access_level?: string;
+    has_auto_discovery?: boolean;
+    sort_by?: string;
   }): Promise<{codebundles: CodeBundle[], total_count: number, pagination: {limit: number, offset: number, has_more: boolean}}> {
     console.log('API: Getting codebundles from', `${API_BASE_URL}/codebundles`, 'with params:', params);
     const response = await api.get('/codebundles', { params });

@@ -8,35 +8,21 @@ import {
   CircularProgress,
   Alert,
   Chip,
-  Grid,
   Button,
-  Divider,
-  List,
-  ListItem,
-  ListItemText,
-  Avatar,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
 } from '@mui/material';
 import {
   GitHub as GitHubIcon,
-  Schedule as ScheduleIcon,
   Code as CodeIcon,
   Task as TaskIcon,
-  Tag as TagIcon,
+  LocalOffer as TagIcon,
 } from '@mui/icons-material';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { apiService, CodeCollection, CodeBundle, CodeCollectionVersion, VersionCodebundle } from '../services/api';
+import { useParams, Link } from 'react-router-dom';
+import { apiService, CodeCollection, CodeCollectionVersion } from '../services/api';
 
 const CodeCollectionDetail: React.FC = () => {
   const { collectionSlug } = useParams<{ collectionSlug: string }>();
-  const navigate = useNavigate();
   const [collection, setCollection] = useState<CodeCollection | null>(null);
   const [versions, setVersions] = useState<CodeCollectionVersion[]>([]);
-  const [selectedVersion, setSelectedVersion] = useState<string>('main');
-  const [codebundles, setCodebundles] = useState<CodeBundle[] | VersionCodebundle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,16 +37,12 @@ const CodeCollectionDetail: React.FC = () => {
           apiService.getCollectionVersions(collectionSlug)
         ]);
         
+        console.log('Collection data:', collectionData);
+        console.log('Versions data:', versionsData);
+        console.log('Number of versions:', versionsData.length);
+        
         setCollection(collectionData);
         setVersions(versionsData);
-        
-        // Set default selected version (prefer latest, fallback to main, then first available)
-        if (versionsData.length > 0) {
-          const latestVersion = versionsData.find(v => v.is_latest && v.version_type === 'tag');
-          const mainVersion = versionsData.find(v => v.version_type === 'main');
-          const defaultVersion = latestVersion || mainVersion || versionsData[0];
-          setSelectedVersion(defaultVersion.version_name);
-        }
         
       } catch (err) {
         setError('Failed to load collection details');
@@ -72,34 +54,6 @@ const CodeCollectionDetail: React.FC = () => {
 
     fetchData();
   }, [collectionSlug]);
-
-  // Fetch codebundles when version changes
-  useEffect(() => {
-    const fetchCodebundles = async () => {
-      if (!collectionSlug || !selectedVersion) return;
-      
-      try {
-        if (selectedVersion === 'main' || versions.find(v => v.version_name === selectedVersion && v.version_type === 'main')) {
-          // For main version, get regular codebundles
-          const codebundlesResponse = await apiService.getCodeBundles();
-          const codebundlesData = codebundlesResponse.codebundles;
-          const collectionCodebundles = codebundlesData.filter(
-            cb => cb.codecollection?.slug === collectionSlug
-          );
-          setCodebundles(collectionCodebundles);
-        } else {
-          // For specific versions, get version codebundles
-          const versionData = await apiService.getVersionCodebundles(collectionSlug, selectedVersion);
-          setCodebundles(versionData.codebundles || []);
-        }
-      } catch (err) {
-        console.error('Error fetching codebundles:', err);
-        setCodebundles([]);
-      }
-    };
-
-    fetchCodebundles();
-  }, [collectionSlug, selectedVersion, versions]);
 
   if (loading) {
     return (
@@ -128,269 +82,365 @@ const CodeCollectionDetail: React.FC = () => {
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <Avatar
+      <Card sx={{ mb: 4, p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Box
+            component="img"
             src={collection.owner_icon || 'https://assets-global.website-files.com/64f9646ad0f39e9ee5c116c4/659f80c7391d64a0ec2a840e_icon_rw-platform.svg'}
-            sx={{ width: 80, height: 80, mr: 3 }}
+            alt="Icon"
+            sx={{
+              width: 80,
+              height: 80,
+              mr: 3,
+              borderRadius: 2,
+              padding: 1.5,
+              bgcolor: 'action.hover',
+              border: '2px solid',
+              borderColor: 'divider',
+            }}
           />
-          <Box>
-            <Typography variant="h1" sx={{ mb: 1 }}>
+          <Box sx={{ flexGrow: 1 }}>
+            <Typography variant="h4" sx={{ mb: 0.5, fontWeight: 'bold' }}>
               {collection.name}
             </Typography>
-            <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
-              by {collection.owner}
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
+              by <strong>{collection.owner}</strong>
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               <Chip label={collection.git_ref} size="small" variant="outlined" />
               <Chip 
                 label={collection.is_active ? 'Active' : 'Inactive'} 
                 size="small" 
                 color={collection.is_active ? 'success' : 'default'}
               />
+              {collection.statistics && (
+                <>
+                  <Chip 
+                    icon={<CodeIcon />}
+                    label={`${collection.statistics.codebundle_count} CodeBundles`} 
+                    size="small" 
+                    variant="outlined"
+                  />
+                  <Chip 
+                    icon={<TaskIcon />}
+                    label={`${collection.statistics.total_tasks} Tasks`} 
+                    size="small" 
+                    variant="outlined"
+                  />
+                </>
+              )}
             </Box>
           </Box>
+          <Button
+            component="a"
+            href={collection.git_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant="contained"
+            startIcon={<GitHubIcon />}
+          >
+            View on GitHub
+          </Button>
         </Box>
 
-        <Typography variant="body1" sx={{ mb: 3, fontSize: '1.1rem' }}>
+        <Typography variant="body1" color="text.secondary">
           {collection.description}
         </Typography>
 
-        {/* Version Selector */}
-        {versions.length > 0 && (
-          <Box sx={{ mb: 4 }}>
-            <FormControl sx={{ minWidth: 200 }}>
-              <InputLabel>Version</InputLabel>
-              <Select
-                value={selectedVersion}
-                label="Version"
-                onChange={(e) => setSelectedVersion(e.target.value)}
-                startAdornment={<TagIcon sx={{ mr: 1, color: 'action.active' }} />}
-              >
-                {versions.map((version) => (
-                  <MenuItem key={version.id} value={version.version_name}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                      <Typography>{version.version_name}</Typography>
-                      {version.is_latest && (
-                        <Chip label="Latest" size="small" color="primary" />
-                      )}
-                      {version.is_prerelease && (
-                        <Chip label="Pre-release" size="small" color="warning" />
-                      )}
-                      {version.version_type === 'main' && (
-                        <Chip label="Main" size="small" color="success" />
-                      )}
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Showing codebundles for version: {selectedVersion}
-              {versions.find(v => v.version_name === selectedVersion)?.codebundle_count && 
-                ` (${versions.find(v => v.version_name === selectedVersion)?.codebundle_count} codebundles)`
-              }
-            </Typography>
-          </Box>
-        )}
+      </Card>
 
-        {/* Statistics Cards */}
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 4 }}>
-          <Box sx={{ flex: '1 1 calc(25% - 12px)', minWidth: '200px' }}>
-            <Card sx={{ textAlign: 'center', p: 2 }}>
-              <CodeIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h4" color="primary">
-                {collection.statistics?.codebundle_count || 0}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Codebundles
-              </Typography>
-            </Card>
-          </Box>
-          <Box sx={{ flex: '1 1 calc(25% - 12px)', minWidth: '200px' }}>
-            <Card sx={{ textAlign: 'center', p: 2 }}>
-              <TaskIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h4" color="primary">
-                {collection.statistics?.total_tasks || 0}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Total Tasks
-              </Typography>
-            </Card>
-          </Box>
-          <Box sx={{ flex: '1 1 calc(25% - 12px)', minWidth: '200px' }}>
-            <Card sx={{ textAlign: 'center', p: 2 }}>
-              <ScheduleIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h6" color="primary">
-                {collection.last_synced ? new Date(collection.last_synced).toLocaleDateString() : 'Never'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Last Synced
-              </Typography>
-            </Card>
-          </Box>
-          <Box sx={{ flex: '1 1 calc(25% - 12px)', minWidth: '200px' }}>
-            <Card sx={{ textAlign: 'center', p: 2 }}>
-              <GitHubIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
-              <Button
-                component="a"
-                href={collection.git_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                variant="outlined"
-                size="small"
-              >
-                View Repository
-              </Button>
-            </Card>
-          </Box>
-        </Box>
+      {/* Collection Information */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3, mb: 4 }}>
+        {/* Repository Information */}
+        <Card>
+          <CardContent>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <GitHubIcon color="primary" />
+              Repository
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  Git URL
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    fontFamily: 'monospace', 
+                    fontSize: '0.875rem',
+                    wordBreak: 'break-all',
+                    bgcolor: 'action.hover',
+                    p: 1,
+                    borderRadius: 1,
+                  }}
+                >
+                  {collection.git_url}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  Branch/Ref
+                </Typography>
+                <Chip label={collection.git_ref} size="small" sx={{ fontFamily: 'monospace' }} />
+              </Box>
+              {collection.owner_email && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                    Owner Email
+                  </Typography>
+                  <Typography variant="body2">{collection.owner_email}</Typography>
+                </Box>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+
+        {/* Timestamps & Status */}
+        <Card>
+          <CardContent>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TaskIcon color="primary" />
+              Status & Timestamps
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  Status
+                </Typography>
+                <Chip 
+                  label={collection.is_active ? 'Active' : 'Inactive'} 
+                  size="small" 
+                  color={collection.is_active ? 'success' : 'default'}
+                  sx={{ fontWeight: 600 }}
+                />
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  Last Synced
+                </Typography>
+                <Typography variant="body2">
+                  {collection.last_synced 
+                    ? new Date(collection.last_synced).toLocaleString()
+                    : 'Never'
+                  }
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  Created
+                </Typography>
+                <Typography variant="body2">
+                  {new Date(collection.created_at).toLocaleString()}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  Last Updated
+                </Typography>
+                <Typography variant="body2">
+                  {new Date(collection.updated_at).toLocaleString()}
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
       </Box>
 
-      <Divider sx={{ mb: 4 }} />
+      {/* Release Tags Section */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TagIcon color="primary" />
+            Release Tags
+          </Typography>
+          {versions.length > 0 ? (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {versions.filter(v => v.version_type !== 'main').length} git release tag{versions.filter(v => v.version_type !== 'main').length !== 1 ? 's' : ''} available
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {versions
+                  .filter(v => v.version_type !== 'main')
+                  .map((version) => (
+                    <Chip
+                      key={version.id}
+                      label={version.version_name}
+                      component={Link}
+                      to={`/collections/${collection.slug}/versions/${version.version_name}`}
+                      clickable
+                      size="medium"
+                      variant={version.is_latest ? "filled" : "outlined"}
+                      color={version.is_latest ? "primary" : "default"}
+                      sx={{ 
+                        fontFamily: 'monospace',
+                        fontWeight: version.is_latest ? 600 : 400,
+                        '&:hover': {
+                          bgcolor: version.is_latest ? 'primary.dark' : 'action.hover',
+                        }
+                      }}
+                    />
+                  ))}
+              </Box>
+            </>
+          ) : (
+            <Alert severity="info">
+              <Typography variant="body2">
+                No release tags have been synced yet. The version sync service needs to fetch git tags from the repository.
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Git Repository: <strong>{collection.git_ref}</strong>
+              </Typography>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Codebundles Section */}
-      <Typography variant="h4" sx={{ mb: 3 }}>
-        Codebundles ({codebundles.length})
-      </Typography>
-
-      {codebundles.length > 0 ? (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-          {codebundles.map((codebundle) => (
-            <Box key={codebundle.id} sx={{ flex: '0 0 calc(33.333% - 16px)', '@media (max-width: 900px)': { flex: '0 0 calc(50% - 12px)' }, '@media (max-width: 600px)': { flex: '0 0 100%' } }}>
-              <Card
+      {/* Releases Section */}
+      {versions.length > 0 && (
+        <Box>
+          <Typography variant="h5" sx={{ mb: 3, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CodeIcon color="primary" />
+            Releases
+          </Typography>
+          
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {versions.map((version, index) => (
+              <Card 
+                key={version.id}
                 sx={{
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  '&:hover': {
-                    boxShadow: 4,
-                  },
+                  border: version.is_latest ? '2px solid' : '1px solid',
+                  borderColor: version.is_latest ? 'primary.main' : 'divider',
                 }}
               >
-                <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
-                    {codebundle.display_name}
-                  </Typography>
-                  
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {codebundle.description}
-                  </Typography>
-
-                  {codebundle.support_tags && codebundle.support_tags.length > 0 && (
-                    <Box sx={{ mb: 2 }}>
-                      {codebundle.support_tags.slice(0, 2).map((tag) => (
-                        <Chip
-                          key={tag}
-                          label={tag}
-                          size="small"
-                          sx={{ mr: 1, mb: 1 }}
-                        />
-                      ))}
-                      {codebundle.support_tags.length > 2 && (
-                        <Chip
-                          label={`+${codebundle.support_tags.length - 2} more`}
-                          size="small"
-                          variant="outlined"
-                        />
+                <CardContent>
+                  {/* Release Header */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+                        <Typography 
+                          variant="h6" 
+                          sx={{ 
+                            fontFamily: 'monospace', 
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          {version.version_name}
+                        </Typography>
+                        {version.is_latest && (
+                          <Chip label="Latest Release" size="small" color="primary" sx={{ fontWeight: 600 }} />
+                        )}
+                        {version.is_prerelease && (
+                          <Chip label="Pre-release" size="small" color="warning" sx={{ fontWeight: 600 }} />
+                        )}
+                        {version.version_type === 'main' && (
+                          <Chip label="Main Branch" size="small" color="success" sx={{ fontWeight: 600 }} />
+                        )}
+                      </Box>
+                      
+                      {version.display_name && (
+                        <Typography variant="body1" sx={{ mb: 1, fontWeight: 600 }}>
+                          {version.display_name}
+                        </Typography>
                       )}
+                      
+                      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {version.version_date && (
+                          <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <TaskIcon sx={{ fontSize: '1rem' }} />
+                            Released {new Date(version.version_date).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            })}
+                          </Typography>
+                        )}
+                        {version.codebundle_count !== undefined && (
+                          <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <CodeIcon sx={{ fontSize: '1rem' }} />
+                            {version.codebundle_count} CodeBundle{version.codebundle_count !== 1 ? 's' : ''}
+                          </Typography>
+                        )}
+                      </Box>
                     </Box>
-                  )}
-
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {codebundle.task_count} tasks
-                    </Typography>
+                    
                     <Button
                       component={Link}
-                      to={`/collections/${collection.slug}/codebundles/${codebundle.slug}`}
-                      variant="outlined"
+                      to={`/collections/${collection.slug}/versions/${version.version_name}`}
+                      variant={version.is_latest ? "contained" : "outlined"}
                       size="small"
                     >
-                      View Details
+                      View Version
                     </Button>
+                  </Box>
+                  
+                  {/* Release Notes */}
+                  {version.description && (
+                    <Box sx={{ 
+                      mt: 2, 
+                      pt: 2, 
+                      borderTop: '1px solid',
+                      borderColor: 'divider'
+                    }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                        Release Notes
+                      </Typography>
+                      <Typography 
+                        variant="body2" 
+                        color="text.secondary"
+                        sx={{ 
+                          whiteSpace: 'pre-wrap',
+                          lineHeight: 1.6
+                        }}
+                      >
+                        {version.description}
+                      </Typography>
+                    </Box>
+                  )}
+                  
+                  {/* Git Reference */}
+                  <Box sx={{ 
+                    mt: 2, 
+                    pt: 2, 
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1
+                  }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Git Reference:
+                    </Typography>
+                    <Chip 
+                      label={version.git_ref} 
+                      size="small" 
+                      sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
+                    />
                   </Box>
                 </CardContent>
               </Card>
-            </Box>
-          ))}
-        </Box>
-      ) : (
-        <Box sx={{ textAlign: 'center', mt: 4 }}>
-          <Typography variant="h6" color="text.secondary">
-            No codebundles found in this collection
-          </Typography>
+            ))}
+          </Box>
         </Box>
       )}
 
-      {/* Collection Details */}
-      <Divider sx={{ my: 4 }} />
-      
-      <Typography variant="h5" sx={{ mb: 3 }}>
-        Collection Details
-      </Typography>
-      
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-        <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: '300px' }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Repository Information
-              </Typography>
-              <List dense>
-                <ListItem>
-                  <ListItemText 
-                    primary="Git URL" 
-                    secondary={collection.git_url}
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemText 
-                    primary="Branch/Ref" 
-                    secondary={collection.git_ref}
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemText 
-                    primary="Owner Email" 
-                    secondary={collection.owner_email}
-                  />
-                </ListItem>
-              </List>
-            </CardContent>
-          </Card>
-        </Box>
-        
-        <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: '300px' }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Timestamps
-              </Typography>
-              <List dense>
-                <ListItem>
-                  <ListItemText 
-                    primary="Created" 
-                    secondary={new Date(collection.created_at).toLocaleString()}
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemText 
-                    primary="Last Updated" 
-                    secondary={new Date(collection.updated_at).toLocaleString()}
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemText 
-                    primary="Last Synced" 
-                    secondary={collection.last_synced ? new Date(collection.last_synced).toLocaleString() : 'Never'}
-                  />
-                </ListItem>
-              </List>
-            </CardContent>
-          </Card>
-        </Box>
-      </Box>
+      {/* Browse CodeBundles Link */}
+      <Card sx={{ mt: 3, p: 3, textAlign: 'center', bgcolor: 'action.hover' }}>
+        <Typography variant="h6" sx={{ mb: 1 }}>
+          Browse CodeBundles
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          View all CodeBundles from this collection
+        </Typography>
+        <Button
+          component={Link}
+          to={`/codebundles?collection=${collection.id}`}
+          variant="contained"
+          startIcon={<CodeIcon />}
+        >
+          View All CodeBundles
+        </Button>
+      </Card>
+
     </Container>
   );
 };
