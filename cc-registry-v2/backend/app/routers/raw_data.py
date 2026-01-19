@@ -31,20 +31,35 @@ def get_db():
 async def store_yaml_data(db: Session = Depends(get_db)):
     """Store raw YAML data in database"""
     try:
+        logger.info("Starting store_yaml_data endpoint")
+        
         # Load YAML data
         yaml_path = "/app/codecollections.yaml"
+        logger.info(f"Reading YAML file from: {yaml_path}")
+        
+        if not os.path.exists(yaml_path):
+            logger.error(f"YAML file not found: {yaml_path}")
+            raise HTTPException(status_code=404, detail=f"YAML file not found: {yaml_path}")
+        
         with open(yaml_path, 'r') as file:
             yaml_data = yaml.safe_load(file)
         
+        collections_count = len(yaml_data.get('codecollections', []))
+        logger.info(f"YAML loaded successfully, found {collections_count} collections")
+        
         # Store raw YAML data in database
+        logger.info("Checking for existing YAML data in database")
         raw_yaml = db.query(RawYamlData).filter(RawYamlData.source == "codecollections.yaml").first()
+        
         if raw_yaml:
             # Update existing
+            logger.info(f"Updating existing RawYamlData record (id={raw_yaml.id})")
             raw_yaml.content = yaml.dump(yaml_data)
             raw_yaml.parsed_data = json.dumps(yaml_data)
             raw_yaml.is_processed = False
         else:
             # Create new
+            logger.info("Creating new RawYamlData record")
             raw_yaml = RawYamlData(
                 source="codecollections.yaml",
                 content=yaml.dump(yaml_data),
@@ -53,17 +68,23 @@ async def store_yaml_data(db: Session = Depends(get_db)):
             )
             db.add(raw_yaml)
         
+        logger.info("Committing database changes")
         db.commit()
-        logger.info("Stored raw YAML data in database")
+        logger.info(f"Successfully stored YAML data (id={raw_yaml.id})")
         
         return {
             'status': 'success',
             'message': 'YAML data stored successfully',
-            'yaml_id': raw_yaml.id
+            'yaml_id': raw_yaml.id,
+            'collections_count': collections_count
         }
         
+    except yaml.YAMLError as e:
+        logger.error(f"YAML parsing error: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Invalid YAML format: {str(e)}")
     except Exception as e:
-        logger.error(f"Failed to store YAML data: {e}")
+        logger.error(f"Failed to store YAML data: {e}", exc_info=True)
+        logger.error(f"Error type: {type(e).__name__}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/clone-repositories")

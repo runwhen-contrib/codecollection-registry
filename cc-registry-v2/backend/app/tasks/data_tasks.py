@@ -2,6 +2,7 @@
 Data processing tasks
 """
 import logging
+import json
 from typing import Dict, Any, List
 from celery import current_task
 from app.tasks.celery_app import celery_app
@@ -16,48 +17,82 @@ logger = logging.getLogger(__name__)
 @celery_app.task(bind=True)
 def store_yaml_data_task(self, yaml_content: str = None):
     """Store YAML data in database"""
+    db = None
     try:
         db = SessionLocal()
+        logger.info("Starting store_yaml_data_task")
         
         # Read codecollections.yaml if not provided
         if not yaml_content:
             yaml_file_path = "/app/codecollections.yaml"
+            logger.info(f"Reading YAML file from: {yaml_file_path}")
             if not os.path.exists(yaml_file_path):
+                logger.error(f"YAML file not found: {yaml_file_path}")
                 raise FileNotFoundError(f"YAML file not found: {yaml_file_path}")
             
             with open(yaml_file_path, 'r') as f:
                 yaml_content = f.read()
+            logger.info(f"YAML content loaded, size: {len(yaml_content)} bytes")
+        else:
+            logger.info(f"Using provided YAML content, size: {len(yaml_content)} bytes")
         
         # Parse YAML
+        logger.info("Parsing YAML content")
         parsed_data = yaml.safe_load(yaml_content)
+        collections_count = len(parsed_data.get('codecollections', []))
+        logger.info(f"YAML parsed successfully, found {collections_count} collections")
+        
+        # Convert parsed data to JSON string for storage
+        parsed_data_json = json.dumps(parsed_data)
+        logger.debug(f"Parsed data converted to JSON, size: {len(parsed_data_json)} bytes")
         
         # Store or update raw YAML data
+        logger.info("Checking for existing YAML data in database")
         existing = db.query(RawYamlData).filter(RawYamlData.source == "codecollections.yaml").first()
+        
         if existing:
-            existing.raw_content = yaml_content
-            existing.parsed_data = parsed_data
+            logger.info(f"Updating existing RawYamlData record (id={existing.id})")
+            existing.content = yaml_content
+            existing.parsed_data = parsed_data_json
+            existing.is_processed = False
         else:
+            logger.info("Creating new RawYamlData record")
+            logger.debug(f"RawYamlData parameters: source='codecollections.yaml', content_size={len(yaml_content)}")
             raw_yaml = RawYamlData(
                 source="codecollections.yaml",
-                raw_content=yaml_content,
-                parsed_data=parsed_data
+                content=yaml_content,
+                parsed_data=parsed_data_json,
+                is_processed=False
             )
             db.add(raw_yaml)
         
+        logger.info("Committing database changes")
         db.commit()
         logger.info("Successfully stored YAML data")
         
-        return {
+        result = {
             'status': 'success',
-            'collections_count': len(parsed_data.get('codecollections', [])),
+            'collections_count': collections_count,
             'message': 'YAML data stored successfully'
         }
+        logger.info(f"Task completed: {result}")
+        return result
         
+    except FileNotFoundError as e:
+        logger.error(f"File not found error: {e}", exc_info=True)
+        raise
+    except yaml.YAMLError as e:
+        logger.error(f"YAML parsing error: {e}", exc_info=True)
+        raise
     except Exception as e:
-        logger.error(f"Failed to store YAML data: {e}")
+        logger.error(f"Failed to store YAML data: {e}", exc_info=True)
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error args: {e.args}")
         raise
     finally:
-        db.close()
+        if db:
+            logger.info("Closing database session")
+            db.close()
 
 @celery_app.task(bind=True)
 def clone_repositories_task(self, collection_slugs: List[str] = None):

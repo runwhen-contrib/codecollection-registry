@@ -86,7 +86,7 @@ async def health_check():
     }
 
 # Include routers
-from app.routers import admin, tasks, raw_data, admin_crud, task_execution_admin, versions, task_management, admin_inventory, helm_charts, mcp_chat, github_issues
+from app.routers import admin, tasks, raw_data, admin_crud, task_execution_admin, versions, task_management, admin_inventory, helm_charts, mcp_chat, chat_debug, github_issues
 app.include_router(admin.router)
 app.include_router(tasks.router)
 app.include_router(raw_data.router)
@@ -98,6 +98,7 @@ app.include_router(versions.router, prefix="/api/v1/registry")
 app.include_router(task_management.router)
 app.include_router(helm_charts.router, prefix="/api/v1", tags=["helm-charts"])
 app.include_router(mcp_chat.router)  # MCP-powered chat (replaces legacy chat + simple_chat)
+app.include_router(chat_debug.router)  # Debug tools for chat quality analysis
 app.include_router(github_issues.router, prefix="/api/v1")
 
 @app.get("/api/v1/registry/collections")

@@ -148,7 +148,11 @@ async def query_codecollections(
             'what else can it', 'what else does it', 'more about it',
             'same codebundle', 'same bundle', 'can it also', 'does it also',
             'what else can this', 'what else does this', 'tell me more', 'more details',
-            'about this', 'about that', 'in this codebundle', 'in that codebundle'
+            'about this', 'about that', 'in this codebundle', 'in that codebundle',
+            'show me the link', 'what is the link', 'link to this', 'link to that',
+            'how do i use this', 'how do i use that', 'how to use this', 'how to use that',
+            'where can i find this', 'where can i find that', 'where is this', 'where is that',
+            'give me the link', 'get me the link', 'send me the link'
         ]) and query.conversation_history and len(query.conversation_history) > 0
         
         # Keywords/library questions
@@ -227,17 +231,20 @@ async def query_codecollections(
             
             # Go to LLM with conversation history + focused context
             if ai_service.is_enabled():
+                # For follow-ups, pass conversation history which contains the codebundle info
+                # Even if the focused search fails, the LLM can answer from conversation
                 answer = await _generate_llm_answer(
                     ai_service=ai_service,
                     question=query.question,
-                    mcp_context=mcp_response,
+                    mcp_context=mcp_response if mcp_response else "Answer from conversation context only",
                     relevant_tasks=focused_tasks,
-                    conversation_history=query.conversation_history
+                    conversation_history=query.conversation_history,
+                    is_followup=True  # Flag to adjust LLM behavior
                 )
             else:
                 answer = "I can answer follow-up questions better when AI is enabled. Please rephrase your question with more context."
             
-            return ChatResponse(
+            response = ChatResponse(
                 answer=answer,
                 relevant_tasks=[],  # Don't show codebundle cards for follow-ups
                 confidence_score=None,
@@ -249,6 +256,43 @@ async def query_codecollections(
                     "focused_codebundle": codebundle_name
                 }
             )
+            
+            # Store chat for debugging
+            try:
+                from app.routers.chat_debug import store_chat_debug, ChatDebugEntry
+                debug_entry = ChatDebugEntry(
+                    timestamp=_get_timestamp(),
+                    question=query.question,
+                    conversation_history=[{"role": msg.role, "content": msg.content} for msg in (query.conversation_history or [])],
+                    mcp_response=mcp_response[:1000] if mcp_response else "No new search - used conversation context",
+                    relevant_tasks_count=len(focused_tasks),
+                    relevant_tasks=[{
+                        "name": t.codebundle_name,
+                        "slug": t.codebundle_slug,
+                        "relevance_score": t.relevance_score,
+                        "platform": t.platform,
+                        "description": t.description[:200] if t.description else ""
+                    } for t in focused_tasks],
+                    llm_system_prompt="",
+                    llm_user_prompt="",
+                    llm_response=answer[:1000],
+                    final_answer=answer,
+                    no_match_flag=False,  # Follow-ups shouldn't trigger no_match
+                    query_metadata={
+                        "platform_detected": None,
+                        "all_tasks_count": len(focused_tasks),
+                        "filtered_tasks_count": len(focused_tasks),
+                        "conversation_length": len(query.conversation_history),
+                        "ai_enabled": ai_service.is_enabled(),
+                        "is_followup": True,
+                        "focused_codebundle": codebundle_name
+                    }
+                )
+                store_chat_debug(debug_entry)
+            except Exception as e:
+                logger.warning(f"Failed to store followup chat debug: {e}")
+            
+            return response
         
         if is_meta_question:
             # Meta questions about the system - don't search codebundles
@@ -424,7 +468,7 @@ I have access to:
             # Remove the marker from the displayed answer
             answer = answer.replace("[NO_MATCHING_CODEBUNDLE]", "").strip()
         
-        return ChatResponse(
+        response = ChatResponse(
             answer=answer,
             relevant_tasks=relevant_tasks,
             confidence_score=None,
@@ -438,6 +482,41 @@ I have access to:
             },
             no_match=no_match
         )
+        
+        # Store chat for debugging (non-blocking, best effort)
+        try:
+            from app.routers.chat_debug import store_chat_debug, ChatDebugEntry
+            debug_entry = ChatDebugEntry(
+                timestamp=_get_timestamp(),
+                question=query.question,
+                conversation_history=[{"role": msg.role, "content": msg.content} for msg in (query.conversation_history or [])],
+                mcp_response=mcp_response[:5000] if len(mcp_response) > 5000 else mcp_response,  # Truncate long responses
+                relevant_tasks_count=len(relevant_tasks),
+                relevant_tasks=[{
+                    "name": t.codebundle_name,
+                    "slug": t.codebundle_slug,
+                    "relevance_score": t.relevance_score,
+                    "platform": t.platform,
+                    "description": t.description[:200] if t.description else ""
+                } for t in relevant_tasks[:10]],  # Limit to top 10
+                llm_system_prompt="",  # Don't store full prompts for regular queries
+                llm_user_prompt="",
+                llm_response=answer[:2000] if len(answer) > 2000 else answer,  # Truncate
+                final_answer=answer,
+                no_match_flag=no_match,
+                query_metadata={
+                    "platform_detected": platform,
+                    "all_tasks_count": len(all_tasks),
+                    "filtered_tasks_count": len(relevant_tasks),
+                    "conversation_length": len(query.conversation_history) if query.conversation_history else 0,
+                    "ai_enabled": ai_service.is_enabled()
+                }
+            )
+            store_chat_debug(debug_entry)
+        except Exception as e:
+            logger.warning(f"Failed to store chat debug entry: {e}")
+        
+        return response
         
     except MCPError as e:
         logger.error(f"MCP error: {e}")
@@ -701,13 +780,17 @@ async def _generate_llm_answer(
     question: str,
     mcp_context: str,
     relevant_tasks: List[RelevantTask],
-    conversation_history: Optional[List[ConversationMessage]] = None
+    conversation_history: Optional[List[ConversationMessage]] = None,
+    is_followup: bool = False
 ) -> str:
     """
     Generate a natural language answer using the AI service.
     
     Takes the MCP search results and synthesizes a helpful response.
     Includes conversation history for context-aware follow-up questions.
+    
+    Args:
+        is_followup: If True, prioritizes conversation context over search results
     """
     try:
         client = ai_service._get_ai_client()
@@ -779,7 +862,22 @@ If NO resources directly address the query:
                 })
         
         # Add current question with context
-        user_prompt = f"""User Question: {question}
+        if is_followup:
+            # For follow-ups, emphasize using conversation context
+            user_prompt = f"""User Question: {question}
+
+IMPORTANT - THIS IS A FOLLOW-UP QUESTION:
+The user is asking about CodeBundles we JUST discussed in the conversation above.
+
+- Look at the conversation history to find the CodeBundle names, links, and details
+- If they're asking for a link, the CodeBundle slug/name is in the format: `/collections/COLLECTION-SLUG/codebundles/CODEBUNDLE-SLUG`
+- If they're asking "how to use" or "more info", refer to the CodeBundle we already mentioned
+- DO NOT say "I couldn't find" - we literally just discussed it!
+- Answer directly from the conversation context
+
+{f"New search results (if available):{chr(10)}{task_context}" if task_context else "No new search performed - use conversation context only."}"""
+        else:
+            user_prompt = f"""User Question: {question}
 
 Available CodeBundles from search (sorted by relevance score):
 

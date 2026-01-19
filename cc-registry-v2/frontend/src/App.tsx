@@ -17,6 +17,7 @@ import TaskManager from './pages/TaskManager';
 import Login from './pages/Login';
 import ConfigBuilder from './pages/ConfigBuilder';
 import Chat from './pages/Chat';
+import ChatDebug from './pages/ChatDebug';
 import Footer from './components/Footer';
 import { CartProvider } from './contexts/CartContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -43,6 +44,14 @@ function AppContent() {
           <Route path="/login" element={<Login />} />
           
           {/* Protected Routes */}
+          <Route 
+            path="/chat-debug" 
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <ChatDebug />
+              </ProtectedRoute>
+            } 
+          />
           <Route 
             path="/admin" 
             element={

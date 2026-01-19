@@ -135,9 +135,16 @@ const Admin: React.FC = () => {
             >
               📋 Task Manager
             </Button>
+            <Button 
+              variant="outlined" 
+              onClick={() => window.open('/chat-debug', '_blank')}
+              sx={{ minWidth: 200 }}
+            >
+              🐛 Chat Debug Console
+            </Button>
           </Box>
           <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
-            Access specialized admin interfaces
+            Access specialized admin interfaces for task management and chat quality debugging
           </Typography>
         </CardContent>
       </Card>

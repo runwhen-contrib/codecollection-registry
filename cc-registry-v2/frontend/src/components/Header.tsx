@@ -231,24 +231,6 @@ const Header: React.FC = () => {
             >
               Login
             </Button>
-            
-            {isAuthenticated && (
-              <Button
-                component={Link}
-                to="/admin"
-                color="inherit"
-                sx={{
-                  color: 'white',
-                  fontWeight: location.pathname === '/admin' ? 'bold' : 'normal',
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.2)',
-                  }
-                }}
-              >
-                Admin
-              </Button>
-            )}
           </Box>
           {/* More Menu - Hidden features */}
           <IconButton
@@ -292,9 +274,17 @@ const Header: React.FC = () => {
               </MenuItem>
             )}
             {isAuthenticated && (
-              <MenuItem onClick={() => handleMenuNavigate('/tasks')}>
-                Task Manager
-              </MenuItem>
+              <>
+                <MenuItem onClick={() => handleMenuNavigate('/admin')}>
+                  Admin Panel
+                </MenuItem>
+                <MenuItem onClick={() => handleMenuNavigate('/chat-debug')}>
+                  Chat Debug
+                </MenuItem>
+                <MenuItem onClick={() => handleMenuNavigate('/tasks')}>
+                  Task Manager
+                </MenuItem>
+              </>
             )}
           </Menu>
           
