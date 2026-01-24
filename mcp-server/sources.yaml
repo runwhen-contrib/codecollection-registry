@@ -17,7 +17,7 @@ sources:
   # =========================================================================
   documentation:
     - name: CodeBundle Development Guide
-      url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development
+      url: https://docs.runwhen.com/authors/
       description: Complete guide to developing RunWhen CodeBundles including structure, syntax, and best practices
       topics:
         - development
@@ -26,43 +26,8 @@ sources:
         - structure
       priority: high
       
-    - name: Robot Framework Syntax for CodeBundles
-      url: https://docs.runwhen.com/public/runwhen-authors/robot-framework
-      description: Using Robot Framework syntax for CodeBundle development including keywords, variables, and control flow
-      topics:
-        - robot-framework
-        - syntax
-        - keywords
-        - variables
-      priority: high
-      
-    - name: Using Secrets in CodeBundles
-      url: https://docs.runwhen.com/public/runwhen-authors/secrets
-      description: How to use secrets for authentication and sensitive data in CodeBundles
-      topics:
-        - secrets
-        - security
-        - authentication
-        - credentials
-      key_points:
-        - Secrets are defined at workspace level
-        - Access via RW.Platform.Secret library
-        - Support for kubeconfig, cloud credentials, API tokens
-        - Environment variable injection
-      priority: high
-      
-    - name: Meta.yaml Reference
-      url: https://docs.runwhen.com/public/runwhen-authors/meta-yaml
-      description: Complete reference for CodeBundle meta.yaml files including all available fields and options
-      topics:
-        - meta.yaml
-        - configuration
-        - metadata
-        - variables
-      priority: medium
-      
     - name: Environment Variables and Configuration
-      url: https://docs.runwhen.com/public/runwhen-authors/environment-variables
+      url: https://docs.runwhen.com/authors/codebundle-basics#CodeBundleBasics-EnvironmentVariables
       description: Managing environment variables and configuration in CodeBundles
       topics:
         - configuration
@@ -72,7 +37,7 @@ sources:
       priority: medium
       
     - name: Task and SLI Development
-      url: https://docs.runwhen.com/public/runwhen-authors/tasks-and-slis
+      url: https://docs.runwhen.com/authors/codebundle-basics
       description: Creating tasks for automation and SLIs (Service Level Indicators) for monitoring
       topics:
         - tasks
@@ -82,22 +47,8 @@ sources:
         - health-checks
       priority: high
       
-    - name: IAM and Permissions Guide
-      url: https://docs.runwhen.com/public/runwhen-authors/iam-permissions
-      description: Understanding IAM requirements for CodeBundles across different cloud platforms
-      topics:
-        - iam
-        - permissions
-        - security
-        - rbac
-        - aws
-        - gcp
-        - azure
-        - kubernetes
-      priority: high
-      
     - name: Generation Rules and Discovery
-      url: https://docs.runwhen.com/public/runwhen-authors/generation-rules
+      url: https://docs.runwhen.com/authors/generation-rules
       description: How to configure CodeBundles for automatic discovery and generation of workspace items
       topics:
         - discovery
@@ -107,7 +58,7 @@ sources:
       priority: medium
       
     - name: Testing and Debugging CodeBundles
-      url: https://docs.runwhen.com/public/runwhen-authors/testing-debugging
+      url: https://docs.runwhen.com/authors/codebundle-testing
       description: Best practices for testing and debugging CodeBundles during development
       topics:
         - testing
@@ -135,7 +86,7 @@ sources:
       priority: high
       
     - name: Kubernetes Discovery Configuration
-      url: https://docs.runwhen.com/public/runwhen-platform/feature-overview/kubernetes-and-cloud-discovery
+      url: https://docs.runwhen.com/public/kubernetes
       description: Configure Kubernetes cluster discovery including namespaces, deployments, services, and workloads
       topics:
         - kubernetes
@@ -146,7 +97,7 @@ sources:
       priority: high
       
     - name: AWS Discovery Configuration
-      url: https://docs.runwhen.com/public/runwhen-platform/feature-overview/aws-discovery
+      url: https://docs.runwhen.com/public/amazon-web-services
       description: Configure AWS resource discovery including EC2, EKS, RDS, S3, and other AWS services
       topics:
         - aws
@@ -159,7 +110,7 @@ sources:
       priority: high
       
     - name: Azure Discovery Configuration
-      url: https://docs.runwhen.com/public/runwhen-platform/feature-overview/azure-discovery
+      url: https://docs.runwhen.com/public/microsoft-azure
       description: Configure Azure resource discovery including AKS, App Services, databases, and Azure resources
       topics:
         - azure
@@ -170,7 +121,7 @@ sources:
       priority: high
       
     - name: GCP Discovery Configuration
-      url: https://docs.runwhen.com/public/runwhen-platform/feature-overview/gcp-discovery
+      url: https://docs.runwhen.com/public/google-cloud-platform
       description: Configure GCP resource discovery including GKE, Cloud Run, Cloud SQL, and GCP services
       topics:
         - gcp
@@ -204,60 +155,6 @@ sources:
         - Running gcloud commands
         - General shell script execution
       priority: high
-      
-    - name: RW.Core.HTTP
-      url: https://docs.runwhen.com/public/runwhen-authors/rw-core-http
-      description: Make HTTP requests to APIs and web services. Supports GET, POST, PUT, DELETE with authentication.
-      category: python
-      topics:
-        - http
-        - api
-        - rest
-        - webhooks
-      usage_examples:
-        - "RW.Core.HTTP.Get    url=https://api.example.com/health"
-        - "RW.Core.HTTP.Post   url=https://api.example.com/data    body=\\${DATA}"
-      common_use_cases:
-        - API health checks
-        - Webhook integrations
-        - REST API calls
-        - Fetching external data
-      priority: high
-      
-    - name: RW.K8s.Wait
-      url: https://docs.runwhen.com/public/runwhen-authors/rw-k8s-wait
-      description: Wait for Kubernetes resource conditions like pod ready, deployment available, etc.
-      category: kubernetes
-      topics:
-        - kubernetes
-        - wait
-        - conditions
-        - pods
-        - deployments
-      usage_examples:
-        - "RW.K8s.Wait    condition=Ready    resource=pod/\\${POD_NAME}    namespace=\\${NAMESPACE}"
-      common_use_cases:
-        - Waiting for pods to be ready
-        - Waiting for deployments to complete
-        - Synchronization between tasks
-      priority: medium
-      
-    - name: RW.Prometheus
-      url: https://docs.runwhen.com/public/runwhen-authors/rw-prometheus
-      description: Query Prometheus metrics and evaluate alert conditions
-      category: monitoring
-      topics:
-        - prometheus
-        - metrics
-        - monitoring
-        - alerting
-      usage_examples:
-        - "RW.Prometheus.Query    query=up{job=\"kubernetes\"}    url=\\${PROMETHEUS_URL}"
-      common_use_cases:
-        - Querying metrics for SLIs
-        - Alert condition evaluation
-        - Performance monitoring
-      priority: medium
 
   # =========================================================================
   # Examples & Tutorials  

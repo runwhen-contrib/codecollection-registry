@@ -358,7 +358,22 @@ const CodeBundleDetail: React.FC = () => {
                   </Typography>
                 </Box>
                 <Typography variant="body2" sx={{ fontWeight: 500, pl: 2.5 }}>
-                  {codebundle.task_count}
+                  {(codebundle.task_count || 0) + (codebundle.sli_count || 0)}
+                  {codebundle.task_count > 0 && codebundle.sli_count > 0 && (
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                      ({codebundle.task_count} TaskSet + {codebundle.sli_count} SLI)
+                    </Typography>
+                  )}
+                  {codebundle.task_count > 0 && !codebundle.sli_count && (
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                      (TaskSet)
+                    </Typography>
+                  )}
+                  {!codebundle.task_count && codebundle.sli_count > 0 && (
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                      (SLI)
+                    </Typography>
+                  )}
                 </Typography>
               </Box>
             </CardContent>

@@ -3,7 +3,7 @@ Task Monitoring Service - Track and persist Celery task execution
 """
 import logging
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from celery import Celery
 from celery.result import AsyncResult
 from sqlalchemy.orm import Session
@@ -41,7 +41,7 @@ class TaskMonitoringService:
                 status="PENDING",
                 parameters=parameters or {},
                 triggered_by=triggered_by,
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
             db.add(task_execution)
             db.commit()
@@ -76,19 +76,30 @@ class TaskMonitoringService:
             # Update status
             old_status = task_execution.status
             task_execution.status = celery_result.status
-            task_execution.updated_at = datetime.utcnow()
+            task_execution.updated_at = datetime.now(timezone.utc)
             
             # Update timing information
             if celery_result.status == 'STARTED' and not task_execution.started_at:
-                task_execution.started_at = datetime.utcnow()
+                task_execution.started_at = datetime.now(timezone.utc)
             
             if celery_result.status in ['SUCCESS', 'FAILURE', 'REVOKED']:
                 if not task_execution.completed_at:
-                    task_execution.completed_at = datetime.utcnow()
+                    task_execution.completed_at = datetime.now(timezone.utc)
+                    
+                    # If task completed without ever being STARTED, use created_at as start time
+                    if not task_execution.started_at:
+                        task_execution.started_at = task_execution.created_at or task_execution.completed_at
                     
                     # Calculate duration
-                    if task_execution.started_at:
-                        duration = task_execution.completed_at - task_execution.started_at
+                    if task_execution.started_at and task_execution.completed_at:
+                        # Ensure both are timezone-aware or both naive before subtracting
+                        start = task_execution.started_at
+                        end = task_execution.completed_at
+                        if start.tzinfo is None and end.tzinfo is not None:
+                            start = start.replace(tzinfo=timezone.utc)
+                        elif end.tzinfo is None and start.tzinfo is not None:
+                            end = end.replace(tzinfo=timezone.utc)
+                        duration = end - start
                         task_execution.duration_seconds = duration.total_seconds()
             
             # Update result and error information
@@ -182,7 +193,7 @@ class TaskMonitoringService:
         """Clean up old completed tasks"""
         db = SessionLocal()
         try:
-            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
             
             deleted_count = db.query(TaskExecution).filter(
                 TaskExecution.completed_at < cutoff_date,

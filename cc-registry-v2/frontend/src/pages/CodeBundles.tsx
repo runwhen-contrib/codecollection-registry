@@ -29,7 +29,8 @@ const CodeBundles: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [codebundles, setCodebundles] = useState<CodeBundle[]>([]);
   const [collections, setCollections] = useState<CodeCollection[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCollection, setSelectedCollection] = useState('');
@@ -77,7 +78,13 @@ const CodeBundles: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true);
+        // Use searching state for subsequent loads, initial loading for first load
+        if (initialLoading) {
+          setInitialLoading(true);
+        } else {
+          setSearching(true);
+        }
+        
         const offset = (page - 1) * itemsPerPage;
         const params: any = {
           limit: itemsPerPage,
@@ -99,7 +106,8 @@ const CodeBundles: React.FC = () => {
         setError('Failed to load codebundles');
         console.error('Error fetching data:', err);
       } finally {
-        setLoading(false);
+        setInitialLoading(false);
+        setSearching(false);
       }
     };
 
@@ -111,7 +119,7 @@ const CodeBundles: React.FC = () => {
     return () => clearTimeout(timeoutId);
   }, [searchTerm, selectedCollection, selectedPlatform, selectedAccessLevel, selectedTags, hasAutoDiscovery, sortBy, page]);
 
-  if (loading) {
+  if (initialLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
@@ -150,9 +158,12 @@ const CodeBundles: React.FC = () => {
         <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
           All CodeBundles
         </Typography>
-        <Typography variant="body1" color="text.secondary">
-          {loading ? 'Loading...' : `${totalCount} codebundle${totalCount !== 1 ? 's' : ''} found`}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {searching && <CircularProgress size={16} />}
+          <Typography variant="body1" color="text.secondary">
+            {searching ? 'Searching...' : `${totalCount} codebundle${totalCount !== 1 ? 's' : ''} found`}
+          </Typography>
+        </Box>
       </Box>
 
       {/* Search and Filter Controls */}
@@ -273,7 +284,7 @@ const CodeBundles: React.FC = () => {
       </Card>
 
       {/* CodeBundles Grid */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, opacity: searching ? 0.6 : 1, transition: 'opacity 0.2s' }}>
         {codebundles.map((codebundle) => (
           <Box key={codebundle.id} sx={{ flex: '0 0 calc(100% - 12px)', '@media (min-width: 600px)': { flex: '0 0 calc(50% - 12px)' }, '@media (min-width: 900px)': { flex: '0 0 calc(33.333% - 16px)' } }}>
             <Card
@@ -322,7 +333,12 @@ const CodeBundles: React.FC = () => {
 
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2" color="text.secondary">
-                      {codebundle.task_count} tasks
+                      {(codebundle.task_count || 0) + (codebundle.sli_count || 0)} task{((codebundle.task_count || 0) + (codebundle.sli_count || 0)) !== 1 ? 's' : ''}
+                      {codebundle.sli_count > 0 && (
+                        <Typography component="span" variant="caption" sx={{ ml: 0.5 }}>
+                          ({codebundle.sli_count} SLI)
+                        </Typography>
+                      )}
                     </Typography>
                     {codebundle.codecollection && (
                       <Typography variant="body2" color="primary">
@@ -337,7 +353,7 @@ const CodeBundles: React.FC = () => {
           ))}
         </Box>
 
-      {codebundles.length === 0 && !loading && (
+      {codebundles.length === 0 && !searching && (
         <Box sx={{ textAlign: 'center', mt: 4 }}>
           <Typography variant="h6" color="text.secondary">
             No codebundles found
@@ -349,7 +365,7 @@ const CodeBundles: React.FC = () => {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && !loading && (
+      {totalPages > 1 && (
         <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
           <Pagination
             count={totalPages}

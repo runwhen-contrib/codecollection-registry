@@ -59,6 +59,7 @@ services:
       - /app/__pycache__
       - ../mcp-server/data/repos:/mcp-repos:ro  # MCP cloned repos for genrules parsing
       - ../map-tag-icons.yaml:/app/map-tag-icons.yaml:ro  # Tag icon mappings
+      - ./schedules.yaml:/app/schedules.yaml:ro  # Schedule configuration
     command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/health"]
@@ -85,6 +86,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app  # Share backend code
+      - ./schedules.yaml:/app/schedules.yaml:ro  # Schedule configuration
     command: celery -A app.tasks.celery_app worker --loglevel=info
     restart: unless-stopped
 
@@ -107,6 +109,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app  # Share backend code
+      - ./schedules.yaml:/app/schedules.yaml:ro  # Schedule configuration
     command: celery -A app.tasks.celery_app beat --loglevel=info
     restart: unless-stopped
 

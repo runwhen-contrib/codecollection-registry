@@ -194,6 +194,7 @@ async def query_codecollections(
         all_tasks = []  # Initialize for later use
         doc_context = ""  # Documentation context
         relevant_tasks = []  # Initialize
+        mcp_tools_called = []  # Track which MCP tools were called
         
         # Handle follow-up questions - do a focused search on the codebundle from conversation
         if is_followup_question:
@@ -219,6 +220,7 @@ async def query_codecollections(
                         platform=None,
                         max_results=3
                     )
+                    mcp_tools_called.append("find_codebundle")
                     focused_tasks = _parse_markdown_to_tasks(mcp_response)
                     # Filter to just the one we're discussing
                     focused_tasks = [t for t in focused_tasks if codebundle_name in (t.codebundle_slug or '').lower()][:1]
@@ -253,7 +255,8 @@ async def query_codecollections(
                     "query_processed_at": _get_timestamp(),
                     "context_tasks_count": len(focused_tasks),
                     "is_followup": True,
-                    "focused_codebundle": codebundle_name
+                    "focused_codebundle": codebundle_name,
+                    "mcp_tools": mcp_tools_called
                 }
             )
             
@@ -328,6 +331,7 @@ I have access to:
                 query=query.question,
                 category="all"
             )
+            mcp_tools_called.append("keyword_usage_help")
             relevant_tasks = []
             sources_used = ["MCP Keyword Search"]
         else:
@@ -363,6 +367,7 @@ I have access to:
                 platform=platform,
                 max_results=query.context_limit + 3  # Request more to filter
             )
+            mcp_tools_called.append("find_codebundle")
             # Parse sources from the markdown response
             sources_used = _extract_sources_from_markdown(mcp_response)
             all_tasks = _parse_markdown_to_tasks(mcp_response)
@@ -375,6 +380,7 @@ I have access to:
                         category="all",
                         max_results=5
                     )
+                    mcp_tools_called.append("find_documentation")
                     if doc_response and "No documentation found" not in doc_response:
                         doc_context = f"\n\n## Documentation Resources:\n{doc_response}"
                         mcp_response += doc_context
@@ -478,7 +484,8 @@ I have access to:
                 "context_tasks_count": len(relevant_tasks),
                 "search_engine": "mcp-semantic",
                 "llm_enabled": ai_service.is_enabled(),
-                "platform_filter": platform
+                "platform_filter": platform,
+                "mcp_tools": mcp_tools_called
             },
             no_match=no_match
         )

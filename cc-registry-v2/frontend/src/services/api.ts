@@ -813,6 +813,43 @@ export const apiService = {
     const response = await api.post(`/helm-charts/${chartName}/validate-values?${params.toString()}`, values);
     console.log('API: Helm values validation response:', response.data);
     return response.data;
+  },
+
+  // Schedule Configuration API
+  async getSchedules(token: string): Promise<any> {
+    const response = await api.get('/schedule/schedules', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async getSchedule(scheduleName: string, token: string): Promise<any> {
+    const response = await api.get(`/schedule/schedules/${scheduleName}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async updateSchedule(scheduleName: string, scheduleData: any, token: string): Promise<any> {
+    const response = await api.put(`/schedule/schedules/${scheduleName}`, scheduleData, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async triggerScheduleNow(scheduleName: string, token: string): Promise<any> {
+    const response = await api.post(`/schedule/schedules/${scheduleName}/trigger`, {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async cleanupOldTasks(days: number, token: string): Promise<any> {
+    const response = await api.post('/task-management/cleanup', null, {
+      params: { days },
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
   }
 };
 

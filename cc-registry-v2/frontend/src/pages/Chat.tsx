@@ -69,6 +69,11 @@ const Chat: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Auto-focus input on mount and after messages
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [messages]);
+
   useEffect(() => {
     const loadInitialData = async () => {
       try {
@@ -326,19 +331,19 @@ const Chat: React.FC = () => {
       height: 'calc(100vh - 64px)', 
       display: 'flex', 
       flexDirection: 'column',
-      backgroundColor: '#ffffff'
+      backgroundColor: '#f7f7f8'
     }}>
       {/* Messages Area */}
-      <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+      <Box sx={{ flexGrow: 1, overflow: 'auto', pb: 2 }}>
         {messages.length === 0 ? (
           <Box sx={{ 
-            maxWidth: 1100, 
+            maxWidth: 768, 
             mx: 'auto', 
-            p: 4, 
+            p: 3, 
             textAlign: 'center',
-            mt: { xs: 4, md: 10 }
+            mt: { xs: 2, md: 8 }
           }}>
-            <Typography variant="h3" sx={{ mb: 2, fontWeight: 400, color: '#5f6368' }}>
+            <Typography variant="h4" sx={{ mb: 2, fontWeight: 500, color: '#202124' }}>
               Welcome to Registry Chat
             </Typography>
             
@@ -358,7 +363,7 @@ const Chat: React.FC = () => {
               </Typography>
             </Box>
 
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 6, maxWidth: 700, mx: 'auto', fontSize: '0.95rem', lineHeight: 1.6 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 600, mx: 'auto', fontSize: '0.9rem', lineHeight: 1.6 }}>
               Ask Eager Edgar to help explore CodeBundles, documentation, and authoring guidelines. Get assistance with troubleshooting tasks, SLIs, and automation workflows across the CodeCollection ecosystem.
             </Typography>
 
@@ -368,69 +373,9 @@ const Chat: React.FC = () => {
               </Alert>
             )}
 
-            {/* Prominent Input Field */}
-            <Paper
-              elevation={0}
-              sx={{ 
-                display: 'flex',
-                alignItems: 'center',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 3,
-                overflow: 'hidden',
-                backgroundColor: '#fff',
-                maxWidth: 900,
-                mx: 'auto',
-                mb: 2,
-                '&:focus-within': {
-                  borderColor: 'primary.main',
-                  boxShadow: '0 0 0 2px rgba(25, 118, 210, 0.1)'
-                }
-              }}
-            >
-              <TextField
-                fullWidth
-                multiline
-                maxRows={3}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Ask about CodeBundles, SLIs, tasks, or documentation..."
-                disabled={loading || chatHealth?.status !== 'healthy'}
-                inputRef={inputRef}
-                variant="standard"
-                InputProps={{
-                  disableUnderline: true,
-                  sx: { px: 3, py: 2, fontSize: '0.95rem' }
-                }}
-              />
-              <IconButton
-                onClick={() => handleSendMessage()}
-                disabled={!inputValue.trim() || loading || chatHealth?.status !== 'healthy'}
-                sx={{ 
-                  m: 1,
-                  backgroundColor: inputValue.trim() ? 'primary.main' : 'grey.200',
-                  color: inputValue.trim() ? 'white' : 'grey.500',
-                  '&:hover': {
-                    backgroundColor: inputValue.trim() ? 'primary.dark' : 'grey.300'
-                  },
-                  '&.Mui-disabled': {
-                    backgroundColor: 'grey.200',
-                    color: 'grey.400'
-                  }
-                }}
-              >
-                {loading ? (
-                  <CircularProgress size={20} color="inherit" />
-                ) : (
-                  <SendIcon sx={{ fontSize: 20 }} />
-                )}
-              </IconButton>
-            </Paper>
-
             {examples && (
-              <Box sx={{ mt: 6, maxWidth: 900, mx: 'auto' }}>
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
+              <Box sx={{ mt: 4, maxWidth: 768, mx: 'auto' }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center', fontWeight: 500 }}>
                   Try asking about:
                 </Typography>
                 <Box sx={{ 
@@ -490,33 +435,38 @@ const Chat: React.FC = () => {
             )}
           </Box>
         ) : (
-          <Box sx={{ width: '100%', py: 4, px: { xs: 2, sm: 4, md: 6 }, backgroundColor: '#f7f7f8', minHeight: '100%' }}>
-            {messages.map((message) => (
+          <Box sx={{ width: '100%', minHeight: '100%' }}>
+            {messages.map((message, index) => (
               <Box 
                 key={message.id} 
                 sx={{ 
-                  mb: 3,
-                  display: 'flex',
-                  gap: 2,
-                  alignItems: 'flex-start',
-                  maxWidth: 1400,
-                  mx: 'auto'
+                  py: { xs: 3, md: 4 },
+                  px: { xs: 2, md: 3 }
                 }}
               >
+                <Box 
+                  sx={{
+                    maxWidth: 768,
+                    mx: 'auto',
+                    display: 'flex',
+                    gap: 3,
+                    alignItems: 'flex-start'
+                  }}
+                >
                 <Avatar 
                   src={message.type === 'bot' ? 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png' : undefined}
                   sx={{ 
-                    width: 32, 
-                    height: 32,
-                    backgroundColor: message.type === 'user' ? 'grey.700' : 'transparent',
+                    width: 36, 
+                    height: 36,
+                    backgroundColor: message.type === 'user' ? '#5282f1' : 'transparent',
                     flexShrink: 0
                   }}
                 >
-                  {message.type === 'user' && <PersonIcon sx={{ fontSize: 18 }} />}
+                  {message.type === 'user' && <PersonIcon sx={{ fontSize: 20, color: 'white' }} />}
                 </Avatar>
 
                 <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                  <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 600 }}>
+                  <Typography variant="body2" sx={{ mb: 1, fontWeight: 600, color: 'text.primary' }}>
                     {message.type === 'user' ? 'You' : 'Eager Edgar'}
                   </Typography>
 
@@ -552,44 +502,51 @@ const Chat: React.FC = () => {
                         </Box>
                       )}
 
-                      {message.type === 'bot' && (
-                        <Box sx={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 1, 
-                          mt: 2
-                        }}>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => copyToClipboard(message.content, message.id)}
-                            sx={{ 
-                              p: 0.5,
-                              opacity: 0.7,
-                              '&:hover': { opacity: 1 }
-                            }}
-                          >
-                            {copiedId === message.id ? (
-                              <CheckIcon sx={{ fontSize: 16 }} />
-                            ) : (
-                              <CopyIcon sx={{ fontSize: 16 }} />
-                            )}
-                          </IconButton>
-                          <Button
-                            size="small"
-                            variant="contained"
-                            startIcon={<RequestIcon sx={{ fontSize: 16 }} />}
-                            onClick={() => handleOpenRequestDialog(message.userQuery || message.content)}
-                            sx={{
-                              textTransform: 'none',
-                              fontSize: '0.75rem',
-                              backgroundColor: '#1976d2',
-                              color: 'white',
-                              fontWeight: 500,
-                              '&:hover': { backgroundColor: '#1565c0' }
-                            }}
-                          >
-                            Request CodeBundle
-                          </Button>
+                      {message.type === 'bot' && !message.response?.no_match && (
+                        <Box sx={{ mt: 2 }}>
+                          {/* MCP tool data is in response.query_metadata.mcp_tools - hidden from UI but available for inspection */}
+                          
+                          <Box sx={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 1
+                          }}>
+                            <IconButton 
+                              size="small" 
+                              onClick={() => copyToClipboard(message.content, message.id)}
+                              sx={{ 
+                                p: 0.5,
+                                opacity: 0.7,
+                                '&:hover': { opacity: 1 }
+                              }}
+                            >
+                              {copiedId === message.id ? (
+                                <CheckIcon sx={{ fontSize: 16 }} />
+                              ) : (
+                                <CopyIcon sx={{ fontSize: 16 }} />
+                              )}
+                            </IconButton>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<RequestIcon sx={{ fontSize: 16 }} />}
+                              onClick={() => handleOpenRequestDialog(message.userQuery || message.content)}
+                              sx={{
+                                textTransform: 'none',
+                                fontSize: '0.75rem',
+                                borderColor: 'divider',
+                                color: 'text.secondary',
+                                fontWeight: 500,
+                                '&:hover': { 
+                                  borderColor: 'primary.main',
+                                  color: 'primary.main',
+                                  backgroundColor: 'rgba(25, 118, 210, 0.04)'
+                                }
+                              }}
+                            >
+                              Request CodeBundle
+                            </Button>
+                          </Box>
                         </Box>
                       )}
 
@@ -723,6 +680,7 @@ const Chat: React.FC = () => {
                     </Box>
                   )}
                 </Box>
+                </Box>
               </Box>
             ))}
             <div ref={messagesEndRef} />
@@ -730,83 +688,102 @@ const Chat: React.FC = () => {
         )}
       </Box>
 
-      {/* Input Area - Only show when there are messages */}
-      {messages.length > 0 && (
-        <Box sx={{ 
-          borderTop: '1px solid',
-          borderColor: 'divider',
-          backgroundColor: 'background.paper',
-          p: 2
-        }}>
-          <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 1, md: 4 } }}>
-            {error && (
-              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-                {error}
-              </Alert>
-            )}
-            
-            <Paper
-              elevation={0}
+      {/* Input Area - ChatGPT-style fixed bottom input */}
+      <Box sx={{ 
+        backgroundColor: '#f7f7f8',
+        pt: 2,
+        pb: { xs: 2, md: 3 },
+        px: 2
+      }}>
+        <Box sx={{ maxWidth: 768, mx: 'auto' }}>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+          
+          <Paper
+            elevation={0}
+            sx={{ 
+              display: 'flex',
+              alignItems: 'flex-end',
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 3,
+              overflow: 'hidden',
+              backgroundColor: '#fff',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              transition: 'border-color 0.15s, box-shadow 0.15s',
+              '&:focus-within': {
+                borderColor: 'primary.main',
+                boxShadow: '0 2px 12px rgba(82, 130, 241, 0.2)'
+              }
+            }}
+          >
+            <TextField
+              fullWidth
+              multiline
+              maxRows={6}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Message Eager Edgar..."
+              disabled={loading || chatHealth?.status !== 'healthy'}
+              inputRef={inputRef}
+              variant="standard"
+              InputProps={{
+                disableUnderline: true,
+                sx: { 
+                  px: 3, 
+                  py: 2,
+                  fontSize: '0.95rem',
+                  lineHeight: 1.5
+                }
+              }}
+            />
+            <IconButton
+              onClick={() => handleSendMessage()}
+              disabled={!inputValue.trim() || loading || chatHealth?.status !== 'healthy'}
               sx={{ 
-                display: 'flex',
-                alignItems: 'flex-end',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 3,
-                overflow: 'hidden',
-                backgroundColor: '#fff',
-                '&:focus-within': {
-                  borderColor: 'primary.main',
-                  boxShadow: '0 0 0 2px rgba(25, 118, 210, 0.1)'
+                m: 1.5,
+                mb: 1,
+                width: 36,
+                height: 36,
+                backgroundColor: inputValue.trim() ? 'primary.main' : 'grey.300',
+                color: inputValue.trim() ? 'white' : 'grey.500',
+                transition: 'background-color 0.15s, transform 0.1s',
+                '&:hover': {
+                  backgroundColor: inputValue.trim() ? 'primary.dark' : 'grey.400',
+                  transform: inputValue.trim() ? 'scale(1.05)' : 'none'
+                },
+                '&.Mui-disabled': {
+                  backgroundColor: 'grey.200',
+                  color: 'grey.400'
                 }
               }}
             >
-              <TextField
-                fullWidth
-                multiline
-                maxRows={6}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Ask about CodeBundles, SLIs, or documentation..."
-                disabled={loading || chatHealth?.status !== 'healthy'}
-                inputRef={inputRef}
-                variant="standard"
-                InputProps={{
-                  disableUnderline: true,
-                  sx: { px: 2, py: 1.5 }
-                }}
-              />
-              <IconButton
-                onClick={() => handleSendMessage()}
-                disabled={!inputValue.trim() || loading || chatHealth?.status !== 'healthy'}
-                sx={{ 
-                  m: 1,
-                  backgroundColor: inputValue.trim() ? 'primary.main' : 'grey.200',
-                  color: inputValue.trim() ? 'white' : 'grey.500',
-                  '&:hover': {
-                    backgroundColor: inputValue.trim() ? 'primary.dark' : 'grey.300'
-                  },
-                  '&.Mui-disabled': {
-                    backgroundColor: 'grey.200',
-                    color: 'grey.400'
-                  }
-                }}
-              >
-                {loading ? (
-                  <CircularProgress size={20} color="inherit" />
-                ) : (
-                  <SendIcon sx={{ fontSize: 20 }} />
-                )}
-              </IconButton>
-            </Paper>
-            
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
-              Press Enter to send • Shift+Enter for new line
-            </Typography>
-          </Box>
+              {loading ? (
+                <CircularProgress size={18} sx={{ color: 'inherit' }} />
+              ) : (
+                <SendIcon sx={{ fontSize: 18 }} />
+              )}
+            </IconButton>
+          </Paper>
+          
+          <Typography 
+            variant="caption" 
+            color="text.secondary" 
+            sx={{ 
+              display: 'block', 
+              textAlign: 'center', 
+              mt: 1.5,
+              fontSize: '0.7rem'
+            }}
+          >
+            Eager Edgar can make mistakes. Press Enter to send • Shift+Enter for new line
+          </Typography>
         </Box>
-      )}
+      </Box>
 
       {/* Request CodeBundle Dialog */}
       <Dialog 

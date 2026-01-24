@@ -27,6 +27,7 @@ const Admin: React.FC = () => {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState(0);
+  const [schedules, setSchedules] = useState<any>(null);
 
   const checkStatus = async () => {
     try {
@@ -46,6 +47,26 @@ const Admin: React.FC = () => {
       setAiStatus(status);
     } catch (err) {
       console.error('Failed to get AI status:', err);
+    }
+  };
+
+  const fetchSchedules = async () => {
+    try {
+      const data = await apiService.getSchedules(token);
+      setSchedules(data);
+    } catch (err) {
+      console.error('Failed to get schedules:', err);
+    }
+  };
+
+  const triggerSchedule = async (scheduleName: string) => {
+    try {
+      setError(null);
+      setMessage(null);
+      const result = await apiService.triggerScheduleNow(scheduleName, token);
+      setMessage(`Triggered: ${result.message}`);
+    } catch (err: any) {
+      setError(`Failed to trigger schedule: ${err.response?.data?.detail || err.message || err}`);
     }
   };
 
@@ -109,6 +130,7 @@ const Admin: React.FC = () => {
 
   useEffect(() => {
     checkStatus();
+    fetchSchedules();
   }, []);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -152,6 +174,7 @@ const Admin: React.FC = () => {
       <Tabs value={currentTab} onChange={handleTabChange} sx={{ mb: 3 }}>
         <Tab label="Data Management" />
         <Tab label="Database Inventory" />
+        <Tab label="Schedules" />
       </Tabs>
 
       {currentTab === 0 && (
@@ -385,6 +408,89 @@ const Admin: React.FC = () => {
 
       {currentTab === 1 && (
         <AdminInventory />
+      )}
+
+      {currentTab === 2 && (
+        <Box>
+          {/* Messages */}
+          {message && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
+                {message}
+              </Typography>
+            </Alert>
+          )}
+
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
+          {schedules && (
+            <>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                {schedules.note}
+              </Alert>
+
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Configured Schedules ({schedules.total})
+              </Typography>
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {schedules.schedules && schedules.schedules.map((schedule: any) => (
+                  <Card key={schedule.id}>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2 }}>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="h6" sx={{ mb: 1 }}>
+                            {schedule.task_name}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            {schedule.description}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                            <Chip 
+                              label={schedule.schedule_value}
+                              color="primary"
+                              variant="outlined"
+                              size="small"
+                            />
+                            <Chip 
+                              label={schedule.schedule_type}
+                              color="secondary"
+                              variant="outlined"
+                              size="small"
+                            />
+                            {schedule.is_active && (
+                              <Chip 
+                                label="Active"
+                                color="success"
+                                size="small"
+                              />
+                            )}
+                          </Box>
+                        </Box>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          onClick={() => triggerSchedule(schedule.task_name)}
+                          sx={{ ml: 2 }}
+                        >
+                          Run Now
+                        </Button>
+                      </Box>
+                      <Divider sx={{ my: 1 }} />
+                      <Typography variant="caption" color="text.secondary">
+                        Task: {schedule.task_path}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
+            </>
+          )}
+        </Box>
       )}
     </Container>
   );

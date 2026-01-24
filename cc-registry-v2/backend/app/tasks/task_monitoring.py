@@ -144,7 +144,11 @@ class TaskMonitor:
                 return {}
             
             total_workers = len(stats)
-            total_tasks = sum(worker_stats.get('total', 0) for worker_stats in stats.values())
+            # Safely sum total tasks, handling both dict and non-dict values
+            total_tasks = 0
+            for worker_stats in stats.values():
+                if isinstance(worker_stats, dict):
+                    total_tasks += worker_stats.get('total', 0)
             
             return {
                 'total_workers': total_workers,

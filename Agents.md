@@ -4,34 +4,63 @@
 
 ### Documentation File Policy
 
-**Allowed:** One documentation file per major feature in the `/docs/` directory
-- ✅ `docs/chat.md` - Chat system architecture and usage
-- ✅ `docs/chat-debug.md` - Chat debugging tools and procedures
-- ✅ `docs/admin-panel.md` - Admin panel features
-- ✅ `docs/codebundles.md` - CodeBundle management
+**CRITICAL: ALL documentation MUST go in the `docs/` directory of each project**
 
-**NOT Allowed:** Temporary fix/summary/guide files in root directory
-- ❌ `CHAT-FOLLOWUP-FIX.md` (temporary fix documentation)
-- ❌ `TESTING-THE-FIX.md` (temporary testing guide)
-- ❌ `CHAT-DEBUG-GUIDE.md` (duplicate feature doc)
-- ❌ `ISSUE-12345-FIX.md` (issue-specific docs)
-- ❌ Any `*-SUMMARY.md`, `*-FIX.md`, `*-GUIDE.md`, `*-UPDATE.md` files
+**Directory Structure:**
+```
+codecollection-registry/
+├── Agents.md                # AI agent guidelines (root level)
+├── cc-registry-v2/
+│   ├── docs/                # ALL cc-registry-v2 docs go here
+│   │   ├── README.md        # Main docs index
+│   │   ├── CONFIGURATION.md
+│   │   ├── DEPLOYMENT_GUIDE.md
+│   │   ├── SCHEDULES.md
+│   │   ├── TROUBLESHOOTING.md
+│   │   ├── AZURE_OPENAI_SETUP.md
+│   │   ├── DATABASE_REDIS_CONFIG.md
+│   │   ├── MCP_INDEXING_SCHEDULE.md
+│   │   ├── WORKFLOW_FIX.md
+│   │   └── archive/         # Old/deprecated docs
+│   │       └── ...
+│   ├── k8s/                 # K8s-specific docs stay here
+│   │   ├── README.md
+│   │   ├── INGRESS_SETUP.md
+│   │   └── ...
+│   ├── README.md            # Project overview only
+│   └── (no other .md files!)
+├── mcp-server/
+│   ├── docs/                # ALL mcp-server docs go here
+│   │   ├── README.md        # Main docs index
+│   │   ├── DEVELOPMENT.md   # Development guide
+│   │   └── archive/         # Old/deprecated docs
+│   │       └── ...
+│   ├── README.md            # Project overview only
+│   └── (no other .md files!)
+└── (no .md files in root except Agents.md!)
+```
 
-**Guidelines:**
-1. **One doc per feature** - Keep feature documentation consolidated
-2. **Update existing docs** - Don't create new files for updates/fixes
-3. **Use `/docs/` directory** - Keep root clean
-4. **Descriptive naming** - Use feature names, not actions (e.g., `chat.md` not `chat-system-guide.md`)
+**Rules (applies to both cc-registry-v2 AND mcp-server):**
+1. ✅ **ALL new docs go in `docs/`** - No exceptions
+2. ✅ **Update existing docs** - Don't create duplicates
+3. ✅ **Descriptive names** - `MCP_INDEXING.md` not `MCP-INDEXING-GUIDE-FIX-V2.md`
+4. ❌ **NO docs in project root** - Except `README.md` (and `Agents.md` at repo root)
+5. ❌ **NO temporary files** - No `*-FIX.md`, `*-SUMMARY.md`, `*-UPDATE.md`
+6. ❌ **NO issue-specific docs** - Update existing docs instead
 
-**When documenting fixes/changes:**
-- Update the relevant feature doc (e.g., add a "Known Issues" section to `docs/chat.md`)
-- Add inline code comments at the fix location
-- Update this `Agents.md` file if it's an architectural change
+**When creating documentation:**
+- Check if relevant doc already exists in appropriate `docs/` directory
+  - `cc-registry-v2/docs/` for registry docs
+  - `mcp-server/docs/` for MCP server docs
+- If it exists, update it instead of creating new
+- If it's temporary/fix notes, add to existing doc's "Recent Changes" section
+- If it's deprecated, move to `docs/archive/`
+- If user explicitly requests it, create in `docs/` with clear name
 
-**Only create NEW documentation when:**
-- User explicitly requests it
-- It's a new major feature that doesn't fit existing docs
-- It's a deployment/ops guide that teams will reference repeatedly
+**When making changes:**
+- Update relevant doc in appropriate `docs/` directory
+- Add inline code comments at fix location
+- Update `Agents.md` (repo root) only for architectural changes
 
 ---
 
@@ -72,10 +101,20 @@ codecollection-registry/
 
 ## 📚 Feature Documentation
 
-Detailed feature documentation is in the `/docs/` directory:
+Detailed feature documentation is in the project `docs/` directories:
 
-- **[docs/chat.md](docs/chat.md)** - Chat system architecture, follow-up detection, troubleshooting
-- **[docs/chat-debug.md](docs/chat-debug.md)** - Debug console features, API endpoints, use cases
+### cc-registry-v2/docs/
+
+- **[MCP_WORKFLOW.md](cc-registry-v2/docs/MCP_WORKFLOW.md)** - Complete App → MCP → Indexing workflow guide
+- **[SCHEDULES.md](cc-registry-v2/docs/SCHEDULES.md)** - Schedule management
+- **[MCP_INDEXING_SCHEDULE.md](cc-registry-v2/docs/MCP_INDEXING_SCHEDULE.md)** - Automated indexing
+- **[DEPLOYMENT_GUIDE.md](cc-registry-v2/docs/DEPLOYMENT_GUIDE.md)** - Deployment instructions
+- **[CONFIGURATION.md](cc-registry-v2/docs/CONFIGURATION.md)** - Configuration reference
+- **[TROUBLESHOOTING.md](cc-registry-v2/docs/TROUBLESHOOTING.md)** - Common issues
+
+### mcp-server/docs/
+
+- **[DEVELOPMENT.md](mcp-server/docs/DEVELOPMENT.md)** - MCP server development guide
 
 Refer to these docs for:
 - Implementation details
@@ -283,4 +322,4 @@ POST /api/v1/chat/query
 
 ---
 
-Last Updated: 2026-01-19
+Last Updated: 2026-01-24
