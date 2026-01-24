@@ -495,7 +495,7 @@ const Home: React.FC = () => {
           >
             <CardActionArea
               component={Link}
-              to="/categories"
+              to="/all-tasks"
               sx={{ p: 1.5, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
             >
               <Typography variant="body2" fontWeight="600" sx={{ fontSize: '14px', letterSpacing: '0.2px' }}>

@@ -58,6 +58,7 @@ const Chat: React.FC = () => {
   const [currentRequestQuery, setCurrentRequestQuery] = useState('');
   const [submittingRequest, setSubmittingRequest] = useState(false);
   const [initialQueryProcessed, setInitialQueryProcessed] = useState(false);
+  const [codebundleContext, setCodebundleContext] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -91,11 +92,17 @@ const Chat: React.FC = () => {
     loadInitialData();
   }, []);
 
-  // Handle initial query from homepage search
+  // Handle initial query from homepage search or codebundle detail page
   useEffect(() => {
-    const state = location.state as { initialQuery?: string } | null;
+    const state = location.state as { initialQuery?: string; codebundleContext?: any } | null;
     if (state?.initialQuery && !initialQueryProcessed && chatHealth?.status === 'healthy') {
       setInitialQueryProcessed(true);
+      
+      // Store codebundle context if provided
+      if (state.codebundleContext) {
+        setCodebundleContext(state.codebundleContext);
+      }
+      
       handleSendMessage(state.initialQuery);
       // Clear the state so it doesn't re-trigger
       window.history.replaceState({}, document.title);
@@ -140,14 +147,34 @@ const Chat: React.FC = () => {
             content: m.content
           }));
         
+        // Build additional context if we have codebundle context
+        let additionalContext = '';
+        if (codebundleContext) {
+          additionalContext = `Context: This question is about the "${codebundleContext.name}" CodeBundle`;
+          if (codebundleContext.collectionSlug) {
+            additionalContext += ` (slug: ${codebundleContext.slug}, collection: ${codebundleContext.collectionSlug})`;
+          }
+          if (codebundleContext.description) {
+            additionalContext += `. Description: ${codebundleContext.description}`;
+          }
+          if (codebundleContext.accessLevel) {
+            additionalContext += `. Access Level: ${codebundleContext.accessLevel}`;
+          }
+          if (codebundleContext.iamRequirements && codebundleContext.iamRequirements.length > 0) {
+            additionalContext += `. IAM Requirements: ${codebundleContext.iamRequirements.join(', ')}`;
+          }
+        }
+        
         console.log('Sending query to API:', {
           question: text,
           conversationHistoryLength: conversationHistory.length,
-          conversationHistory: conversationHistory
+          conversationHistory: conversationHistory,
+          codebundleContext: codebundleContext ? codebundleContext.name : 'none',
+          additionalContext
         });
         
         response = await chatApi.query({
-          question: text,
+          question: additionalContext ? `${additionalContext}\n\nQuestion: ${text}` : text,
           context_limit: 8,
           include_enhanced_descriptions: true,
           conversation_history: conversationHistory

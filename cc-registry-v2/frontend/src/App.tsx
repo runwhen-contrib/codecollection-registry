@@ -10,7 +10,6 @@ import CodeBundles from './pages/CodeBundles';
 import CodeBundleDetail from './pages/CodeBundleDetail';
 import VersionDetail from './pages/VersionDetail';
 import AllTasks from './pages/AllTasks';
-import Categories from './pages/Categories';
 import TestAPI from './pages/TestAPI';
 import Admin from './pages/Admin';
 import TaskManager from './pages/TaskManager';
@@ -38,7 +37,6 @@ function AppContent() {
           <Route path="/codebundles" element={<CodeBundles />} />
           <Route path="/collections/:collectionSlug/codebundles/:codebundleSlug" element={<CodeBundleDetail />} />
           <Route path="/all-tasks" element={<AllTasks />} />
-          <Route path="/categories" element={<Categories />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/test-api" element={<TestAPI />} />
           <Route path="/login" element={<Login />} />

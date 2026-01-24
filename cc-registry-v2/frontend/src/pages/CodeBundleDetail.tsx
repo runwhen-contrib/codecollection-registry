@@ -23,6 +23,7 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Avatar,
 } from '@mui/material';
 import { 
   GitHub as GitHubIcon, 
@@ -44,12 +45,13 @@ import {
   KeyboardArrowDown as KeyboardArrowDownIcon,
   KeyboardArrowUp as KeyboardArrowUpIcon,
 } from '@mui/icons-material';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { apiService, CodeBundle } from '../services/api';
 import { useCart } from '../contexts/CartContext';
 
 const CodeBundleDetail: React.FC = () => {
   const { collectionSlug, codebundleSlug } = useParams<{ collectionSlug: string; codebundleSlug: string }>();
+  const navigate = useNavigate();
   const [codebundle, setCodebundle] = useState<CodeBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const { addToCart, removeFromCart, isInCart } = useCart();
@@ -123,6 +125,43 @@ const CodeBundleDetail: React.FC = () => {
             }}
           >
             {isInCart(codebundle.id) ? "Remove from Configuration" : "Add to Configuration"}
+          </Button>
+          
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={
+              <Avatar 
+                src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png"
+                sx={{ 
+                  width: 20, 
+                  height: 20, 
+                  backgroundColor: 'transparent'
+                }}
+              />
+            }
+            onClick={() => {
+              // Create context string with codebundle details
+              const context = `I have a question about the "${codebundle.display_name}" CodeBundle from the ${codebundle.codecollection?.name || 'unknown'} collection.\n\nCodeBundle Details:\n- Description: ${codebundle.description || 'N/A'}\n- Platform: ${codebundle.discovery_platform || 'N/A'}\n- Tasks: ${codebundle.task_count || 0}\n- Access Level: ${codebundle.access_level || 'N/A'}`;
+              
+              navigate('/chat', { 
+                state: { 
+                  initialQuery: context,
+                  codebundleContext: {
+                    name: codebundle.display_name,
+                    slug: codebundle.slug,
+                    collectionSlug: codebundle.codecollection?.slug,
+                    description: codebundle.description,
+                    tasks: codebundle.tasks,
+                    platform: codebundle.discovery_platform,
+                    accessLevel: codebundle.access_level,
+                    iamRequirements: codebundle.minimum_iam_requirements
+                  }
+                } 
+              });
+            }}
+          >
+            Ask Eager Edgar
           </Button>
         </Box>
 
@@ -780,12 +819,12 @@ const CodeBundleDetail: React.FC = () => {
                     <Box sx={{ mb: 2 }}>
                       <Chip 
                         label={codebundle.access_level.toUpperCase()} 
-                        size="medium"
+                        size="small"
                         color={
                           codebundle.access_level === 'read-only' ? 'success' :
                           codebundle.access_level === 'read-write' ? 'warning' : 'default'
                         }
-                        sx={{ fontWeight: 600, fontSize: '0.875rem', px: 2, py: 2.5 }}
+                        sx={{ fontWeight: 600, fontSize: '0.75rem' }}
                       />
                     </Box>
                     <Typography variant="body2" color="text.secondary">
@@ -816,25 +855,36 @@ const CodeBundleDetail: React.FC = () => {
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                       The following IAM permissions are required to execute this CodeBundle:
                     </Typography>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <Box 
+                      component="ul" 
+                      sx={{ 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        gap: 0.5, 
+                        pl: 2,
+                        m: 0,
+                        listStyleType: 'disc'
+                      }}
+                    >
                       {codebundle.minimum_iam_requirements.map((req, index) => (
-                        <Card key={index} variant="outlined" sx={{ bgcolor: 'background.default' }}>
-                          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                              <CheckCircleIcon sx={{ fontSize: '1rem', color: 'success.main', mt: 0.25 }} />
-                              <Typography 
-                                variant="body2" 
-                                sx={{ 
-                                  fontFamily: 'monospace', 
-                                  fontSize: '0.875rem',
-                                  wordBreak: 'break-all'
-                                }}
-                              >
-                                {req}
-                              </Typography>
-                            </Box>
-                          </CardContent>
-                        </Card>
+                        <Box 
+                          component="li" 
+                          key={index}
+                          sx={{ 
+                            pl: 0.5
+                          }}
+                        >
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontFamily: 'monospace', 
+                              fontSize: '0.875rem',
+                              wordBreak: 'break-all'
+                            }}
+                          >
+                            {req}
+                          </Typography>
+                        </Box>
                       ))}
                     </Box>
                   </Box>

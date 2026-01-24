@@ -73,7 +73,7 @@ const Header: React.FC = () => {
     handleBrowseMenuClose();
   };
 
-  const isBrowseActive = ['/collections', '/codebundles', '/categories', '/all-tasks'].some(
+  const isBrowseActive = ['/collections', '/codebundles', '/all-tasks'].some(
     path => location.pathname.startsWith(path)
   );
 
@@ -142,9 +142,6 @@ const Header: React.FC = () => {
               </MenuItem>
               <MenuItem onClick={() => handleMenuNavigate('/codebundles')}>
                 CodeBundles
-              </MenuItem>
-              <MenuItem onClick={() => handleMenuNavigate('/categories')}>
-                Categories
               </MenuItem>
               <MenuItem onClick={() => handleMenuNavigate('/all-tasks')}>
                 All Tasks
