@@ -573,6 +573,8 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
                 "runbook_source_url": codebundle.runbook_source_url,
                 "created_at": codebundle.created_at,
                 "updated_at": codebundle.updated_at,
+                # Configuration variables
+                "user_variables": codebundle.user_variables or [],
                 # AI Enhancement fields
                 "enhancement_status": codebundle.enhancement_status or "pending",
                 "ai_enhanced_description": codebundle.ai_enhanced_description,

@@ -178,6 +178,14 @@ export interface CodeBundle {
     git_url: string;
     git_ref?: string;
   } | null;
+  user_variables?: Array<{
+    name: string;
+    type: string;
+    description: string;
+    pattern?: string;
+    example?: string;
+    default?: string | null;
+  }>;
 }
 
 export interface Task {

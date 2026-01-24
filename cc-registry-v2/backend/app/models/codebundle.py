@@ -33,6 +33,9 @@ class Codebundle(Base):
     task_count = Column(Integer, default=0)
     sli_count = Column(Integer, default=0)
     
+    # User variables parsed from RW.Core.Import User Variable
+    user_variables = Column(JSON, default=list)  # List of {name, type, description, pattern, example, default}
+    
     # Enhanced task indexing and AI metadata
     task_index = Column(JSON, default=dict)  # {"task_name": "unique_index", ...}
     ai_enhanced_metadata = Column(JSON, default=dict)  # AI-generated enhancements

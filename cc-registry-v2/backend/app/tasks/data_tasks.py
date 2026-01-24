@@ -95,12 +95,18 @@ def store_yaml_data_task(self, yaml_content: str = None):
             db.close()
 
 @celery_app.task(bind=True)
-def clone_repositories_task(self, collection_slugs: List[str] = None):
+def clone_repositories_task(self, previous_result=None, collection_slugs: List[str] = None):
     """Clone repositories and store files"""
     try:
         from git import Repo
         import tempfile
         import shutil
+        
+        # Ignore previous_result from chain if passed
+        if previous_result and isinstance(previous_result, dict):
+            logger.info(f"Received result from previous task: {previous_result.get('message', 'N/A')}")
+        
+        logger.info(f"Starting clone_repositories_task for {len(collection_slugs) if collection_slugs else 'all'} collections")
         
         db = SessionLocal()
         
@@ -109,7 +115,13 @@ def clone_repositories_task(self, collection_slugs: List[str] = None):
         if not raw_yaml:
             raise ValueError("No YAML data found. Run store_yaml_data_task first.")
         
-        collections_data = raw_yaml.parsed_data.get('codecollections', [])
+        # Parse JSON string back to dict if needed
+        if isinstance(raw_yaml.parsed_data, str):
+            parsed_data = json.loads(raw_yaml.parsed_data)
+        else:
+            parsed_data = raw_yaml.parsed_data
+        
+        collections_data = parsed_data.get('codecollections', [])
         
         # Filter collections if specified
         if collection_slugs:
@@ -207,72 +219,121 @@ def clone_repositories_task(self, collection_slugs: List[str] = None):
         db.close()
 
 @celery_app.task(bind=True)
-def parse_stored_data_task(self):
-    """Parse stored raw data into structured records"""
+def parse_stored_data_task(self, previous_result=None):
+    """Parse stored raw data into structured records - processes incrementally"""
     try:
+        # Ignore previous_result from chain if passed
+        if previous_result and isinstance(previous_result, dict):
+            logger.info(f"Received result from previous task: {previous_result.get('message', 'N/A')}")
+        
+        logger.info("Starting parse_stored_data_task")
+        
         db = SessionLocal()
         
-        # Parse Robot Framework files
-        codebundles_data = parse_all_robot_files(db)
+        # Get all unprocessed Robot files
+        from app.models.raw_data import RawRepositoryData
+        robot_files = db.query(RawRepositoryData).filter(
+            RawRepositoryData.file_type == 'robot',
+            RawRepositoryData.is_processed == False
+        ).all()
+        
+        total_files = len(robot_files)
+        logger.info(f"Found {total_files} Robot files to parse")
+        
+        from app.services.robot_parser import RobotFrameworkParser
+        parser = RobotFrameworkParser()
         
         codebundles_created = 0
         codebundles_updated = 0
+        files_processed = 0
         
-        for codebundle_data in codebundles_data:
+        # Process files incrementally
+        for idx, raw_file in enumerate(robot_files, 1):
             try:
-                # Get the collection
-                collection = db.query(CodeCollection).filter(
-                    CodeCollection.slug == codebundle_data['collection_slug']
-                ).first()
+                # Log progress
+                if idx % 50 == 0 or idx == 1:
+                    logger.info(f"Processing file {idx}/{total_files}: {raw_file.file_path}")
                 
-                if not collection:
-                    logger.warning(f"Collection not found: {codebundle_data['collection_slug']}")
-                    continue
+                # Parse the file
+                codebundles_list = parser.parse_robot_file(raw_file)
                 
-                # Check if codebundle already exists
-                existing_codebundle = db.query(Codebundle).filter(
-                    Codebundle.slug == codebundle_data['slug']
-                ).first()
+                # Process each codebundle from this file
+                for codebundle_data in codebundles_list:
+                    try:
+                        # Get the collection
+                        collection = db.query(CodeCollection).filter(
+                            CodeCollection.slug == codebundle_data['collection_slug']
+                        ).first()
+                        
+                        if not collection:
+                            logger.warning(f"Collection not found: {codebundle_data['collection_slug']}")
+                            continue
+                        
+                        # Check if codebundle already exists
+                        existing_codebundle = db.query(Codebundle).filter(
+                            Codebundle.slug == codebundle_data['slug']
+                        ).first()
+                        
+                        if existing_codebundle:
+                            # Update existing
+                            existing_codebundle.name = codebundle_data['name']
+                            existing_codebundle.display_name = codebundle_data['display_name']
+                            existing_codebundle.description = codebundle_data['description']
+                            existing_codebundle.doc = codebundle_data['doc']
+                            existing_codebundle.tasks = codebundle_data['tasks']
+                            existing_codebundle.support_tags = codebundle_data['support_tags']
+                            existing_codebundle.slis = codebundle_data.get('slis', [])
+                            existing_codebundle.user_variables = codebundle_data.get('user_variables', [])
+                            codebundles_updated += 1
+                        else:
+                            # Create new
+                            codebundle = Codebundle(
+                                name=codebundle_data['name'],
+                                slug=codebundle_data['slug'],
+                                display_name=codebundle_data['display_name'],
+                                description=codebundle_data['description'],
+                                doc=codebundle_data['doc'],
+                                author=codebundle_data['author'],
+                                support_tags=codebundle_data['support_tags'],
+                                tasks=codebundle_data['tasks'],
+                                slis=codebundle_data.get('slis', []),
+                                user_variables=codebundle_data.get('user_variables', []),
+                                codecollection_id=collection.id
+                            )
+                            db.add(codebundle)
+                            codebundles_created += 1
+                    
+                    except Exception as e:
+                        logger.error(f"Failed to save codebundle {codebundle_data.get('name', 'unknown')}: {e}")
+                        continue
                 
-                if existing_codebundle:
-                    # Update existing
-                    existing_codebundle.name = codebundle_data['name']
-                    existing_codebundle.display_name = codebundle_data['display_name']
-                    existing_codebundle.description = codebundle_data['description']
-                    existing_codebundle.doc = codebundle_data['doc']
-                    existing_codebundle.tasks = codebundle_data['tasks']
-                    existing_codebundle.support_tags = codebundle_data['support_tags']
-                    existing_codebundle.slis = codebundle_data['slis']
-                    codebundles_updated += 1
-                else:
-                    # Create new
-                    codebundle = Codebundle(
-                        name=codebundle_data['name'],
-                        slug=codebundle_data['slug'],
-                        display_name=codebundle_data['display_name'],
-                        description=codebundle_data['description'],
-                        doc=codebundle_data['doc'],
-                        author=codebundle_data['author'],
-                        support_tags=codebundle_data['support_tags'],
-                        tasks=codebundle_data['tasks'],
-                        slis=codebundle_data['slis'],
-                        codecollection_id=collection.id
-                    )
-                    db.add(codebundle)
-                    codebundles_created += 1
+                # Mark file as processed
+                raw_file.is_processed = True
+                files_processed += 1
+                
+                # Commit every 50 files
+                if idx % 50 == 0:
+                    db.commit()
+                    logger.info(f"Committed batch at file {idx}/{total_files} - Created: {codebundles_created}, Updated: {codebundles_updated}")
                 
             except Exception as e:
-                logger.error(f"Failed to process codebundle {codebundle_data.get('name', 'unknown')}: {e}")
+                logger.error(f"Failed to parse file {idx}/{total_files} ({raw_file.file_path}): {e}")
+                # Mark as processed even if failed
+                raw_file.is_processed = True
+                db.rollback()
                 continue
         
+        # Final commit
         db.commit()
+        logger.info(f"Parse complete - Files: {files_processed}, Created: {codebundles_created}, Updated: {codebundles_updated}")
         
         return {
             'status': 'success',
             'codebundles_created': codebundles_created,
             'codebundles_updated': codebundles_updated,
             'total_processed': codebundles_created + codebundles_updated,
-            'message': f'Successfully parsed {codebundles_created + codebundles_updated} codebundles'
+            'files_processed': files_processed,
+            'message': f'Successfully parsed {codebundles_created + codebundles_updated} codebundles from {files_processed} files'
         }
         
     except Exception as e:

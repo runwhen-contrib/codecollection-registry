@@ -16,6 +16,13 @@ import {
   Tabs,
   Tab,
   Tooltip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from '@mui/material';
 import { 
   GitHub as GitHubIcon, 
@@ -34,6 +41,8 @@ import {
   Verified as VerifiedIcon,
   Update as UpdateIcon,
   Storage as StorageIcon,
+  KeyboardArrowDown as KeyboardArrowDownIcon,
+  KeyboardArrowUp as KeyboardArrowUpIcon,
 } from '@mui/icons-material';
 import { useParams, Link } from 'react-router-dom';
 import { apiService, CodeBundle } from '../services/api';
@@ -47,6 +56,7 @@ const CodeBundleDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [mainTab, setMainTab] = useState(0);
   const [tasksTab, setTasksTab] = useState(0);
+  const [expandedVars, setExpandedVars] = useState<{ [key: number]: boolean }>({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -676,34 +686,70 @@ const CodeBundleDetail: React.FC = () => {
                   </Box>
                 )}
                 
-                {/* User Variables - Placeholder for future implementation */}
-                <Box sx={{ mt: 4, p: 3, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                    <InfoIcon sx={{ fontSize: '1.2rem', color: 'info.main', mt: 0.25 }} />
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                        User Variable Configuration
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Detailed user variable configurations (defaults, examples, and descriptions) are being extracted from the Robot Framework files. 
-                        Check the source code on GitHub for the complete variable definitions and usage examples.
-                      </Typography>
-                      {codebundle.codecollection?.git_url && (
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          startIcon={<GitHubIcon />}
-                          href={`${codebundle.codecollection.git_url}/tree/main/codebundles/${codebundle.slug}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          sx={{ mt: 2, textTransform: 'none' }}
-                        >
-                          View Source on GitHub
-                        </Button>
-                      )}
+                {/* User Variables */}
+                {codebundle.user_variables && codebundle.user_variables.length > 0 && (
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, fontStyle: 'italic' }}>
+                      These variables can be overridden or tuned as needed:
+                    </Typography>
+                    <TableContainer component={Paper} variant="outlined">
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 600 }}>Variable</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Default</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {codebundle.user_variables.map((variable, index) => (
+                            <TableRow key={index} hover>
+                              <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                                {variable.name}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '0.875rem' }}>
+                                {variable.description || '-'}
+                              </TableCell>
+                              <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                                {variable.default || variable.example || '-'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+                )}
+                
+                {(!codebundle.user_variables || codebundle.user_variables.length === 0) && (
+                  <Box sx={{ mt: 4, p: 3, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                      <InfoIcon sx={{ fontSize: '1.2rem', color: 'info.main', mt: 0.25 }} />
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                          No User Variables Documented
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          This CodeBundle may not require user-configured variables, or they have not been extracted yet. 
+                          Check the source code on GitHub for the complete configuration requirements.
+                        </Typography>
+                        {codebundle.codecollection?.git_url && (
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<GitHubIcon />}
+                            href={`${codebundle.codecollection.git_url}/tree/main/codebundles/${codebundle.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{ mt: 2, textTransform: 'none' }}
+                          >
+                            View Source on GitHub
+                          </Button>
+                        )}
+                      </Box>
                     </Box>
                   </Box>
-                </Box>
+                )}
                 
                 {!codebundle.configuration_type?.templates && 
                  !codebundle.configuration_type?.level_of_detail && 

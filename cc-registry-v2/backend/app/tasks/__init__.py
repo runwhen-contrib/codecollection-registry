@@ -8,6 +8,7 @@ from . import (
     ai_enhancement_tasks,
     workflow_tasks,
     task_monitoring,
-    mcp_tasks  # MCP server indexing tasks
+    mcp_tasks,  # MCP server indexing tasks
+    parse_user_vars_only  # User variables parsing
 )
 

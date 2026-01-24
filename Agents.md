@@ -139,6 +139,7 @@ Refer to these docs for:
 - **Database:** PostgreSQL via SQLAlchemy ORM
 - **Async:** Use `async`/`await` for all endpoint handlers
 - **Logging:** Use `logger.info()`, `logger.error()` for debugging
+- **Celery Chains:** Always add `previous_result=None` parameter to chained tasks (see [CELERY_CHAIN_PATTERN.md](cc-registry-v2/docs/CELERY_CHAIN_PATTERN.md))
 
 ### Docker & Services
 - **Restart Backend:** `docker-compose restart backend`
