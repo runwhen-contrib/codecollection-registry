@@ -330,6 +330,19 @@ export const apiService = {
     return response.data;
   },
 
+  // Recent Tasks
+  async getRecentTasks(): Promise<Array<{
+    task_name: string;
+    codebundle_name: string;
+    codebundle_slug: string;
+    collection_name: string;
+    collection_slug: string;
+    git_updated_at: string | null;
+  }>> {
+    const response = await api.get('/registry/recent-tasks');
+    return response.data;
+  },
+
   // Tag Icons (from map-tag-icons.yaml)
   async getTagIcons(): Promise<{ icons: Record<string, string> }> {
     const response = await api.get('/registry/tag-icons');

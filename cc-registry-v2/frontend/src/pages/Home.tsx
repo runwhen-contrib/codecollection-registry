@@ -45,6 +45,15 @@ interface RecentCodebundle {
   updated_at: string | null;
 }
 
+interface RecentTask {
+  task_name: string;
+  codebundle_name: string;
+  codebundle_slug: string;
+  collection_name: string;
+  collection_slug: string;
+  git_updated_at: string | null;
+}
+
 // Featured category names to display on homepage
 const FEATURED_CATEGORIES = ['KUBERNETES', 'GKE', 'AKS', 'EKS', 'AWS', 'AZURE', 'GCP', 'POSTGRES'];
 
@@ -62,10 +71,15 @@ const Home: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState<RegistryStats | null>(null);
   const [recentCodebundles, setRecentCodebundles] = useState<RecentCodebundle[]>([]);
+  const [recentTasks, setRecentTasks] = useState<RecentTask[]>([]);
   const [tagIcons, setTagIcons] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  
+  // Flipboard state - track which 5 items to display
+  const [codebundleOffset, setCodebundleOffset] = useState(0);
+  const [taskOffset, setTaskOffset] = useState(0);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,13 +96,15 @@ const Home: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsData, recentData, iconsData] = await Promise.all([
+        const [statsData, recentData, tasksData, iconsData] = await Promise.all([
           apiService.getRegistryStats(),
           apiService.getRecentCodebundles(),
+          apiService.getRecentTasks(),
           apiService.getTagIcons()
         ]);
         setStats(statsData);
         setRecentCodebundles(recentData);
+        setRecentTasks(tasksData);
         setTagIcons(iconsData.icons || {});
       } catch (err) {
         console.error('Error fetching data:', err);
@@ -100,6 +116,29 @@ const Home: React.FC = () => {
 
     fetchData();
   }, []);
+
+  // Flipboard rotation - all rows flip together every 7.5 seconds
+  useEffect(() => {
+    if (recentCodebundles.length <= 5 && recentTasks.length <= 5) return;
+    
+    const interval = setInterval(() => {
+      if (recentCodebundles.length > 5) {
+        setCodebundleOffset(prev => {
+          const next = prev + 1;
+          return next >= recentCodebundles.length - 4 ? 0 : next;
+        });
+      }
+      
+      if (recentTasks.length > 5) {
+        setTaskOffset(prev => {
+          const next = prev + 1;
+          return next >= recentTasks.length - 4 ? 0 : next;
+        });
+      }
+    }, 7500);
+
+    return () => clearInterval(interval);
+  }, [recentCodebundles.length, recentTasks.length]);
 
   // Cycle through placeholder examples
   useEffect(() => {
@@ -467,148 +506,317 @@ const Home: React.FC = () => {
         </Box>
       </Container>
 
-      {/* Content Section */}
+      {/* Content Section - Two Columns */}
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        {/* Trending CodeBundles */}
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-            <TrendingIcon sx={{ color: '#5282f1', fontSize: 26 }} />
-            <Typography 
-              variant="h2" 
-              sx={{ 
-                fontWeight: 600, 
-                fontSize: { xs: '20px', md: '24px' },
-                letterSpacing: '-0.2px'
-              }}
-            >
-              Recently Updated
-            </Typography>
-          </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 4 }}>
           
-          <Box sx={{ 
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' },
-            gap: 2,
-            mb: 4
-          }}>
-            {recentCodebundles.slice(0, 6).map((cb) => (
-              <Card
-                key={cb.id}
-                sx={{
-                  border: '1px solid #e0e0e0',
-                  '&:hover': { 
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                    borderColor: '#5282f1'
-                  },
-                  transition: 'all 0.2s'
+          {/* Left Column: Recently Updated CodeBundles */}
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+              <TrendingIcon sx={{ color: '#5282f1', fontSize: 24 }} />
+              <Typography 
+                variant="h2" 
+                sx={{ 
+                  fontWeight: 600, 
+                  fontSize: { xs: '18px', md: '20px' },
+                  letterSpacing: '-0.2px'
                 }}
               >
-                <CardActionArea
+                Recently Updated CodeBundles
+              </Typography>
+            </Box>
+            
+            <Box 
+              sx={{ 
+                bgcolor: 'background.paper',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                p: 2,
+                minHeight: '320px',
+                minWidth: 0,
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.5
+              }}
+            >
+              {recentCodebundles.slice(codebundleOffset, codebundleOffset + 5).map((cb, index) => (
+                <Box
+                  key={`${cb.id}-${codebundleOffset}`}
                   component={Link}
                   to={`/collections/${cb.collection_slug}/codebundles/${cb.slug}`}
-                  sx={{ p: 2.5, height: '100%' }}
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    p: 1.5,
+                    bgcolor: 'rgba(82, 130, 241, 0.03)',
+                    borderLeft: '3px solid #5282f1',
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    transition: 'all 0.3s ease',
+                    animation: 'flipCard 1.2s ease-in-out',
+                    animationDelay: `${index * 0.3}s`,
+                    transformStyle: 'preserve-3d',
+                    '@keyframes flipCard': {
+                      '0%': {
+                        transform: 'perspective(800px) rotateX(0deg)',
+                        opacity: 1,
+                      },
+                      '50%': {
+                        transform: 'perspective(800px) rotateX(90deg)',
+                        opacity: 0.3,
+                      },
+                      '100%': {
+                        transform: 'perspective(800px) rotateX(0deg)',
+                        opacity: 1,
+                      }
+                    },
+                    '&:hover': {
+                      bgcolor: 'rgba(82, 130, 241, 0.08)',
+                      transform: 'translateX(4px)',
+                    }
+                  }}
                 >
-                  <Typography 
-                    className="codebundle-name"
-                    sx={{ 
-                      fontSize: '15px',
-                      mb: 1,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {cb.display_name || cb.name}
-                  </Typography>
-                  
-                  <Box sx={{ display: 'flex', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
-                    <Chip 
-                      label={cb.collection_name.replace('rw-', '').replace('-codecollection', '')}
-                      size="small" 
+                  <Box sx={{ flex: 1, minWidth: 0, mr: 2 }}>
+                    <Box
                       sx={{ 
-                        height: 22,
-                        fontSize: '12px',
-                        backgroundColor: '#f0f0f0'
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        mb: 0.25,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        fontFamily: 'monospace'
                       }}
-                    />
-                    {cb.platform && cb.platform !== 'Unknown' && (
-                      <Chip 
-                        label={cb.platform} 
-                        size="small" 
-                        sx={{ 
-                          height: 22,
-                          fontSize: '12px',
-                          backgroundColor: '#e3f2fd',
-                          color: '#1976d2'
-                        }}
-                      />
-                    )}
+                    >
+                      {cb.display_name || cb.name}
+                    </Box>
+                    <Box
+                      sx={{ 
+                        fontSize: '11px',
+                        color: 'text.secondary',
+                        fontFamily: 'monospace'
+                      }}
+                    >
+                      {cb.collection_name.replace('rw-', '').replace('-codecollection', '').toUpperCase()}
+                    </Box>
                   </Box>
-                  
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {cb.task_count} task{cb.task_count !== 1 ? 's' : ''}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {formatDate(cb.git_updated_at || cb.updated_at)}
-                    </Typography>
+                  <Box sx={{ textAlign: 'right' }}>
+                    <Box
+                      sx={{ 
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        fontFamily: 'monospace',
+                        color: '#5282f1',
+                        letterSpacing: '0.5px'
+                      }}
+                    >
+                      {cb.git_updated_at ? new Date(cb.git_updated_at).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric',
+                        year: 'numeric'
+                      }).toUpperCase() : 'N/A'}
+                    </Box>
+                    <Box
+                      sx={{ 
+                        fontSize: '11px',
+                        fontFamily: 'monospace',
+                        color: 'text.secondary'
+                      }}
+                    >
+                      {cb.git_updated_at ? new Date(cb.git_updated_at).toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false 
+                      }) : ''}
+                    </Box>
                   </Box>
-                </CardActionArea>
-              </Card>
-            ))}
+                </Box>
+              ))}
+            </Box>
           </Box>
 
-          {/* Browse All / Contribute CTAs */}
-          <Box sx={{ 
-            display: 'flex', 
-            gap: 2, 
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            mt: 4
-          }}>
-            <Button
-              component={Link}
-              to="/codebundles"
-              variant="contained"
-              sx={{
-                textTransform: 'none',
-                fontSize: '15px',
-                fontWeight: 600,
-                backgroundColor: '#5282f1',
-                color: 'white',
-                px: 4,
-                py: 1.25,
-                '&:hover': {
-                  backgroundColor: '#3a5cb8',
-                  color: 'white'
-                }
+          {/* Right Column: Recently Updated Tasks */}
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+              <TrendingIcon sx={{ color: '#5282f1', fontSize: 24 }} />
+              <Typography 
+                variant="h2" 
+                sx={{ 
+                  fontWeight: 600, 
+                  fontSize: { xs: '18px', md: '20px' },
+                  letterSpacing: '-0.2px'
+                }}
+              >
+                Recently Updated Tasks
+              </Typography>
+            </Box>
+            
+            <Box 
+              sx={{ 
+                bgcolor: 'background.paper',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                p: 2,
+                minHeight: '320px',
+                minWidth: 0,
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.5
               }}
             >
-              Browse All CodeBundles
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<MoneyIcon />}
-              href="https://docs.runwhen.com/public/v/runwhen-authors"
-              target="_blank"
-              rel="noopener"
-              sx={{
-                borderColor: '#f5af19',
-                color: '#e67e00',
-                fontSize: '15px',
-                fontWeight: 600,
-                px: 4,
-                py: 1.25,
-                textTransform: 'none',
-                '&:hover': {
-                  borderColor: '#e67e00',
-                  backgroundColor: 'rgba(245, 175, 25, 0.08)',
-                },
-              }}
-            >
-              Get Paid to Contribute
-            </Button>
+              {recentTasks.slice(taskOffset, taskOffset + 5).map((task, index) => (
+                <Box
+                  key={`${task.codebundle_slug}-${task.task_name}-${taskOffset}`}
+                  component={Link}
+                  to={`/collections/${task.collection_slug}/codebundles/${task.codebundle_slug}`}
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    p: 1.5,
+                    bgcolor: 'rgba(82, 130, 241, 0.03)',
+                    borderLeft: '3px solid #5282f1',
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    transition: 'all 0.3s ease',
+                    animation: 'flipCard 1.2s ease-in-out',
+                    animationDelay: `${index * 0.3}s`,
+                    transformStyle: 'preserve-3d',
+                    '@keyframes flipCard': {
+                      '0%': {
+                        transform: 'perspective(800px) rotateX(0deg)',
+                        opacity: 1,
+                      },
+                      '50%': {
+                        transform: 'perspective(800px) rotateX(90deg)',
+                        opacity: 0.3,
+                      },
+                      '100%': {
+                        transform: 'perspective(800px) rotateX(0deg)',
+                        opacity: 1,
+                      }
+                    },
+                    '&:hover': {
+                      bgcolor: 'rgba(82, 130, 241, 0.08)',
+                      transform: 'translateX(4px)',
+                    }
+                  }}
+                >
+                  <Box sx={{ flex: 1, minWidth: 0, mr: 2 }}>
+                    <Box
+                      sx={{ 
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        mb: 0.25,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        fontFamily: 'monospace'
+                      }}
+                    >
+                      {task.task_name}
+                    </Box>
+                    <Box
+                      sx={{ 
+                        fontSize: '11px',
+                        color: 'text.secondary',
+                        fontFamily: 'monospace'
+                      }}
+                    >
+                      {task.codebundle_name.substring(0, 40)}
+                    </Box>
+                  </Box>
+                  <Box sx={{ textAlign: 'right' }}>
+                    <Box
+                      sx={{ 
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        fontFamily: 'monospace',
+                        color: '#5282f1',
+                        letterSpacing: '0.5px'
+                      }}
+                    >
+                      {task.git_updated_at ? new Date(task.git_updated_at).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric',
+                        year: 'numeric'
+                      }).toUpperCase() : 'N/A'}
+                    </Box>
+                    <Box
+                      sx={{ 
+                        fontSize: '11px',
+                        fontFamily: 'monospace',
+                        color: 'text.secondary'
+                      }}
+                    >
+                      {task.git_updated_at ? new Date(task.git_updated_at).toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false 
+                      }) : ''}
+                    </Box>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
           </Box>
+        </Box>
+
+        {/* Browse All / Contribute CTAs */}
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 2, 
+          justifyContent: 'center',
+          flexWrap: 'wrap',
+          mt: 4
+        }}>
+          <Button
+            component={Link}
+            to="/codebundles"
+            variant="contained"
+            sx={{
+              textTransform: 'none',
+              fontSize: '15px',
+              fontWeight: 600,
+              backgroundColor: '#5282f1',
+              color: 'white',
+              px: 4,
+              py: 1.25,
+              '&:hover': {
+                backgroundColor: '#3a5cb8',
+                color: 'white'
+              }
+            }}
+          >
+            Browse All CodeBundles
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<MoneyIcon />}
+            href="https://docs.runwhen.com/public/v/runwhen-authors"
+            target="_blank"
+            rel="noopener"
+            sx={{
+              borderColor: '#f5af19',
+              color: '#e67e00',
+              fontSize: '15px',
+              fontWeight: 600,
+              px: 4,
+              py: 1.25,
+              textTransform: 'none',
+              '&:hover': {
+                borderColor: '#e67e00',
+                backgroundColor: 'rgba(245, 175, 25, 0.08)',
+              },
+            }}
+          >
+            Get Paid to Contribute
+          </Button>
         </Box>
       </Container>
     </Box>

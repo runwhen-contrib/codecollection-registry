@@ -612,7 +612,7 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
 
 @app.get("/api/v1/registry/recent-codebundles")
 async def get_recent_codebundles():
-    """Get the 10 most recently updated codebundles"""
+    """Get the 10 most recently updated codebundles based on git update date"""
     try:
         from app.core.database import SessionLocal
         from app.models import CodeCollection, Codebundle
@@ -620,14 +620,16 @@ async def get_recent_codebundles():
         
         db = SessionLocal()
         try:
-            # Get recent codebundles ordered by git_updated_at (or updated_at as fallback)
-            codebundles = db.query(Codebundle).filter(
-                Codebundle.is_active == True
+            # Get recent codebundles ordered by git_updated_at only, excluding rw-generic-codecollection
+            codebundles = db.query(Codebundle).join(
+                CodeCollection, Codebundle.codecollection_id == CodeCollection.id
+            ).filter(
+                Codebundle.is_active == True,
+                Codebundle.git_updated_at.isnot(None),  # Only codebundles with git dates
+                CodeCollection.slug != 'rw-generic-codecollection'  # Exclude generics
             ).order_by(
-                desc(Codebundle.git_updated_at.isnot(None)),  # Prioritize those with git dates
-                desc(Codebundle.git_updated_at),
-                desc(Codebundle.updated_at)
-            ).limit(10).all()
+                desc(Codebundle.git_updated_at)
+            ).limit(20).all()
             
             result = []
             for cb in codebundles:
@@ -654,6 +656,73 @@ async def get_recent_codebundles():
             db.close()
     except Exception as e:
         logger.error(f"Error getting recent codebundles: {e}")
+        return []
+
+
+@app.get("/api/v1/registry/recent-tasks")
+async def get_recent_tasks():
+    """Get the 10 most recently added tasks based on git update date"""
+    try:
+        from app.core.database import SessionLocal
+        from app.models import CodeCollection, Codebundle
+        from sqlalchemy import desc
+        
+        db = SessionLocal()
+        try:
+            # Get codebundles with tasks, ordered by git_updated_at, excluding rw-generic-codecollection
+            codebundles = db.query(Codebundle).join(
+                CodeCollection, Codebundle.codecollection_id == CodeCollection.id
+            ).filter(
+                Codebundle.is_active == True,
+                Codebundle.git_updated_at.isnot(None),
+                Codebundle.tasks.isnot(None),
+                CodeCollection.slug != 'rw-generic-codecollection'  # Exclude generics
+            ).order_by(
+                desc(Codebundle.git_updated_at)
+            ).limit(100).all()  # Get more codebundles to extract tasks from
+            
+            result = []
+            for cb in codebundles:
+                collection = db.query(CodeCollection).filter(
+                    CodeCollection.id == cb.codecollection_id
+                ).first()
+                
+                # Skip if somehow we got a generic collection (shouldn't happen)
+                if collection and collection.slug == 'rw-generic-codecollection':
+                    continue
+                
+                # Extract task names from the codebundle
+                if cb.tasks:
+                    for task in cb.tasks:
+                        # Handle both string and dict formats
+                        if isinstance(task, str):
+                            task_name = task
+                        elif isinstance(task, dict):
+                            task_name = task.get('name', 'Unknown Task')
+                        else:
+                            continue
+                        
+                        result.append({
+                            "task_name": task_name,
+                            "codebundle_name": cb.display_name or cb.name,
+                            "codebundle_slug": cb.slug,
+                            "collection_name": collection.name if collection else "Unknown",
+                            "collection_slug": collection.slug if collection else "",
+                            "git_updated_at": cb.git_updated_at.isoformat() if cb.git_updated_at else None,
+                        })
+                        
+                        # Stop once we have 20 tasks
+                        if len(result) >= 20:
+                            break
+                
+                if len(result) >= 20:
+                    break
+            
+            return result[:20]
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error getting recent tasks: {e}")
         return []
 
 

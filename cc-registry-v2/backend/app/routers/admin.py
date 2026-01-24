@@ -25,10 +25,13 @@ router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 
 def get_git_last_commit_date(repo_path: str, folder_path: str) -> Optional[datetime]:
-    """Get the last commit date for files in a folder using git log"""
+    """Get the last commit date for files in a folder using git log, excluding meta.yml/meta.yaml"""
     try:
+        # Exclude meta.yml and meta.yaml files from git log to get real code update dates
         result = subprocess.run(
-            ['git', 'log', '-1', '--format=%ct', '--', folder_path],
+            ['git', 'log', '-1', '--format=%ct', '--', folder_path, 
+             f':(exclude){folder_path}/meta.yml', 
+             f':(exclude){folder_path}/meta.yaml'],
             cwd=repo_path,
             capture_output=True,
             text=True,
@@ -37,10 +40,10 @@ def get_git_last_commit_date(repo_path: str, folder_path: str) -> Optional[datet
         if result.returncode == 0 and result.stdout.strip():
             timestamp = int(result.stdout.strip())
             dt = datetime.fromtimestamp(timestamp)
-            logger.debug(f"Git date for {folder_path}: {dt}")
+            logger.info(f"Git date for {folder_path}: {dt}")
             return dt
         else:
-            logger.debug(f"No git date found for {folder_path}: rc={result.returncode}, out={result.stdout}, err={result.stderr}")
+            logger.warning(f"No git date found for {folder_path}: rc={result.returncode}, stderr={result.stderr}")
     except Exception as e:
         logger.warning(f"Could not get git date for {folder_path}: {e}")
     return None
