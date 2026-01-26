@@ -22,6 +22,7 @@ import {
 } from '@mui/icons-material';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
+import TaskGrowthChart from '../components/TaskGrowthChart';
 
 interface RegistryStats {
   collections: number;
@@ -819,6 +820,13 @@ const Home: React.FC = () => {
           </Button>
         </Box>
       </Container>
+
+      {/* Task Growth Chart */}
+      <Box sx={{ bgcolor: 'background.default', py: 6 }}>
+        <Container maxWidth="lg">
+          <TaskGrowthChart />
+        </Container>
+      </Box>
     </Box>
   );
 };

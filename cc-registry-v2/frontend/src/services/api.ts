@@ -878,6 +878,14 @@ export const apiService = {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data;
+  },
+
+  // Analytics - Get task growth by week
+  async getTasksByWeek(): Promise<any> {
+    console.log('API: Getting tasks by week analytics');
+    const response = await api.get('/analytics/tasks-by-week-cached');
+    console.log('API: Tasks by week response:', response.data);
+    return response.data;
   }
 };
 
