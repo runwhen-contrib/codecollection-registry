@@ -18,7 +18,8 @@ const getAuthToken = (): string | null => {
 // Add request interceptor for debugging and auth
 api.interceptors.request.use(
   (config) => {
-    console.log('API Request:', config.method?.toUpperCase(), config.url);
+    const timestamp = new Date().toISOString().substring(11, 23);
+    console.log(`[${timestamp}] 🚀 API Request:`, config.method?.toUpperCase(), config.url);
     
     // Add auth token for admin and tasks endpoints
     if (config.url?.includes('/admin') || config.url?.includes('/tasks')) {
@@ -31,7 +32,7 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('API Request Error:', error);
+    console.error('❌ API Request Error:', error);
     return Promise.reject(error);
   }
 );
@@ -39,11 +40,16 @@ api.interceptors.request.use(
 // Add response interceptor for debugging
 api.interceptors.response.use(
   (response) => {
-    console.log('API Response:', response.status, response.config.url);
+    const timestamp = new Date().toISOString().substring(11, 23);
+    const duration = response.config.metadata?.startTime 
+      ? Date.now() - response.config.metadata.startTime 
+      : '?';
+    console.log(`[${timestamp}] ✅ API Response:`, response.status, response.config.url, `(${duration}ms)`);
     return response;
   },
   (error) => {
-    console.error('API Response Error:', error.response?.status, error.response?.data, error.message);
+    const timestamp = new Date().toISOString().substring(11, 23);
+    console.error(`[${timestamp}] ❌ API Error:`, error.response?.status, error.config?.url, error.response?.data || error.message);
     return Promise.reject(error);
   }
 );
