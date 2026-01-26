@@ -32,9 +32,16 @@ def _configure_broker_url():
         broker_url = f"sentinel://{password_part}{sentinel_hosts_str}"
         
         # Transport options tell Kombu which master and db to use
+        # Ensure REDIS_DB is properly converted to int, handling string inputs
+        try:
+            redis_db = int(settings.REDIS_DB) if isinstance(settings.REDIS_DB, (str, int)) else 0
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid REDIS_DB value '{settings.REDIS_DB}', defaulting to 0")
+            redis_db = 0
+        
         transport_options = {
             'master_name': settings.REDIS_SENTINEL_MASTER,
-            'db': int(settings.REDIS_DB),
+            'db': redis_db,
             'sentinel_kwargs': {
                 'socket_timeout': 1.0,
                 'socket_connect_timeout': 1.0,

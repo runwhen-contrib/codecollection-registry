@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     @model_validator(mode='after')
     def construct_urls(self):
         """Construct DATABASE_URL and REDIS_URL from components if not provided"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         # Build DATABASE_URL from components if not provided
         if not self.DATABASE_URL:
             if all([self.DB_HOST, self.DB_USER, self.DB_PASSWORD, self.DB_NAME]):
@@ -73,9 +76,24 @@ class Settings(BaseSettings):
                 # Format: sentinel://[:password@]host1:port1,host2:port2/service_name/db_number
                 auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
                 self.REDIS_URL = f"sentinel://{auth}{self.REDIS_SENTINEL_HOSTS}/{self.REDIS_SENTINEL_MASTER}/{self.REDIS_DB}"
+                
+                # Important: Don't let REDIS_URL override our explicit REDIS_DB setting
+                # When using Sentinel, REDIS_DB must remain as the integer/string we set explicitly
+                logger.info(f"Constructed Sentinel URL. REDIS_DB remains: {self.REDIS_DB} (type: {type(self.REDIS_DB)})")
             else:
                 # Fallback to default for development
                 self.REDIS_URL = "redis://redis:6379/0"
+        
+        # Validate REDIS_DB is correct type
+        if self.REDIS_SENTINEL_HOSTS:
+            # Ensure REDIS_DB is an integer when using Sentinel
+            if isinstance(self.REDIS_DB, str):
+                logger.warning(f"REDIS_DB is string '{self.REDIS_DB}', converting to int")
+                try:
+                    self.REDIS_DB = int(self.REDIS_DB)
+                except ValueError as e:
+                    logger.error(f"Failed to convert REDIS_DB '{self.REDIS_DB}' to int: {e}, defaulting to 0")
+                    self.REDIS_DB = 0
         
         return self
     

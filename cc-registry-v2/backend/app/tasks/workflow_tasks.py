@@ -16,7 +16,7 @@ def sync_parse_enhance_workflow_task(self, limit: int = None):
     """
     Complete workflow: Sync → Parse → Enhance New
     
-    This task orchestrates the full update cycle:
+    This task orchestrates the full update cycle by calling subtasks directly (not via .get()).
     1. Sync all codecollections from their repos
     2. Parse all codebundles to find new ones
     3. AI enhance only NEW codebundles (pending/NULL status)
@@ -26,11 +26,18 @@ def sync_parse_enhance_workflow_task(self, limit: int = None):
     
     Returns:
         Dict with results from each step
+        
+    Note: Subtasks are called directly in this worker process to avoid the
+    "Never call result.get() within a task" anti-pattern.
     """
     try:
         logger.info(f"Starting sync-parse-enhance workflow (task {self.request.id})")
         
-        # Step 1: Sync collections
+        # Import subtasks
+        from app.tasks.registry_tasks import sync_all_collections_task, parse_all_codebundles_task
+        from app.tasks.ai_enhancement_tasks import enhance_pending_codebundles_task
+        
+        # Step 1: Sync collections (call directly, not via apply_async)
         self.update_state(state='PROGRESS', meta={
             'step': 1,
             'total_steps': 3,
@@ -38,12 +45,11 @@ def sync_parse_enhance_workflow_task(self, limit: int = None):
             'status': 'Checking for updates in repositories...'
         })
         
-        from app.tasks.registry_tasks import sync_all_collections_task
         logger.info("Step 1/3: Syncing collections...")
         
         try:
-            # Use apply_async to properly dispatch to workers, then wait for result
-            sync_result = sync_all_collections_task.apply_async().get(timeout=300)
+            # Call task function directly (eager execution in this worker)
+            sync_result = sync_all_collections_task()
             logger.info(f"Sync completed: {sync_result}")
         except Exception as e:
             logger.error(f"Sync failed: {e}")
@@ -58,12 +64,11 @@ def sync_parse_enhance_workflow_task(self, limit: int = None):
             'sync_result': sync_result
         })
         
-        from app.tasks.registry_tasks import parse_all_codebundles_task
         logger.info("Step 2/3: Parsing codebundles...")
         
         try:
-            # Use apply_async to properly dispatch to workers, then wait for result
-            parse_result = parse_all_codebundles_task.apply_async().get(timeout=600)
+            # Call task function directly (eager execution in this worker)
+            parse_result = parse_all_codebundles_task()
             logger.info(f"Parse completed: {parse_result}")
         except Exception as e:
             logger.error(f"Parse failed: {e}")
@@ -79,13 +84,11 @@ def sync_parse_enhance_workflow_task(self, limit: int = None):
             'parse_result': parse_result
         })
         
-        from app.tasks.ai_enhancement_tasks import enhance_pending_codebundles_task
         logger.info(f"Step 3/3: Enhancing NEW codebundles (limit={limit})...")
         
         try:
-            # Only enhance pending/new codebundles
-            # Use apply_async to properly dispatch to workers, then wait for result
-            enhance_result = enhance_pending_codebundles_task.apply_async(kwargs={'limit': limit}).get(timeout=1800)
+            # Call task function directly with limit parameter
+            enhance_result = enhance_pending_codebundles_task(limit=limit)
             logger.info(f"Enhancement completed: {enhance_result}")
         except Exception as e:
             logger.error(f"Enhancement failed: {e}")
@@ -130,4 +133,5 @@ def quick_update_workflow_task(self, ai_limit: int = 20):
     Args:
         ai_limit: Max number of codebundles to enhance (default: 20)
     """
-    return sync_parse_enhance_workflow_task.apply_async(kwargs={'limit': ai_limit}).get(timeout=3600)
+    # Call the main workflow task directly (not via .get())
+    return sync_parse_enhance_workflow_task(limit=ai_limit)
