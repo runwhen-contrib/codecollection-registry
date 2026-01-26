@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 # Import all models to ensure they're registered with SQLAlchemy
 from app.models import *
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Database tables are now managed via Alembic migrations
+# Migrations run automatically on container startup via run_migrations.py
 
 # Create FastAPI app
 app = FastAPI(
