@@ -147,6 +147,7 @@ export interface CodeBundle {
   updated_at: string;
   git_updated_at: string | null;
   configuration_type: ConfigurationType;
+  discovery_platform?: string;
   // Backwards compatibility
   discovery?: DiscoveryInfo;
   // AI Enhancement fields
