@@ -25,6 +25,25 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>RunWhen CodeCollection Registry</title>
+    
+    <!-- Google Analytics (only loads if REACT_APP_GA_MEASUREMENT_ID is set) -->
+    <script>
+      (function() {
+        var gaId = '%REACT_APP_GA_MEASUREMENT_ID%';
+        if (gaId && gaId.startsWith('G-')) {
+          var script = document.createElement('script');
+          script.async = true;
+          script.src = 'https://www.googletagmanager.com/gtag/js?id=' + gaId;
+          document.head.appendChild(script);
+          
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          window.gtag = gtag;
+          gtag('js', new Date());
+          gtag('config', gaId);
+        }
+      })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
