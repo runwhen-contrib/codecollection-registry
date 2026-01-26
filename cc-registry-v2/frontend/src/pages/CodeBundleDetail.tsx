@@ -290,24 +290,12 @@ const CodeBundleDetail: React.FC = () => {
               )}
               
               {codebundle.configuration_type?.level_of_detail && (
-                <Box sx={{ mb: 1.5 }}>
+                <Box>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                     Level of Detail
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
                     {codebundle.configuration_type.level_of_detail}
-                  </Typography>
-                </Box>
-              )}
-              
-              {codebundle.configuration_type?.templates && codebundle.configuration_type.templates.length > 0 && (
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                    Templates ({codebundle.configuration_type.templates.length})
-                  </Typography>
-                  <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.65rem', color: 'text.secondary' }}>
-                    {codebundle.configuration_type.templates.slice(0, 2).join(', ')}
-                    {codebundle.configuration_type.templates.length > 2 && '...'}
                   </Typography>
                 </Box>
               )}
@@ -493,7 +481,7 @@ const CodeBundleDetail: React.FC = () => {
               <Tabs value={mainTab} onChange={(e, newValue) => setMainTab(newValue)}>
                 <Tab label="Description" sx={{ textTransform: 'none' }} />
                 <Tab label="Tasks" sx={{ textTransform: 'none' }} />
-                <Tab label="Configuration" sx={{ textTransform: 'none' }} />
+                <Tab label="Variables" sx={{ textTransform: 'none' }} />
                 <Tab label="Security" sx={{ textTransform: 'none' }} />
                 <Tab label="Updates" sx={{ textTransform: 'none' }} />
               </Tabs>
@@ -631,104 +619,13 @@ const CodeBundleDetail: React.FC = () => {
             {/* Configuration Tab */}
             {mainTab === 2 && (
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold' }}>
-                  Configuration Variables & Templates
-                </Typography>
-                
-                {/* Configuration Templates */}
-                {codebundle.configuration_type?.templates && codebundle.configuration_type.templates.length > 0 && (
-                  <Box sx={{ mb: 4 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                      <CodeIcon sx={{ fontSize: '1.2rem', color: 'primary.main' }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Available Templates
-                      </Typography>
-                      <Chip 
-                        label={`${codebundle.configuration_type.templates.length} template${codebundle.configuration_type.templates.length !== 1 ? 's' : ''}`} 
-                        size="small" 
-                        color="primary"
-                        sx={{ ml: 1 }}
-                      />
-                    </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Configuration templates available for this CodeBundle:
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      {codebundle.configuration_type.templates.map((template, index) => (
-                        <Card key={index} variant="outlined" sx={{ bgcolor: 'background.default' }}>
-                          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                              <CodeIcon sx={{ fontSize: '1rem', color: 'primary.main', mt: 0.25 }} />
-                              <Typography 
-                                variant="body2" 
-                                sx={{ 
-                                  fontFamily: 'monospace', 
-                                  fontSize: '0.875rem',
-                                  wordBreak: 'break-all'
-                                }}
-                              >
-                                {template}
-                              </Typography>
-                            </Box>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </Box>
-                  </Box>
-                )}
-                
-                {/* Level of Detail */}
-                {codebundle.configuration_type?.level_of_detail && (
-                  <Box sx={{ mb: 4 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                      <InfoIcon sx={{ fontSize: '1.2rem', color: 'primary.main' }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Configuration Level
-                      </Typography>
-                    </Box>
-                    <Chip 
-                      label={codebundle.configuration_type.level_of_detail.toUpperCase()} 
-                      size="medium"
-                      color="primary"
-                      sx={{ fontWeight: 600, fontSize: '0.875rem', px: 2, py: 2.5 }}
-                    />
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                      This CodeBundle supports <strong>{codebundle.configuration_type.level_of_detail}</strong> level configuration.
-                    </Typography>
-                  </Box>
-                )}
-                
-                {/* Resource Types */}
-                {codebundle.configuration_type?.resource_types && codebundle.configuration_type.resource_types.length > 0 && (
-                  <Box sx={{ mb: 4 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                      <StorageIcon sx={{ fontSize: '1.2rem', color: 'primary.main' }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Target Resource Types
-                      </Typography>
-                    </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      This CodeBundle can be configured for the following resource types:
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      {codebundle.configuration_type.resource_types.map((type, index) => (
-                        <Chip 
-                          key={index}
-                          label={type} 
-                          size="medium"
-                          variant="outlined"
-                          color="primary"
-                          sx={{ fontSize: '0.875rem', fontWeight: 500 }}
-                        />
-                      ))}
-                    </Box>
-                  </Box>
-                )}
-                
                 {/* User Variables */}
-                {codebundle.user_variables && codebundle.user_variables.length > 0 && (
-                  <Box sx={{ mt: 3 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, fontStyle: 'italic' }}>
+                {codebundle.user_variables && codebundle.user_variables.length > 0 ? (
+                  <Box>
+                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+                      Configuration Variables
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                       These variables can be overridden or tuned as needed:
                     </Typography>
                     <TableContainer component={Paper} variant="outlined">
@@ -758,9 +655,7 @@ const CodeBundleDetail: React.FC = () => {
                       </Table>
                     </TableContainer>
                   </Box>
-                )}
-                
-                {(!codebundle.user_variables || codebundle.user_variables.length === 0) && (
+                ) : (
                   <Box sx={{ mt: 4, p: 3, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
                       <InfoIcon sx={{ fontSize: '1.2rem', color: 'info.main', mt: 0.25 }} />
@@ -788,14 +683,6 @@ const CodeBundleDetail: React.FC = () => {
                       </Box>
                     </Box>
                   </Box>
-                )}
-                
-                {!codebundle.configuration_type?.templates && 
-                 !codebundle.configuration_type?.level_of_detail && 
-                 !codebundle.configuration_type?.resource_types?.length && (
-                  <Alert severity="info">
-                    No configuration information has been documented for this CodeBundle.
-                  </Alert>
                 )}
               </CardContent>
             )}
