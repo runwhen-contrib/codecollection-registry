@@ -120,14 +120,15 @@ async def list_collections():
                 # Calculate statistics for each collection
                 codebundle_stats = db.query(
                     func.count(Codebundle.id).label('codebundle_count'),
-                    func.sum(Codebundle.task_count).label('total_tasks')
+                    func.sum(Codebundle.task_count).label('total_tasks'),
+                    func.sum(Codebundle.sli_count).label('total_slis')
                 ).filter(
                     Codebundle.codecollection_id == collection.id,
                     Codebundle.is_active == True
                 ).first()
                 
                 codebundle_count = codebundle_stats.codebundle_count or 0
-                total_tasks = codebundle_stats.total_tasks or 0
+                total_tasks = (codebundle_stats.total_tasks or 0) + (codebundle_stats.total_slis or 0)
                 
                 result.append({
                     "id": collection.id,
@@ -181,14 +182,15 @@ async def get_collection_by_slug(collection_slug: str):
             # Calculate statistics for this collection
             codebundle_stats = db.query(
                 func.count(Codebundle.id).label('codebundle_count'),
-                func.sum(Codebundle.task_count).label('total_tasks')
+                func.sum(Codebundle.task_count).label('total_tasks'),
+                func.sum(Codebundle.sli_count).label('total_slis')
             ).filter(
                 Codebundle.codecollection_id == collection.id,
                 Codebundle.is_active == True
             ).first()
             
             codebundle_count = codebundle_stats.codebundle_count or 0
-            total_tasks = codebundle_stats.total_tasks or 0
+            total_tasks = (codebundle_stats.total_tasks or 0) + (codebundle_stats.total_slis or 0)
             
             return {
                 "id": collection.id,
@@ -574,6 +576,7 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
                 "runbook_source_url": codebundle.runbook_source_url,
                 "created_at": codebundle.created_at,
                 "updated_at": codebundle.updated_at,
+                "git_updated_at": codebundle.git_updated_at,
                 # Configuration variables
                 "user_variables": codebundle.user_variables or [],
                 # AI Enhancement fields

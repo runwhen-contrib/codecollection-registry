@@ -16,6 +16,7 @@ Welcome to the CodeCollection Registry v2 documentation. This directory contains
 - **[SCHEDULES.md](SCHEDULES.md)** - Celery Beat schedule management and configuration
 - **[MCP_INDEXING_SCHEDULE.md](MCP_INDEXING_SCHEDULE.md)** - Automated documentation indexing schedules
 - **[WORKFLOW_FIX.md](WORKFLOW_FIX.md)** - Workflow orchestration and task chaining
+- **[ANALYTICS_FEATURES.md](ANALYTICS_FEATURES.md)** - Task growth chart and Google Analytics integration
 
 ### Infrastructure Setup
 

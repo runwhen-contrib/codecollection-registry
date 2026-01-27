@@ -145,6 +145,20 @@ schedules:
       day_of_week: 0  # Sunday at 2 AM
     enabled: false  # Disabled by default - enable if needed
 
+  # =============================================================================
+  # ANALYTICS COMPUTATION
+  # =============================================================================
+  
+  # Task Growth Analytics - Compute monthly task growth from git history
+  - name: compute-task-growth-analytics
+    task: app.tasks.analytics_tasks.compute_task_growth_analytics
+    description: Analyze git history and compute task growth metrics for dashboard
+    schedule_type: crontab
+    crontab:
+      hour: 2
+      minute: 30
+    enabled: true
+
 # Schedule Type Reference:
 #
 # crontab - Run at specific times

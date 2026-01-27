@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Import our models for autogenerate support
 from app.core.database import Base
-from app.models import CodeCollection, Codebundle, CodeCollectionVersion, AIEnhancementLog
+from app.models import CodeCollection, Codebundle, CodeCollectionVersion, AIEnhancementLog, TaskGrowthMetric
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

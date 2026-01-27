@@ -39,8 +39,8 @@ const TaskGrowthChart: React.FC = () => {
         const response = await apiService.getTasksByWeek();
         
         // Transform data for chart
-        const chartData: ChartData[] = response.weeks.map((week: string, index: number) => ({
-          week: formatWeekLabel(week),
+        const chartData: ChartData[] = response.weeks.map((month: string, index: number) => ({
+          week: formatMonthLabel(month),
           tasks: response.cumulative[index],
         }));
         
@@ -58,7 +58,7 @@ const TaskGrowthChart: React.FC = () => {
     fetchData();
   }, []);
 
-  const formatWeekLabel = (dateStr: string): string => {
+  const formatMonthLabel = (dateStr: string): string => {
     const date = new Date(dateStr);
     const month = date.toLocaleDateString('en-US', { month: 'short' });
     const year = date.getFullYear();
@@ -87,8 +87,8 @@ const TaskGrowthChart: React.FC = () => {
     );
   }
 
-  // Sample every Nth week for cleaner x-axis labels (show ~12-15 labels)
-  const labelInterval = Math.max(Math.floor(data.length / 12), 0);
+  // Show all months (18 months is reasonable for x-axis)
+  const labelInterval = 0;
 
   return (
     <Card>

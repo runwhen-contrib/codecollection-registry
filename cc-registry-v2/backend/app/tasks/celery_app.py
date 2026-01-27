@@ -68,7 +68,8 @@ celery_app = Celery(
         "app.tasks.ai_enhancement_tasks",
         "app.tasks.data_population_tasks",
         "app.tasks.task_monitoring",
-        "app.tasks.workflow_tasks"
+        "app.tasks.workflow_tasks",
+        "app.tasks.analytics_tasks"  # Analytics computation tasks
     ]
 )
 

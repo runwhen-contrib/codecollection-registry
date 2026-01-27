@@ -1,7 +1,7 @@
 """
 Analytics endpoints for dashboard charts and metrics
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from datetime import datetime, timedelta
@@ -189,86 +189,74 @@ async def get_tasks_by_week(db: Session = Depends(get_db)) -> Dict[str, Any]:
 @router.get("/tasks-by-week-cached")
 async def get_tasks_by_week_cached(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """
-    Faster version: uses database dates (git_updated_at) without cloning repos.
-    Shows last 18 months of data.
+    Get cached task growth data from database (computed by background job).
+    Returns last 18 months of monthly task growth.
+    
+    If no cached data exists, returns empty result and logs a warning.
+    Run the compute_task_growth_analytics Celery task to populate data.
     """
     try:
-        logger.info("Generating tasks-by-week from database dates (last 18 months)")
+        from app.models import TaskGrowthMetric
         
-        # Calculate date 18 months ago
-        eighteen_months_ago = datetime.now() - timedelta(days=18*30)  # Approximate 18 months
+        logger.info("Fetching cached task growth analytics from database")
         
-        # Get all active codebundles with dates
-        codebundles = db.query(
-            Codebundle.git_updated_at,
-            Codebundle.created_at,
-            Codebundle.task_count,
-            Codebundle.sli_count
-        ).filter(
-            Codebundle.is_active == True
-        ).all()
+        # Get most recent metric
+        metric = db.query(TaskGrowthMetric).filter(
+            TaskGrowthMetric.metric_type == "monthly_growth",
+            TaskGrowthMetric.time_period == "18_months"
+        ).order_by(TaskGrowthMetric.computed_at.desc()).first()
         
-        # Build date list - include all codebundles for cumulative count
-        codebundle_dates = []
-        for cb in codebundles:
-            date = cb.git_updated_at or cb.created_at
-            task_count = (cb.task_count or 0) + (cb.sli_count or 0)
-            codebundle_dates.append({
-                'date': date,
-                'task_count': task_count
-            })
-        
-        # Sort by date
-        codebundle_dates.sort(key=lambda x: x['date'])
-        
-        if not codebundle_dates:
+        if not metric:
+            logger.warning("No cached task growth metrics found. Run compute_task_growth_analytics task.")
             return {
                 "weeks": [],
                 "cumulative": [],
-                "total_tasks": 0
+                "total_tasks": 0,
+                "message": "No cached data available. Analytics task needs to run."
             }
         
-        # Build weekly aggregates for all time
-        weekly_data = defaultdict(int)
-        for entry in codebundle_dates:
-            entry_date = entry['date']
-            week_start = entry_date - timedelta(days=entry_date.weekday())
-            week_key = week_start.strftime('%Y-%m-%d')
-            weekly_data[week_key] += entry['task_count']
+        # Return cached data
+        from datetime import timezone
+        now_utc = datetime.now(timezone.utc)
+        age_seconds = (now_utc - metric.computed_at).total_seconds()
+        logger.info(f"Serving cached analytics computed at {metric.computed_at} (age: {age_seconds:.0f}s)")
         
-        # Generate cumulative counts for last 18 months only
-        weeks = []
-        cumulative = []
+        result = metric.data.copy()
+        result["computed_at"] = metric.computed_at.isoformat()
+        result["weeks"] = result.pop("months", [])  # Rename for compatibility
         
-        # Start from 18 months ago, but calculate cumulative from beginning
-        start_week = eighteen_months_ago - timedelta(days=eighteen_months_ago.weekday())
-        latest = datetime.now()
+        return result
         
-        # Calculate total tasks before 18 months ago
-        running_total = 0
-        temp_week = codebundle_dates[0]['date'] - timedelta(days=codebundle_dates[0]['date'].weekday())
-        while temp_week < start_week:
-            week_key = temp_week.strftime('%Y-%m-%d')
-            running_total += weekly_data.get(week_key, 0)
-            temp_week += timedelta(days=7)
+    except Exception as e:
+        logger.error(f"Error fetching cached task growth analytics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/compute-task-growth")
+async def trigger_task_growth_computation(background_tasks: BackgroundTasks) -> Dict[str, Any]:
+    """
+    Manually trigger task growth analytics computation.
+    Runs as background task, results stored in database.
+    
+    Use this endpoint to:
+    - Populate initial data
+    - Force refresh of analytics
+    - Test the computation
+    """
+    try:
+        from app.tasks.analytics_tasks import compute_task_growth_analytics
         
-        # Now generate the visible data (last 18 months)
-        current_week = start_week
-        while current_week <= latest:
-            week_key = current_week.strftime('%Y-%m-%d')
-            running_total += weekly_data.get(week_key, 0)
-            
-            weeks.append(week_key)
-            cumulative.append(running_total)
-            
-            current_week += timedelta(days=7)
+        # Trigger Celery task
+        task = compute_task_growth_analytics.apply_async()
+        
+        logger.info(f"Triggered task growth analytics computation: task_id={task.id}")
         
         return {
-            "weeks": weeks,
-            "cumulative": cumulative,
-            "total_tasks": running_total
+            "status": "triggered",
+            "task_id": task.id,
+            "message": "Task growth analytics computation started in background"
         }
         
     except Exception as e:
-        logger.error(f"Error generating tasks-by-week-cached: {e}")
+        logger.error(f"Error triggering task growth computation: {e}")
         raise HTTPException(status_code=500, detail=str(e))

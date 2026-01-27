@@ -326,9 +326,11 @@ async def get_population_status(token: str = Depends(verify_admin_token)):
         try:
             collections_count = db.query(CodeCollection).count()
             codebundles_count = db.query(Codebundle).count()
-            # Count tasks from JSON field in codebundles
+            # Count ALL tasks: both runbook tasks and SLI tasks
             codebundles = db.query(Codebundle).all()
-            tasks_count = sum(len(cb.tasks or []) for cb in codebundles)
+            runbook_tasks = sum(len(cb.tasks or []) for cb in codebundles)
+            sli_tasks = sum(len(cb.slis or []) for cb in codebundles)
+            tasks_count = runbook_tasks + sli_tasks
             
             return {
                 "collections": collections_count,

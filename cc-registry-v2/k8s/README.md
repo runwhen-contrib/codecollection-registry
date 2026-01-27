@@ -273,6 +273,107 @@ kubectl rollout undo deployment/cc-registry-backend --to-revision=2 -n codecolle
 kubectl rollout restart deployment/cc-registry-backend -n codecollection-registry
 ```
 
+## 💾 Database Migrations
+
+### Automatic Migration on Deployment
+
+Database migrations run **automatically** when the backend container starts. This is handled by:
+
+**File:** `backend/scripts/start.sh`
+```bash
+#!/bin/bash
+# Run migrations before starting the app
+python run_migrations.py
+# Then start FastAPI
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+**Migration Script:** `backend/scripts/run_migrations.py`
+- Checks if database is ready
+- Runs `alembic upgrade head`
+- Retries on connection failures
+
+### Worker/Scheduler Pattern
+
+Workers and schedulers use an **initContainer** to wait for migrations:
+
+```yaml
+initContainers:
+  - name: wait-for-migrations
+    image: backend-image:tag
+    command: ['python', '/app/scripts/run_migrations.py']
+```
+
+This ensures:
+1. Backend starts and runs migrations
+2. Workers/schedulers wait for migrations to complete
+3. All pods start with correct schema
+
+### Adding a New Migration
+
+```bash
+# 1. Create migration file in backend/alembic/versions/
+# Example: 003_add_new_feature.py
+
+# 2. Build and push new backend image
+docker build -t your-registry/backend:v1.2.3 ./backend
+docker push your-registry/backend:v1.2.3
+
+# 3. Update image tag in kustomization.yaml or deployment manifests
+
+# 4. Deploy (migrations run automatically on backend restart)
+kubectl apply -k .
+
+# 5. Monitor migration
+kubectl logs -f deployment/cc-registry-backend -n codecollection-registry
+# Look for: "Running migrations..." and "Migrations completed successfully"
+
+# 6. Verify schema
+kubectl exec -it deployment/cc-registry-backend -n codecollection-registry -- \
+  alembic current
+```
+
+### Migration Safety
+
+- **Idempotent:** Migrations use `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, etc.
+- **Atomic:** Each migration runs in a transaction
+- **Logged:** All migration attempts are logged
+- **Resilient:** Retries on connection failures
+
+### Troubleshooting Migrations
+
+```bash
+# Check if migrations ran
+kubectl logs deployment/cc-registry-backend -n codecollection-registry | grep -i migration
+
+# Check current schema version
+kubectl exec -it deployment/cc-registry-backend -n codecollection-registry -- \
+  alembic current
+
+# View migration history
+kubectl exec -it deployment/cc-registry-backend -n codecollection-registry -- \
+  alembic history
+
+# Manually run migrations (if needed)
+kubectl exec -it deployment/cc-registry-backend -n codecollection-registry -- \
+  alembic upgrade head
+
+# View pending migrations
+kubectl exec -it deployment/cc-registry-backend -n codecollection-registry -- \
+  alembic upgrade head --sql
+```
+
+### Migration Files Location
+
+- **Local:** `backend/alembic/versions/`
+- **Container:** `/app/alembic/versions/`
+- **Pattern:** `{revision_id}_{description}.py`
+
+### Recent Migrations
+
+- `001_add_user_variables.py` - Added user_variables column to codebundles
+- `002_add_task_growth_metrics.py` - Created task_growth_metrics table for analytics
+
 ## 🧹 Cleanup
 
 ### Delete All Resources
