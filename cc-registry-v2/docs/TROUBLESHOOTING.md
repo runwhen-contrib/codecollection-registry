@@ -39,6 +39,16 @@
 **Fix:** Added `func.sum(Codebundle.sli_count)` to aggregation  
 **File:** `backend/app/main.py` lines ~120 and ~181
 
+### Manual Task Trigger Returns 500 Error
+**Symptom:** Triggering parse/sync tasks via API returns 500 with "duplicate key violation" on `task_executions_task_id_key`  
+**Cause:** Race condition - both the API endpoint and the Celery task try to create a task execution record with the same `task_id`  
+**Fix:** Removed `task_monitor.create_task_record()` calls from API endpoints - tasks create their own records  
+**File:** `backend/app/routers/tasks.py` - `/sync-collections`, `/sync-collection/{id}`, `/parse-codebundles` endpoints  
+**Endpoints Affected:**
+- `POST /api/v1/tasks/sync-collections`
+- `POST /api/v1/tasks/sync-collection/{collection_id}`
+- `POST /api/v1/tasks/parse-codebundles`
+
 ---
 
 ## Common Issues

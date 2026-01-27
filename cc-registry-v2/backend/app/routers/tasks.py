@@ -93,14 +93,8 @@ async def trigger_sync_collections(
         
         task = sync_all_collections_task.apply_async()
         
-        # Create task record for monitoring
-        task_monitor.create_task_record(
-            task_id=task.id,
-            task_name="Sync All Collections",
-            task_type="sync",
-            parameters={},
-            triggered_by="admin"
-        )
+        # Don't create task record here - the task creates its own record
+        # (Avoids duplicate key constraint violation)
         
         return TaskResponse(
             task_id=task.id,
@@ -122,14 +116,8 @@ async def trigger_sync_single_collection(
         
         task = sync_single_collection_task.apply_async(args=[collection_id])
         
-        # Create task record for monitoring
-        task_monitor.create_task_record(
-            task_id=task.id,
-            task_name=f"Sync Collection {collection_id}",
-            task_type="sync",
-            parameters={"collection_id": collection_id},
-            triggered_by="admin"
-        )
+        # Don't create task record here - the task creates its own record
+        # (Avoids duplicate key constraint violation)
         
         return TaskResponse(
             task_id=task.id,
@@ -150,14 +138,8 @@ async def trigger_parse_codebundles(
         
         task = parse_all_codebundles_task.apply_async()
         
-        # Create task record for monitoring
-        task_monitor.create_task_record(
-            task_id=task.id,
-            task_name="Parse All Codebundles",
-            task_type="parse",
-            parameters={},
-            triggered_by="admin"
-        )
+        # Don't create task record here - the task creates its own record
+        # (Avoids duplicate key constraint violation)
         
         return TaskResponse(
             task_id=task.id,
