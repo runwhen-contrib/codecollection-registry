@@ -24,8 +24,7 @@ import {
   Launch as LaunchIcon,
   Close as CloseIcon,
   Add as AddIcon,
-  Remove as RemoveIcon,
-  GitHub as GitHubIcon
+  Remove as RemoveIcon
 } from '@mui/icons-material';
 import { apiService, Task, TasksResponse } from '../services/api';
 import { useCart } from '../contexts/CartContext';
@@ -447,42 +446,17 @@ const AllTasks: React.FC = () => {
                             </Typography>
                           </Box>
                           
-                          <Box sx={{ ml: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              startIcon={<LaunchIcon />}
-                              href={`/collections/${group.codebundle.collection_slug}/codebundles/${group.codebundle.slug}`}
-                              sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
-                            >
-                              View
-                            </Button>
-                            
-                            {group.codebundle.runbook_source_url && (
-                              <Button
-                                variant="text"
-                                size="small"
-                                startIcon={<GitHubIcon />}
-                                href={group.codebundle.runbook_source_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
-                              >
-                                Source
-                              </Button>
-                            )}
-                            
+                          <Box sx={{ ml: 1.5, display: 'flex', flexDirection: 'row', gap: 0.75, alignItems: 'center' }}>
                             <Button
                               variant={isInCart(group.codebundle.id) ? "contained" : "outlined"}
                               size="small"
                               color={isInCart(group.codebundle.id) ? "error" : "primary"}
                               startIcon={isInCart(group.codebundle.id) ? <RemoveIcon /> : <AddIcon />}
-                              sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
+                              sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, whiteSpace: 'nowrap' }}
                               onClick={() => {
                                 if (isInCart(group.codebundle.id)) {
                                   removeFromCart(group.codebundle.id);
                                 } else {
-                                  // Create a proper CodeBundle object for the cart
                                   const codebundleItem = {
                                     id: group.codebundle.id,
                                     name: group.codebundle.name,
@@ -513,7 +487,7 @@ const AllTasks: React.FC = () => {
                                       runwhen_directory_path: null
                                     },
                                     codecollection: {
-                                      id: 0, // We don't have this info in the current structure
+                                      id: 0,
                                       name: group.codebundle.collection_name,
                                       slug: group.codebundle.collection_slug,
                                       git_url: group.tasks[0]?.git_url || '',
@@ -524,7 +498,16 @@ const AllTasks: React.FC = () => {
                                 }
                               }}
                             >
-                              {isInCart(group.codebundle.id) ? "Remove CodeBundle" : "Select CodeBundle"}
+                              {isInCart(group.codebundle.id) ? "Remove" : "Select CodeBundle"}
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              startIcon={<LaunchIcon />}
+                              href={`/collections/${group.codebundle.collection_slug}/codebundles/${group.codebundle.slug}`}
+                              sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, whiteSpace: 'nowrap' }}
+                            >
+                              View
                             </Button>
                           </Box>
                         </Box>
