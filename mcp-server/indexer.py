@@ -640,7 +640,7 @@ class CodeCollectionIndexer:
             if crawl_content and index_config.get('crawl_linked_pages', True):
                 crawler = WebCrawler()
                 if crawler.is_available():
-                    logger.info("Web crawling enabled - fetching documentation content...")
+                    logger.info(f"Web crawling enabled ({crawler.backend}) - fetching documentation content...")
                     for doc in all_docs:
                         url = doc.get('url')
                         if url and url.startswith('http'):
@@ -655,7 +655,7 @@ class CodeCollectionIndexer:
                             except Exception as e:
                                 logger.warning(f"Failed to crawl {url}: {e}")
                 else:
-                    logger.info("Web crawling unavailable (install beautifulsoup4)")
+                    logger.info("Web crawling unavailable (install crawl4ai or beautifulsoup4)")
             
             return all_docs
         except Exception as e:

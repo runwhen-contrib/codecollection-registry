@@ -269,24 +269,34 @@ def parse_stored_data_task(self, previous_result=None):
                             logger.warning(f"Collection not found: {codebundle_data['collection_slug']}")
                             continue
                         
-                        # Check if codebundle already exists
+                        # Determine if this is a runbook or sli file
+                        is_sli_file = raw_file.file_path.endswith('sli.robot')
+                        parsed_tasks = codebundle_data.get('tasks', [])
+                        
+                        # Check if codebundle already exists (use slug + collection_id for consistency)
                         existing_codebundle = db.query(Codebundle).filter(
-                            Codebundle.slug == codebundle_data['slug']
+                            Codebundle.slug == codebundle_data['slug'],
+                            Codebundle.codecollection_id == collection.id
                         ).first()
                         
                         if existing_codebundle:
-                            # Update existing
+                            # Update metadata
                             existing_codebundle.name = codebundle_data['name']
                             existing_codebundle.display_name = codebundle_data['display_name']
                             existing_codebundle.description = codebundle_data['description']
                             existing_codebundle.doc = codebundle_data['doc']
-                            existing_codebundle.tasks = codebundle_data['tasks']
                             existing_codebundle.support_tags = codebundle_data['support_tags']
-                            existing_codebundle.slis = codebundle_data.get('slis', [])
                             existing_codebundle.user_variables = codebundle_data.get('user_variables', [])
+                            # Only update the appropriate task field based on file type
+                            if is_sli_file:
+                                existing_codebundle.slis = parsed_tasks
+                                existing_codebundle.sli_count = len(parsed_tasks)
+                            else:
+                                existing_codebundle.tasks = parsed_tasks
+                                existing_codebundle.task_count = len(parsed_tasks)
                             codebundles_updated += 1
                         else:
-                            # Create new
+                            # Create new with proper task/sli separation
                             codebundle = Codebundle(
                                 name=codebundle_data['name'],
                                 slug=codebundle_data['slug'],
@@ -295,8 +305,10 @@ def parse_stored_data_task(self, previous_result=None):
                                 doc=codebundle_data['doc'],
                                 author=codebundle_data['author'],
                                 support_tags=codebundle_data['support_tags'],
-                                tasks=codebundle_data['tasks'],
-                                slis=codebundle_data.get('slis', []),
+                                tasks=[] if is_sli_file else parsed_tasks,
+                                slis=parsed_tasks if is_sli_file else [],
+                                task_count=0 if is_sli_file else len(parsed_tasks),
+                                sli_count=len(parsed_tasks) if is_sli_file else 0,
                                 user_variables=codebundle_data.get('user_variables', []),
                                 codecollection_id=collection.id
                             )

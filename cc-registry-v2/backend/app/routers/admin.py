@@ -324,13 +324,16 @@ async def get_population_status(token: str = Depends(verify_admin_token)):
         
         db = SessionLocal()
         try:
+            from sqlalchemy import func
+            
             collections_count = db.query(CodeCollection).count()
             codebundles_count = db.query(Codebundle).count()
-            # Count ALL tasks: both runbook tasks and SLI tasks
-            codebundles = db.query(Codebundle).all()
-            runbook_tasks = sum(len(cb.tasks or []) for cb in codebundles)
-            sli_tasks = sum(len(cb.slis or []) for cb in codebundles)
-            tasks_count = runbook_tasks + sli_tasks
+            # Count tasks using authoritative integer fields (consistent with stats endpoint)
+            stats = db.query(
+                func.coalesce(func.sum(Codebundle.task_count), 0).label('total_tasks'),
+                func.coalesce(func.sum(Codebundle.sli_count), 0).label('total_slis')
+            ).first()
+            tasks_count = int(stats.total_tasks) + int(stats.total_slis)
             
             return {
                 "collections": collections_count,

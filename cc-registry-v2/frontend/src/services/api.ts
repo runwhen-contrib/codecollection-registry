@@ -41,8 +41,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     const timestamp = new Date().toISOString().substring(11, 23);
-    const duration = response.config.metadata?.startTime 
-      ? Date.now() - response.config.metadata.startTime 
+    const duration = (response.config as any).metadata?.startTime 
+      ? Date.now() - (response.config as any).metadata.startTime 
       : '?';
     console.log(`[${timestamp}] ✅ API Response:`, response.status, response.config.url, `(${duration}ms)`);
     return response;
@@ -905,6 +905,7 @@ export interface ChatQuery {
 export interface ChatResponse {
   answer: string;
   no_match?: boolean;  // True when no relevant codebundle was found
+  answer_source?: string;  // "documentation", "codebundles", or "mixed"
   relevant_tasks: Array<{
     id: number;
     codebundle_name: string;

@@ -205,43 +205,20 @@ class FindDocumentationTool(BaseTool):
         category: str = "all",
         max_results: int = 10
     ) -> str:
-        """Find documentation"""
+        """
+        Find documentation using a two-layer approach:
+        1. Semantic search (ChromaDB with crawled page content) - PRIMARY
+        2. docs.yaml keyword matching - for URL enrichment and fallback
+        
+        Semantic search uses actual crawled page content with embeddings,
+        so it can answer detailed questions. docs.yaml provides curated
+        URLs and descriptions for enrichment.
+        """
         doc_manager = get_doc_manager()
+        semantic_results = []
+        keyword_results = []
         
-        # Search managed docs first
-        results = doc_manager.search(
-            query=query,
-            category=category if category != "all" else None,
-            limit=max_results
-        )
-        
-        if results:
-            output = f"# Documentation: {query}\n\n"
-            output += f"Found {len(results)} resource(s):\n\n"
-            
-            for entry in results:
-                output += f"## **{entry.name}**\n\n"
-                output += f"**Category:** {entry.category}\n\n"
-                
-                if entry.description:
-                    output += f"**Description:** {entry.description}\n\n"
-                
-                if entry.keywords:
-                    output += f"**Keywords:** {', '.join(entry.keywords)}\n\n"
-                
-                if entry.url:
-                    output += f"**Link:** [{entry.url}]({entry.url})\n\n"
-                
-                if entry.examples:
-                    output += "**Examples:**\n"
-                    for ex in entry.examples[:2]:
-                        output += f"```robot\n{ex}\n```\n\n"
-                
-                output += "---\n\n"
-            
-            return output
-        
-        # Fallback to semantic search if available
+        # Layer 1: Semantic search against crawled documentation content (PRIMARY)
         if self._get_semantic_search:
             try:
                 ss = self._get_semantic_search()
@@ -250,25 +227,82 @@ class FindDocumentationTool(BaseTool):
                         query=query,
                         category=category if category != "all" else None,
                         max_results=max_results
-                    )
-                    
-                    if semantic_results:
-                        output = f"# Documentation: {query}\n\n"
-                        output += f"Found {len(semantic_results)} resource(s):\n\n"
-                        
-                        for doc in semantic_results:
-                            output += f"## **{doc['name']}**\n\n"
-                            output += f"**Category:** {doc['category']}\n\n"
-                            if doc.get('description'):
-                                output += f"**Description:** {doc['description']}\n\n"
-                            if doc.get('url'):
-                                output += f"**Link:** [{doc['url']}]({doc['url']})\n\n"
-                            output += f"**Relevance:** {doc['score']:.0%}\n\n"
-                            output += "---\n\n"
-                        
-                        return output
+                    ) or []
             except Exception as e:
-                logger.warning(f"Semantic search fallback failed: {e}")
+                logger.warning(f"Semantic documentation search failed: {e}")
+        
+        # Layer 2: Keyword search against docs.yaml (for URLs and curated descriptions)
+        keyword_results = doc_manager.search(
+            query=query,
+            category=category if category != "all" else None,
+            limit=max_results
+        )
+        
+        # Build a URL lookup from keyword results for enrichment
+        url_lookup = {}
+        for entry in keyword_results:
+            name_key = entry.name.lower().strip()
+            url_lookup[name_key] = entry
+        
+        # Merge results: semantic results first (richer content), enriched with docs.yaml URLs
+        output_parts = []
+        seen_names = set()
+        
+        # Add semantic results (these have actual page content from crawling)
+        for doc in semantic_results:
+            name = doc.get('name', doc.get('question', 'Untitled'))
+            seen_names.add(name.lower().strip())
+            
+            part = f"## **{name}**\n\n"
+            part += f"**Category:** {doc.get('category', 'documentation')}\n\n"
+            
+            # Use crawled content if available (much richer than docs.yaml descriptions)
+            if doc.get('crawled_content'):
+                # Include actual page content - this is the gold
+                content = doc['crawled_content'][:3000]
+                part += f"**Content:**\n{content}\n\n"
+            elif doc.get('description'):
+                part += f"**Description:** {doc['description']}\n\n"
+            
+            # Enrich with URL from docs.yaml if available
+            url = doc.get('url', '')
+            name_key = name.lower().strip()
+            if name_key in url_lookup and url_lookup[name_key].url:
+                url = url_lookup[name_key].url
+            if url:
+                part += f"**Link:** [{url}]({url})\n\n"
+            
+            part += f"**Relevance:** {doc.get('score', 0):.0%}\n\n"
+            part += "---\n\n"
+            output_parts.append(part)
+        
+        # Add keyword-only results that weren't in semantic results
+        for entry in keyword_results:
+            if entry.name.lower().strip() not in seen_names:
+                seen_names.add(entry.name.lower().strip())
+                
+                part = f"## **{entry.name}**\n\n"
+                part += f"**Category:** {entry.category}\n\n"
+                
+                if entry.description:
+                    part += f"**Description:** {entry.description}\n\n"
+                
+                if entry.url:
+                    part += f"**Link:** [{entry.url}]({entry.url})\n\n"
+                
+                if entry.examples:
+                    part += "**Examples:**\n"
+                    for ex in entry.examples[:2]:
+                        part += f"```robot\n{ex}\n```\n\n"
+                
+                part += "---\n\n"
+                output_parts.append(part)
+        
+        if output_parts:
+            output = f"# Documentation: {query}\n\n"
+            output += f"Found {len(output_parts)} resource(s):\n\n"
+            output += "".join(output_parts[:max_results])
+            return output
         
         return f"No documentation found matching: {query}\n\nCheck the official RunWhen documentation at https://docs.runwhen.com"
 

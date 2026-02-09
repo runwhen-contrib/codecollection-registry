@@ -68,6 +68,52 @@ sources:
       priority: medium
 
   # =========================================================================
+  # RunWhen Local
+  # =========================================================================
+  runwhen_local:
+    - name: RunWhen Local Installation Guide
+      url: https://docs.runwhen.com/public/v/runwhen-local/user-guide/features/getting-started
+      description: |
+        How to install RunWhen Local using Helm (Kubernetes), Docker, or Docker Compose. 
+        RunWhen Local discovers your cloud and Kubernetes resources, matches them to relevant 
+        CodeBundles, and generates troubleshooting commands you can run immediately.
+        Install with Helm: helm repo add runwhen-contrib https://runwhen-contrib.github.io/helm-charts && 
+        helm install runwhen-local runwhen-contrib/runwhen-local -n runwhen-local --create-namespace.
+        Or with Docker: docker run -p 8081:8081 ghcr.io/runwhen-contrib/runwhen-local:latest.
+        Access the UI at http://localhost:8081.
+      topics:
+        - install
+        - installation
+        - runwhen-local
+        - local
+        - helm
+        - docker
+        - getting-started
+        - setup
+      priority: high
+
+    - name: RunWhen Local Configuration
+      url: https://docs.runwhen.com/public/v/runwhen-local/user-guide/features/configuration
+      description: Configure RunWhen Local via workspaceInfo.yaml to set up kubeconfigs, cloud credentials, namespace mappings, and discovery settings.
+      topics:
+        - configuration
+        - runwhen-local
+        - kubeconfig
+        - cloud-credentials
+        - workspaceInfo
+      priority: high
+
+    - name: RunWhen Local Troubleshooting
+      url: https://docs.runwhen.com/public/v/runwhen-local/user-guide/features/troubleshooting
+      description: Troubleshoot common RunWhen Local issues including missing resources, slow discovery, and connectivity problems. Check logs and restart discovery.
+      topics:
+        - troubleshooting
+        - runwhen-local
+        - debug
+        - issues
+      priority: medium
+
+  # =========================================================================
   # Cloud Discovery Configuration
   # =========================================================================
   cloud_discovery:
@@ -133,56 +179,240 @@ sources:
       priority: high
 
   # =========================================================================
-  # Library References
+  # RunWhen Platform
+  # =========================================================================
+  platform:
+    - name: RunWhen Platform Overview
+      url: https://docs.runwhen.com/public/runwhen-platform
+      description: Overview of the RunWhen Platform including workspaces, SLXs, CodeBundles, and how they work together to automate troubleshooting and monitoring
+      topics:
+        - platform
+        - overview
+        - introduction
+        - runwhen
+      priority: high
+
+    - name: Workspace Configuration
+      url: https://docs.runwhen.com/public/runwhen-platform/workspaces
+      description: Guide to configuring RunWhen workspaces including adding clusters, setting up discovery, and organizing resources
+      topics:
+        - workspace
+        - configuration
+        - setup
+        - organization
+      priority: high
+
+    - name: Secrets Management
+      url: https://docs.runwhen.com/public/runwhen-platform/secrets
+      description: How to manage secrets in RunWhen including kubeconfigs, API keys, cloud credentials (AWS, Azure, GCP), and service account tokens
+      topics:
+        - secrets
+        - credentials
+        - security
+        - kubeconfig
+        - api-keys
+        - authentication
+      priority: high
+
+    - name: SLX Configuration
+      url: https://docs.runwhen.com/public/runwhen-platform/slx-configuration
+      description: Guide to configuring Service Level Expectations (SLX) including thresholds, alerting, and CodeBundle bindings
+      topics:
+        - slx
+        - service-level
+        - configuration
+        - thresholds
+        - alerting
+      priority: medium
+
+  # =========================================================================
+  # Library References (keyword_usage_help / find_library_info tools)
   # =========================================================================
   libraries:
-    - name: RW.CLI.RunCli
-      url: https://docs.runwhen.com/public/runwhen-authors/rw-cli-runcli
-      description: Execute shell commands and CLI tools. Supports kubectl, aws, gcloud, and other CLI tools.
-      category: cli
+    - name: RW.CLI Library
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-cli
+      description: Execute shell commands and CLI tools like kubectl, aws, gcloud, and other CLI tools. The most commonly used library in CodeBundles.
       topics:
         - cli
         - shell
         - kubectl
         - aws
         - gcloud
+        - command
+        - bash
+        - rw.cli
       usage_examples:
         - "RW.CLI.Run Cli    cmd=kubectl get pods -n \\${NAMESPACE}"
         - "RW.CLI.Run Cli    cmd=aws eks describe-cluster --name \\${CLUSTER_NAME}"
-      common_use_cases:
-        - Running kubectl commands
-        - Executing AWS CLI commands
-        - Running gcloud commands
-        - General shell script execution
+      priority: high
+
+    - name: RW.K8s Library
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-k8s
+      description: Kubernetes-specific operations and helpers for working with pods, deployments, services, namespaces, and other K8s resources
+      topics:
+        - kubernetes
+        - k8s
+        - pods
+        - deployments
+        - services
+        - namespaces
+        - rw.k8s
+      priority: high
+
+    - name: RW.Core Library
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-core
+      description: Core utility functions for CodeBundle development including variable handling, output formatting, and common helpers
+      topics:
+        - core
+        - utilities
+        - helpers
+        - common
+        - variables
+        - rw.core
+      priority: medium
+
+    - name: RW.AWS Library
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-aws
+      description: AWS-specific operations and helpers for EC2, S3, EKS, Lambda, RDS, and other AWS services
+      topics:
+        - aws
+        - amazon
+        - ec2
+        - s3
+        - lambda
+        - eks
+        - rds
+        - rw.aws
+      priority: high
+
+    - name: RW.Azure Library
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-azure
+      description: Azure-specific operations and helpers for AKS, App Services, databases, and Azure resources
+      topics:
+        - azure
+        - microsoft
+        - aks
+        - app-service
+        - webapp
+        - functionapp
+        - rw.azure
+      priority: high
+
+    - name: RW.GCP Library
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-gcp
+      description: Google Cloud Platform specific operations for GKE, Cloud Run, Cloud SQL, and GCP services
+      topics:
+        - gcp
+        - google
+        - gke
+        - cloud-run
+        - compute
+        - rw.gcp
       priority: high
 
   # =========================================================================
-  # Examples & Tutorials  
+  # CodeBundle Development (codebundle tools)
+  # =========================================================================
+  codebundle_development:
+    - name: Robot Framework Basics for CodeBundles
+      url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/robot-framework-basics
+      description: Introduction to Robot Framework syntax for CodeBundle development including keywords, tasks, variables, and test structure
+      topics:
+        - robot
+        - robot-framework
+        - syntax
+        - keywords
+        - tasks
+      priority: high
+
+    - name: SLI Development Guide
+      url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/sli-development
+      description: Guide to creating Service Level Indicator (SLI) CodeBundles that measure metrics and return numeric values for monitoring
+      topics:
+        - sli
+        - service-level-indicator
+        - metrics
+        - monitoring
+        - sli.robot
+      priority: high
+
+    - name: TaskSet Development Guide
+      url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/taskset-development
+      description: Guide to creating TaskSet CodeBundles for automated runbooks with multiple tasks for troubleshooting and remediation
+      topics:
+        - taskset
+        - runbook
+        - automation
+        - tasks
+        - remediation
+        - runbook.robot
+      priority: high
+
+  # =========================================================================
+  # Contributing & GitHub Issues (request_codebundle / check_existing_requests tools)
+  # =========================================================================
+  contributing:
+    - name: Contributing CodeBundles
+      url: https://docs.runwhen.com/public/runwhen-authors/contributing
+      description: |
+        How to contribute CodeBundles to the RunWhen community:
+        1. Fork the appropriate codecollection repository on GitHub
+        2. Create your CodeBundle following the development guide
+        3. Test it locally using robot or RunWhen Local
+        4. Submit a pull request for community review
+        Contributions help the entire community troubleshoot and monitor their infrastructure.
+      topics:
+        - contribute
+        - contribution
+        - pull-request
+        - community
+        - open-source
+        - github
+      priority: high
+
+    - name: Requesting New CodeBundles
+      url: https://github.com/runwhen-contrib/rw-cli-codecollection/issues
+      description: |
+        You can request new CodeBundles by creating a GitHub issue on the appropriate codecollection repository.
+        Include: the platform/service you need help with, what the CodeBundle should do,
+        any specific CLI commands or APIs involved, and your use case.
+        The community and RunWhen team review requests and may implement them.
+      topics:
+        - request
+        - codebundle-request
+        - github-issue
+        - feature-request
+        - new-codebundle
+      priority: medium
+
+  # =========================================================================
+  # Examples & Tutorials (codebundle tools)
   # =========================================================================
   examples:
-    - name: Simple Health Check Example
+    - name: Kubernetes Deployment Health Check
       url: https://github.com/runwhen-contrib/rw-public-codecollection/tree/main/codebundles/k8s-deployment-healthcheck
-      description: A simple example of a Kubernetes deployment health check CodeBundle
+      description: A simple example of a Kubernetes deployment health check CodeBundle that checks pod status, readiness, and resource usage
       topics:
         - example
         - health-check
         - kubernetes
+        - deployment
         - getting-started
       priority: high
-      
-    - name: Troubleshooting Task Example
+
+    - name: Kubernetes Namespace Troubleshooting
       url: https://github.com/runwhen-contrib/rw-cli-codecollection/tree/main/codebundles/k8s-namespace-healthcheck
-      description: Example of a comprehensive namespace troubleshooting CodeBundle with multiple tasks
+      description: Comprehensive namespace troubleshooting CodeBundle that checks events, pod health, resource quotas, and network policies
       topics:
         - example
         - troubleshooting
         - kubernetes
         - namespace
       priority: high
-      
-    - name: AWS CodeBundle Example
+
+    - name: AWS EKS Cluster Health Check
       url: https://github.com/runwhen-contrib/rw-cli-codecollection/tree/main/codebundles/aws-eks-cluster-healthcheck
-      description: Example of an AWS EKS cluster health check CodeBundle
+      description: AWS EKS cluster health check CodeBundle that validates cluster status, node health, and add-on configurations
       topics:
         - example
         - aws
@@ -210,7 +440,7 @@ sources:
         - kubectl
         - kubernetes
         - cli
-        
+
     - question: How do I access cloud provider credentials?
       answer: |
         Cloud credentials are configured as secrets in your workspace and accessed via environment variables:
@@ -226,7 +456,7 @@ sources:
         - gcp
         - azure
         - secrets
-        
+
     - question: How do I create an SLI vs a Task?
       answer: |
         SLIs (Service Level Indicators) return a numeric metric value (0-1 or percentage).
@@ -241,6 +471,53 @@ sources:
         - monitoring
         - automation
 
+    - question: How do I debug a CodeBundle?
+      answer: |
+        Tips for debugging CodeBundles:
+        1. Use Log statements to output variable values
+        2. Test locally with: robot --variable NAMESPACE:default sli.robot
+        3. Check the RunSession logs in the RunWhen platform
+        4. Use RunWhen Local to test CodeBundles against real infrastructure
+        5. Add RW.Core.Add Pre To Report for detailed output
+      topics:
+        - debug
+        - debugging
+        - troubleshooting
+        - logs
+        - testing
+
+    - question: What is the difference between SLI and TaskSet?
+      answer: |
+        SLI (Service Level Indicator) CodeBundles measure a metric and return a numeric value (0-1 or percentage).
+        They are used for continuous monitoring and alerting.
+        
+        TaskSet CodeBundles run automated runbooks with multiple tasks that can be triggered on-demand or 
+        automatically. They are used for remediation and troubleshooting.
+        
+        Use SLIs for monitoring, TaskSets for remediation.
+      topics:
+        - sli
+        - taskset
+        - difference
+        - types
+        - monitoring
+        - automation
+
+    - question: How do I contribute a CodeBundle?
+      answer: |
+        To contribute a CodeBundle:
+        1. Fork the appropriate codecollection repository (e.g., rw-cli-codecollection)
+        2. Create your CodeBundle following the development guide
+        3. Test it locally using robot or RunWhen Local
+        4. Submit a pull request on GitHub
+        5. The community will review and merge
+      topics:
+        - contribute
+        - contribution
+        - pull-request
+        - community
+        - github
+
 # =========================================================================
 # Index Configuration
 # =========================================================================
@@ -253,7 +530,7 @@ index_config:
   crawl_linked_pages: true
   
   # Maximum depth for crawling
-  max_crawl_depth: 1
+  max_crawl_depth: 3
   
   # Include code examples in embeddings
   include_code_examples: true

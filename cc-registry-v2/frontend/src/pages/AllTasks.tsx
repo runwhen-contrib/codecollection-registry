@@ -434,7 +434,7 @@ const AllTasks: React.FC = () => {
               {Object.keys(groupedTasks).length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   {Object.entries(groupedTasks).map(([key, group]) => (
-                    <Card key={key} sx={{ '&:hover': { boxShadow: 2 } }}>
+                    <Card key={key}>
                       <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                         {/* CodeBundle Header */}
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
@@ -551,10 +551,6 @@ const AllTasks: React.FC = () => {
                                       display: 'flex',
                                       justifyContent: 'space-between',
                                       alignItems: 'center',
-                                      '&:hover': {
-                                        bgcolor: 'grey.100',
-                                        borderColor: 'primary.main'
-                                      }
                                     }}
                                   >
                                     <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 500 }}>
@@ -586,10 +582,6 @@ const AllTasks: React.FC = () => {
                                       display: 'flex',
                                       justifyContent: 'space-between',
                                       alignItems: 'center',
-                                      '&:hover': {
-                                        bgcolor: 'grey.100',
-                                        borderColor: 'secondary.main'
-                                      }
                                     }}
                                   >
                                     <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 500 }}>

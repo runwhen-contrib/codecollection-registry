@@ -553,26 +553,59 @@ const Chat: React.FC = () => {
                                 <CopyIcon sx={{ fontSize: 16 }} />
                               )}
                             </IconButton>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              startIcon={<RequestIcon sx={{ fontSize: 16 }} />}
-                              onClick={() => handleOpenRequestDialog(message.userQuery || message.content)}
-                              sx={{
-                                textTransform: 'none',
-                                fontSize: '0.75rem',
-                                borderColor: 'divider',
-                                color: 'text.secondary',
-                                fontWeight: 500,
-                                '&:hover': { 
-                                  borderColor: 'primary.main',
-                                  color: 'primary.main',
-                                  backgroundColor: 'rgba(25, 118, 210, 0.04)'
-                                }
-                              }}
-                            >
-                              Request CodeBundle
-                            </Button>
+                            {/* Only show Request CodeBundle button for codebundle-sourced answers */}
+                            {message.response?.answer_source !== 'documentation' && message.response?.answer_source !== 'libraries' && message.response?.answer_source !== 'system' && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<RequestIcon sx={{ fontSize: 16 }} />}
+                                onClick={() => handleOpenRequestDialog(message.userQuery || message.content)}
+                                sx={{
+                                  textTransform: 'none',
+                                  fontSize: '0.75rem',
+                                  borderColor: 'divider',
+                                  color: 'text.secondary',
+                                  fontWeight: 500,
+                                  '&:hover': { 
+                                    borderColor: 'primary.main',
+                                    color: 'primary.main',
+                                    backgroundColor: 'rgba(25, 118, 210, 0.04)'
+                                  }
+                                }}
+                              >
+                                Request CodeBundle
+                              </Button>
+                            )}
+                            {/* Show source indicator for all tool types */}
+                            {message.response?.answer_source && message.response.answer_source !== 'codebundles' && (
+                              <Chip
+                                label={`Source: ${
+                                  message.response.answer_source === 'documentation' ? 'Documentation' :
+                                  message.response.answer_source === 'libraries' ? 'Libraries' :
+                                  message.response.answer_source === 'system' ? 'System Info' :
+                                  message.response.answer_source === 'mixed' ? 'Docs + CodeBundles' :
+                                  message.response.answer_source
+                                }`}
+                                size="small"
+                                variant="outlined"
+                                sx={{
+                                  fontSize: '0.7rem',
+                                  height: 22,
+                                  borderColor: 
+                                    message.response.answer_source === 'documentation' ? 'info.light' :
+                                    message.response.answer_source === 'libraries' ? 'secondary.light' :
+                                    message.response.answer_source === 'system' ? 'success.light' :
+                                    message.response.answer_source === 'mixed' ? 'warning.light' :
+                                    'info.light',
+                                  color:
+                                    message.response.answer_source === 'documentation' ? 'info.main' :
+                                    message.response.answer_source === 'libraries' ? 'secondary.main' :
+                                    message.response.answer_source === 'system' ? 'success.main' :
+                                    message.response.answer_source === 'mixed' ? 'warning.main' :
+                                    'info.main'
+                                }}
+                              />
+                            )}
                           </Box>
                         </Box>
                       )}
@@ -614,7 +647,7 @@ const Chat: React.FC = () => {
                         </Box>
                       )}
 
-                      {message.response && message.response.relevant_tasks.length > 0 && (
+                      {message.response && message.response.relevant_tasks.length > 0 && !['documentation', 'libraries', 'system'].includes(message.response.answer_source || '') && (
                         <Box sx={{ mt: 2 }}>
                           <Box 
                             onClick={() => toggleTasks(message.id)}

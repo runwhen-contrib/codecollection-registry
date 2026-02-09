@@ -1,5 +1,8 @@
 """
 Registry Task System - Sync and Parse Collections/Codebundles
+
+This is the CANONICAL code path for syncing and parsing codebundles.
+All tasks here use the shared Celery app from celery_app.py.
 """
 import os
 import yaml
@@ -8,22 +11,16 @@ import logging
 import subprocess
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from celery import Celery
 from git import Repo
 
 from app.core.database import SessionLocal
 from app.models import CodeCollection, Codebundle, RawRepositoryData
 from app.models.version import CodeCollectionVersion
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Initialize Celery
-celery_app = Celery(
-    'registry_tasks',
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
-)
+# Use the shared Celery app (single instance for the entire application)
+from app.tasks.celery_app import celery_app
 
 def _create_display_name(name: str) -> str:
     """Create a display name from a codebundle name"""

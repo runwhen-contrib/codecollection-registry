@@ -3,10 +3,10 @@
 # After making changes, restart the scheduler: docker-compose restart scheduler
 
 schedules:
-  # YAML Validation - Check that all YAML entries exist in database
+  # YAML Validation - Sync collections from YAML to ensure all entries exist in database
   - name: validate-yaml-seed-daily
-    task: app.tasks.registry_tasks.validate_yaml_seed_task
-    description: Validate that all YAML entries exist in database
+    task: app.tasks.registry_tasks.sync_all_collections_task
+    description: Sync YAML entries into database (validates all collections exist)
     schedule_type: crontab
     crontab:
       hour: 1
@@ -17,52 +17,68 @@ schedules:
     enabled: true
 
   # =============================================================================
-  # AUTOMATED UPDATE WORKFLOW (Every 4 Hours)
+  # REGISTRY SYNC WORKFLOW
   # =============================================================================
-  # This workflow runs every 4 hours and does:
-  #   1. Sync codecollections from their repos
-  #   2. Parse codebundles to discover new ones
-  #   3. AI enhance ONLY NEW codebundles (not a full refresh)
-  # All three steps run in sequence automatically.
-  
-  - name: update-workflow-every-4h
+  # This is the primary sync process. It runs the canonical workflow:
+  #   1. Sync codecollections from their git repos
+  #   2. Parse codebundles (extracts tasks, SLIs, metadata)
+  #   3. AI enhance ONLY NEW codebundles (pending/NULL status)
+  #
+  # All three steps run in sequence automatically. Uses the canonical code path
+  # in registry_tasks.py which correctly:
+  #   - Looks up codebundles by (slug + collection_id) to avoid duplicates
+  #   - Sets both task_count and sli_count integer fields
+  #   - Separates runbook tasks from SLI tasks
+  #
+  # Adjust the crontab hours below to change sync frequency.
+  # Examples: "0,6,12,18" = every 6h, "0,4,8,12,16,20" = every 4h, "0,12" = twice daily
+
+  - name: scheduled-sync
     task: app.tasks.workflow_tasks.sync_parse_enhance_workflow_task
-    description: "Complete update: sync repos → parse → AI enhance NEW codebundles (every 4h)"
-    schedule_type: interval
-    interval:
-      hours: 4
+    description: "Complete sync: clone repos → parse codebundles → AI enhance new"
+    schedule_type: crontab
+    crontab:
+      hour: "0,6,12,18"  # Every 6 hours (midnight, 6 AM, noon, 6 PM)
+      minute: 0
     enabled: true
-  
+
   # =============================================================================
-  # INDIVIDUAL TASKS (Disabled - use workflow above instead)
+  # INDIVIDUAL TASKS (Disabled - available for manual trigger from Admin UI)
   # =============================================================================
-  # These can be manually triggered from the Admin UI if needed
-  
+
   - name: sync-collections-manual
     task: app.tasks.registry_tasks.sync_all_collections_task
     description: "[MANUAL] Sync all collections from repos"
-    schedule_type: interval
-    interval:
-      hours: 24
-    enabled: false  # Disabled - included in update-workflow-every-4h
+    schedule_type: crontab
+    crontab:
+      hour: 0
+      minute: 0
+    enabled: false
 
   - name: parse-codebundles-manual
     task: app.tasks.registry_tasks.parse_all_codebundles_task
     description: "[MANUAL] Parse all codebundles from repos"
-    schedule_type: interval
-    interval:
-      hours: 24
-    enabled: false  # Disabled - included in update-workflow-every-4h
+    schedule_type: crontab
+    crontab:
+      hour: 0
+      minute: 0
+    enabled: false
 
   - name: enhance-new-codebundles-manual
     task: app.tasks.ai_enhancement_tasks.enhance_pending_codebundles_task
     description: "[MANUAL] AI enhance ONLY new codebundles"
-    schedule_type: interval
-    interval:
-      hours: 24
-    enabled: false  # Disabled - included in update-workflow-every-4h
+    schedule_type: crontab
+    crontab:
+      hour: 0
+      minute: 0
+    enabled: false
+
+  # =============================================================================
+  # METRICS & STATISTICS
+  # =============================================================================
 
   # Metrics Generation - Generate daily metrics and statistics
+  # NOTE: No implementation exists yet. Enable when generate_metrics_task is implemented.
   - name: generate-metrics-daily
     task: app.tasks.registry_tasks.generate_metrics_task
     description: Generate daily metrics and statistics
@@ -70,17 +86,7 @@ schedules:
     crontab:
       hour: 5
       minute: 0
-    enabled: true
-
-  # Full Registry Sync - Complete population (clone, parse, sync)
-  - name: scheduled-sync
-    task: app.tasks.sync_tasks.scheduled_sync_task
-    description: Full registry population (clone, parse, sync)
-    schedule_type: crontab
-    crontab:
-      hour: 6
-      minute: 0
-    enabled: true
+    enabled: false
 
   # Statistics Update - Update collection statistics every hour
   - name: update-statistics-hourly
@@ -91,6 +97,10 @@ schedules:
       hour: null  # null = every hour
       minute: 0
     enabled: true
+
+  # =============================================================================
+  # HEALTH CHECKS & CLEANUP
+  # =============================================================================
 
   # Health Check - System health check every 5 minutes
   - name: health-check
@@ -123,7 +133,7 @@ schedules:
   # =============================================================================
   # MCP SERVER INDEXING
   # =============================================================================
-  
+
   # Documentation Indexing - Re-index documentation sources daily
   - name: index-documentation-daily
     task: app.tasks.mcp_tasks.index_documentation_task
@@ -144,6 +154,20 @@ schedules:
       minute: 0
       day_of_week: 0  # Sunday at 2 AM
     enabled: false  # Disabled by default - enable if needed
+
+  # =============================================================================
+  # ANALYTICS COMPUTATION
+  # =============================================================================
+
+  # Task Growth Analytics - Compute monthly task growth from git history
+  - name: compute-task-growth-analytics
+    task: app.tasks.analytics_tasks.compute_task_growth_analytics
+    description: Analyze git history and compute task growth metrics for dashboard
+    schedule_type: crontab
+    crontab:
+      hour: 2
+      minute: 30
+    enabled: true
 
 # Schedule Type Reference:
 #

@@ -267,13 +267,21 @@ async def get_all_tasks(
                     )
                 )
             
-            # Get total count before pagination
-            total_count = query.count()
+            # Get total codebundle count before pagination
+            codebundles_total = query.count()
+            
+            # Get the GLOBAL task count across ALL matching codebundles (not just the page).
+            # Uses the authoritative task_count/sli_count integer fields set by the parser.
+            global_task_stats = query.with_entities(
+                func.coalesce(func.sum(Codebundle.task_count), 0).label('total_tasks'),
+                func.coalesce(func.sum(Codebundle.sli_count), 0).label('total_slis')
+            ).first()
+            global_total_count = int(global_task_stats.total_tasks) + int(global_task_stats.total_slis)
             
             # Apply pagination
             codebundles = query.offset(offset).limit(limit).all()
             
-            # Flatten tasks and SLIs from all codebundles
+            # Flatten tasks and SLIs from paginated codebundles
             all_tasks = []
             for codebundle in codebundles:
                 # Clean up support tags - remove empty/whitespace-only tags
@@ -365,13 +373,13 @@ async def get_all_tasks(
             
             return {
                 "tasks": all_tasks,
-                "total_count": len(all_tasks),
-                "codebundles_count": total_count,
+                "total_count": global_total_count,
+                "codebundles_count": codebundles_total,
                 "support_tags": sorted(list(all_support_tags)),
                 "pagination": {
                     "limit": limit,
                     "offset": offset,
-                    "has_more": total_count > offset + limit
+                    "has_more": codebundles_total > offset + limit
                 }
             }
         finally:
@@ -792,20 +800,17 @@ async def get_registry_stats():
             # Count codebundles
             codebundles_count = db.query(Codebundle).filter(Codebundle.is_active == True).count()
             
-            # Count actual tasks by iterating through codebundles (matches All Tasks page logic)
-            all_codebundles = db.query(Codebundle).filter(Codebundle.is_active == True).all()
-            total_tasks = 0
-            total_slis = 0
+            # Count tasks and SLIs using the authoritative integer fields (task_count, sli_count)
+            # set by the canonical parser. This is both more efficient (SQL SUM vs loading all
+            # records) and more reliable than counting JSON array lengths, which could drift
+            # if a competing code path updates the arrays without updating the counts.
+            stats = db.query(
+                func.coalesce(func.sum(Codebundle.task_count), 0).label('total_tasks'),
+                func.coalesce(func.sum(Codebundle.sli_count), 0).label('total_slis')
+            ).filter(Codebundle.is_active == True).first()
             
-            for cb in all_codebundles:
-                # Count tasks
-                if cb.tasks:
-                    total_tasks += len(cb.tasks)
-                # Count SLIs
-                if cb.slis:
-                    total_slis += len(cb.slis)
-            
-            # Calculate combined total for tasks over time
+            total_tasks = int(stats.total_tasks)
+            total_slis = int(stats.total_slis)
             total_items = total_tasks + total_slis
             
             # Get tasks over time (by collection for now - simulated growth data)
@@ -828,8 +833,8 @@ async def get_registry_stats():
             return {
                 "collections": collections_count,
                 "codebundles": codebundles_count,
-                "tasks": int(total_items),  # Total of tasks + SLIs to match All Tasks page
-                "slis": int(total_slis),
+                "tasks": total_items,
+                "slis": total_slis,
                 "tasks_over_time": tasks_over_time
             }
         finally:

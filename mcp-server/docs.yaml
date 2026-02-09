@@ -14,16 +14,6 @@ documentation:
         - structure
         - codebundle
 
-    - name: meta.yaml Reference
-      url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/meta-yaml-reference
-      description: Reference documentation for meta.yaml configuration file format
-      keywords:
-        - meta.yaml
-        - configuration
-        - metadata
-        - variables
-        - secrets
-
     - name: Robot Framework Basics
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/robot-framework-basics
       description: Introduction to Robot Framework syntax for CodeBundle development
@@ -155,6 +145,89 @@ documentation:
         - service-level
         - configuration
         - thresholds
+
+  runwhen_local:
+    - name: RunWhen Local Installation Guide
+      url: https://docs.runwhen.com/public/v/runwhen-local/user-guide/features/getting-started
+      description: |
+        RunWhen Local is a container-based tool that runs on your local machine or inside your Kubernetes cluster.
+        It discovers your cloud and Kubernetes resources, matches them to relevant CodeBundles, and generates
+        troubleshooting commands you can run immediately.
+
+        Installation methods:
+        1. **Kubernetes (Helm)**: Deploy as a pod in your cluster using the Helm chart.
+           - Add the RunWhen contrib Helm repo: `helm repo add runwhen-contrib https://runwhen-contrib.github.io/helm-charts`
+           - Install: `helm install runwhen-local runwhen-contrib/runwhen-local -n runwhen-local --create-namespace`
+           - Port-forward to access the UI: `kubectl port-forward -n runwhen-local svc/runwhen-local 8081:8081`
+        2. **Docker**: Run locally with Docker.
+           - `docker run -p 8081:8081 ghcr.io/runwhen-contrib/runwhen-local:latest`
+        3. **Docker Compose**: Use docker-compose for more advanced configurations with custom kubeconfigs and cloud credentials.
+
+        After installation, access the web UI at http://localhost:8081 to see discovered resources and matching troubleshooting commands.
+      keywords:
+        - install
+        - installation
+        - runwhen-local
+        - local
+        - getting-started
+        - helm
+        - docker
+        - setup
+        - deploy
+        - kubernetes
+
+    - name: RunWhen Local Configuration
+      url: https://docs.runwhen.com/public/v/runwhen-local/user-guide/features/configuration
+      description: |
+        Configure RunWhen Local by editing the workspaceInfo.yaml file. This file tells RunWhen Local
+        which cloud resources and Kubernetes clusters to discover. Key configuration sections:
+        - workspaceName: A unique name for this workspace
+        - defaultLocation: Geographic region (e.g., us-west1)
+        - kubeconfigs: List of Kubernetes cluster kubeconfigs to scan
+        - cloudCredentials: AWS, Azure, or GCP credentials for cloud resource discovery
+        - namespaceLOBs: Map namespaces to Lines of Business for organization
+      keywords:
+        - configuration
+        - config
+        - runwhen-local
+        - workspaceInfo
+        - kubeconfig
+        - cloud-credentials
+        - namespaces
+
+    - name: RunWhen Local Troubleshooting
+      url: https://docs.runwhen.com/public/v/runwhen-local/user-guide/features/troubleshooting
+      description: |
+        Common troubleshooting steps for RunWhen Local:
+        - If the UI shows no resources, check that your kubeconfig is correctly mounted and has access
+        - If discovery is slow, ensure network access to your clusters
+        - Check logs with: kubectl logs -n runwhen-local deployment/runwhen-local
+        - For Docker: docker logs <container-id>
+        - Restart discovery by restarting the container or pod
+      keywords:
+        - troubleshooting
+        - debug
+        - runwhen-local
+        - problems
+        - issues
+        - logs
+
+    - name: RunWhen Local Features Overview
+      url: https://docs.runwhen.com/public/v/runwhen-local/user-guide/features
+      description: |
+        RunWhen Local provides these key features:
+        - **Resource Discovery**: Automatically discovers Kubernetes workloads, cloud resources, and infrastructure
+        - **CodeBundle Matching**: Maps discovered resources to relevant troubleshooting CodeBundles
+        - **Troubleshooting Commands**: Generates ready-to-run commands for common issues
+        - **Map View**: Visual map of your infrastructure and its health
+        - **Custom Workspaces**: Organize resources by team, environment, or project
+      keywords:
+        - features
+        - runwhen-local
+        - discovery
+        - map
+        - troubleshooting
+        - overview
 
   faq:
     - name: How do I use kubectl in a CodeBundle?

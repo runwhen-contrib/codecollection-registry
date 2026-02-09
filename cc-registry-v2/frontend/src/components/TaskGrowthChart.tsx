@@ -121,7 +121,7 @@ const TaskGrowthChart: React.FC = () => {
               tickFormatter={(value) => value.toLocaleString()}
             />
             <Tooltip 
-              formatter={(value: number) => [`${value.toLocaleString()} tasks`, 'Total Tasks']}
+              formatter={(value: number | undefined) => [`${(value ?? 0).toLocaleString()} tasks`, 'Total Tasks']}
               contentStyle={{
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
                 border: '1px solid #ccc',

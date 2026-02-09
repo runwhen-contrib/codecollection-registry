@@ -432,20 +432,27 @@ class VectorStore:
             seen_ids.add(doc_id)
             ids.append(doc_id)
             
-            # Create document text for embedding
+            # Create document text for ChromaDB storage.
+            # This is what gets returned on search, so include crawled content.
             doc_parts = [
-                doc.get("name", ""),
+                f"# {doc.get('name', '')}",
                 doc.get("description", ""),
             ]
-            if doc.get("topics"):
-                doc_parts.append(f"Topics: {', '.join(doc['topics'])}")
-            if doc.get("key_points"):
-                doc_parts.append(f"Key points: {', '.join(doc['key_points'])}")
-            if doc.get("usage_examples"):
-                doc_parts.append(f"Examples: {', '.join(doc['usage_examples'])}")
-            if doc.get("answer"):
-                doc_parts.append(f"Answer: {doc['answer'][:500]}")
-            documents.append(" ".join(doc_parts))
+            # Include actual crawled page content (this is the critical data for
+            # the LLM to answer documentation questions with real content)
+            if doc.get("crawled_content"):
+                doc_parts.append(doc["crawled_content"][:12000])
+            else:
+                # Fallback to metadata-only content
+                if doc.get("topics"):
+                    doc_parts.append(f"Topics: {', '.join(doc['topics'])}")
+                if doc.get("key_points"):
+                    doc_parts.append(f"Key points: {', '.join(doc['key_points'])}")
+                if doc.get("usage_examples"):
+                    doc_parts.append(f"Examples: {', '.join(doc['usage_examples'])}")
+                if doc.get("answer"):
+                    doc_parts.append(f"Answer: {doc['answer'][:500]}")
+            documents.append("\n\n".join(doc_parts))
             
             metadatas.append({
                 "name": doc.get("name", doc.get("question", "")),
@@ -454,6 +461,7 @@ class VectorStore:
                 "category": doc.get("category", "general"),
                 "topics": ",".join(doc.get("topics", [])),
                 "priority": doc.get("priority", "medium"),
+                "has_crawled_content": "true" if doc.get("crawled_content") else "false",
             })
         
         collection.add(

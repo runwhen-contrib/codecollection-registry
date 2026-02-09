@@ -294,15 +294,21 @@ class SemanticSearch:
         recommendations = []
         for result in results:
             meta = result.metadata
-            recommendations.append({
+            rec = {
                 'name': meta.get('name', ''),
                 'description': meta.get('description', ''),
                 'url': meta.get('url', ''),
                 'category': meta.get('category', ''),
                 'topics': meta.get('topics', '').split(',') if meta.get('topics') else [],
                 'priority': meta.get('priority', 'medium'),
-                'score': result.score
-            })
+                'score': result.score,
+            }
+            # Include the stored document content (crawled page content).
+            # This is what makes documentation answers actually useful --
+            # the LLM gets real page content, not just metadata summaries.
+            if result.content and meta.get('has_crawled_content') == 'true':
+                rec['crawled_content'] = result.content
+            recommendations.append(rec)
         
         return recommendations
     

@@ -66,6 +66,7 @@ class ChatResponse(BaseModel):
     sources_used: List[str]
     query_metadata: Dict[str, Any]
     no_match: bool = False  # True when no relevant codebundle was found
+    answer_source: str = "codebundles"  # "documentation", "codebundles", "libraries", "mixed", or "system"
 
 
 class KeywordHelpQuery(BaseModel):
@@ -155,18 +156,27 @@ async def query_codecollections(
             'give me the link', 'get me the link', 'send me the link'
         ]) and query.conversation_history and len(query.conversation_history) > 0
         
-        # Keywords/library questions
+        # Keywords/library questions - only trigger for questions specifically about
+        # Robot Framework keywords/libraries, NOT general "use" questions like
+        # "what codebundle can I use to troubleshoot X"
         is_keyword_question = any(word in question_lower for word in [
-            'library', 'libraries', 'keyword', 'import', 'use ', 'how do i use',
-            'rw.cli', 'rw.k8s', 'robot framework'
+            'library', 'libraries', 'keyword', 'import ',
+            'rw.cli', 'rw.k8s', 'rw.core', 'rw.aws', 'rw.azure', 'rw.gcp',
+            'robot framework'
+        ]) and not any(word in question_lower for word in [
+            'codebundle', 'code bundle', 'troubleshoot', 'monitor', 'health check',
+            'what can i use', 'what codebundle'
         ])
         
         # Documentation/how-to questions (configuration, setup, guides)
+        # Note: docs are now ALWAYS searched (not gated by this flag), but this
+        # classification is kept for potential future use (e.g., prioritizing doc results)
         is_docs_question = any(word in question_lower for word in [
             'how to', 'how do i', 'configure', 'configuration', 'setup', 'set up',
-            'meta.yaml', 'secrets', 'credentials', 'generation rule', 'gen rule',
-            'sli', 'task vs', 'what is', 'guide', 'documentation', 'example',
-            'best practice', 'getting started', 'tutorial'
+            'install', 'installation', 'runwhen-local', 'runwhen local',
+            'secrets', 'credentials', 'generation rule', 'gen rule',
+            'sli', 'task vs', 'what is', 'guide', 'documentation', 'docs', 'example',
+            'best practice', 'getting started', 'tutorial', 'check the docs'
         ])
         
         # Meta questions about the system itself - should NOT show codebundles
@@ -195,6 +205,8 @@ async def query_codecollections(
         doc_context = ""  # Documentation context
         relevant_tasks = []  # Initialize
         mcp_tools_called = []  # Track which MCP tools were called
+        answer_source = "codebundles"  # Default, overridden per branch
+        explicitly_wants_codebundles = False  # Set True when user asks "what codebundles..."
         
         # Handle follow-up questions - do a focused search on the codebundle from conversation
         if is_followup_question:
@@ -310,22 +322,25 @@ I have access to:
    - GCP (GKE, Cloud Run, Cloud SQL, etc.)
    - Databases (PostgreSQL, Redis, MongoDB, etc.)
 
-2. **Documentation** - Guides and references:
+2. **Documentation** - I can answer questions using RunWhen docs:
+   - RunWhen Local installation and configuration
    - CodeBundle development guides
-   - Robot Framework syntax tutorials
-   - Library references (RW.CLI, RW.Core, RW.K8s)
-   - Best practices and examples
+   - Cloud discovery setup (Kubernetes, AWS, Azure, GCP)
+   - Robot Framework syntax and library references (RW.CLI, RW.Core, RW.K8s)
+   - Best practices, troubleshooting, and FAQs
 
 3. **Libraries** - Robot Framework keyword libraries for automation
 
-**Ask me:**
+**Ask me things like:**
+- "How do I install runwhen-local?"
 - "What codebundles do you have for Kubernetes?"
 - "How do I troubleshoot Azure App Service?"
-- "What can I run when pods are failing?"
+- "How do I configure cloud discovery?"
 - "How do I create a new CodeBundle?"
 """
             relevant_tasks = []
             sources_used = ["System Information"]
+            answer_source = "system"
         elif is_keyword_question:
             mcp_response = await mcp.keyword_usage_help(
                 query=query.question,
@@ -334,21 +349,48 @@ I have access to:
             mcp_tools_called.append("keyword_usage_help")
             relevant_tasks = []
             sources_used = ["MCP Keyword Search"]
+            answer_source = "libraries"
         else:
             # Enhance search query with conversation context for better results
             search_query = query.question
             
-            # If this is a vague follow-up (e.g., "I was hoping for a different codebundle"),
-            # augment the search with context from the user's original question
+            # Detect if user is explicitly asking for codebundles
+            # e.g. "what codebundles are useful for this", "show me codebundles", "which codebundles"
+            explicitly_wants_codebundles = any(phrase in question_lower for phrase in [
+                'what codebundle', 'which codebundle', 'show me codebundle',
+                'find codebundle', 'find me codebundle', 'list codebundle',
+                'what code bundle', 'which code bundle', 'show me code bundle',
+                'codebundles for', 'codebundle for', 'codebundles can',
+                'recommend codebundle', 'suggest codebundle',
+                'useful codebundle', 'relevant codebundle',
+            ])
+            if explicitly_wants_codebundles:
+                answer_source = "codebundles"  # Force codebundles, don't let LLM override to docs
+            
+            # If this is a follow-up that references conversation context
+            # (e.g., "what codebundles for this", "different codebundle", "more options"),
+            # augment the search with the original user question so the search has real terms
             if query.conversation_history and len(query.conversation_history) > 0:
-                # Check if current question is vague and needs context
+                # Check if current question needs context enrichment
+                needs_context = False
+                
+                # Vague follow-ups that reference "this", "that", or ask for alternatives
                 vague_indicators = [
                     'different', 'another', 'other', 'alternative', 'else',
                     'something else', 'more options', 'other options'
                 ]
-                is_vague = any(indicator in question_lower for indicator in vague_indicators) and len(query.question.split()) < 15
+                # Context-dependent references - query mentions "this" or "for that" without specifics
+                context_references = [
+                    'for this', 'for that', 'about this', 'about that',
+                    'useful for this', 'related to this', 'help with this',
+                ]
                 
-                if is_vague:
+                is_vague = any(indicator in question_lower for indicator in vague_indicators) and len(query.question.split()) < 15
+                references_context = any(ref in question_lower for ref in context_references)
+                
+                needs_context = is_vague or references_context or explicitly_wants_codebundles
+                
+                if needs_context:
                     # Find the original user question for context
                     original_question = None
                     for msg in query.conversation_history:
@@ -357,9 +399,9 @@ I have access to:
                             break
                     
                     if original_question:
-                        # Combine context: "different codebundle" + "kubernetes crashloopbackoff pods"
+                        # Combine context: "what codebundles are useful" + "pods stuck CrashLoopBackOff"
                         search_query = f"{original_question} {query.question}"
-                        logger.info(f"Enhanced vague query with context: '{query.question}' -> '{search_query}'")
+                        logger.info(f"Enhanced query with conversation context: '{query.question}' -> '{search_query}'")
             
             # Always search codebundles
             mcp_response = await mcp.find_codebundle(
@@ -372,21 +414,25 @@ I have access to:
             sources_used = _extract_sources_from_markdown(mcp_response)
             all_tasks = _parse_markdown_to_tasks(mcp_response)
             
-            # Also search documentation if this looks like a docs/how-to question
-            if is_docs_question:
-                try:
-                    doc_response = await mcp.find_documentation(
-                        query=query.question,
-                        category="all",
-                        max_results=5
-                    )
-                    mcp_tools_called.append("find_documentation")
-                    if doc_response and "No documentation found" not in doc_response:
-                        doc_context = f"\n\n## Documentation Resources:\n{doc_response}"
-                        mcp_response += doc_context
-                        sources_used.append("MCP Documentation Search")
-                except Exception as e:
-                    logger.warning(f"Documentation search failed: {e}")
+            # Always search documentation alongside codebundles
+            # Documentation can answer how-to, setup, configuration, and conceptual questions
+            # that codebundles alone cannot address
+            try:
+                doc_response = await mcp.find_documentation(
+                    query=query.question,
+                    category="all",
+                    max_results=5
+                )
+                mcp_tools_called.append("find_documentation")
+                if doc_response and "No documentation found" not in doc_response:
+                    doc_context = f"\n\n## Documentation Resources:\n{doc_response}"
+                    mcp_response += doc_context
+                    sources_used.append("MCP Documentation Search")
+                    logger.info(f"Documentation search returned results for: {query.question[:80]}")
+                else:
+                    logger.info(f"No documentation found for: {query.question[:80]}")
+            except Exception as e:
+                logger.warning(f"Documentation search failed: {e}")
             
             # Filter results by relevance and specificity
             # With Azure embeddings (1536-dim), 70-80% is typical for good matches
@@ -459,7 +505,8 @@ I have access to:
                 question=query.question,
                 mcp_context=mcp_response,
                 relevant_tasks=tasks_for_llm,
-                conversation_history=query.conversation_history
+                conversation_history=query.conversation_history,
+                doc_context=doc_context
             )
             # Update relevant_tasks to show user what we're referencing
             if not relevant_tasks:
@@ -474,9 +521,32 @@ I have access to:
             # Remove the marker from the displayed answer
             answer = answer.replace("[NO_MATCHING_CODEBUNDLE]", "").strip()
         
+        # Detect answer source from LLM's [SOURCE:...] tag
+        # Only override if answer_source is still the default (not set by meta/keyword/explicit branches)
+        import re
+        source_match = re.match(r'\[SOURCE:(documentation|codebundles|libraries|mixed)\]', answer)
+        if source_match:
+            # Always strip the tag from the displayed answer
+            llm_source = source_match.group(1)
+            answer = answer[source_match.end():].strip()
+            
+            # Only let the LLM override source if the user didn't explicitly ask for something
+            if answer_source == "codebundles" and not explicitly_wants_codebundles:
+                answer_source = llm_source
+        
+        # Fallback heuristics (only when source is still the default)
+        if answer_source == "codebundles" and not explicitly_wants_codebundles:
+            if doc_context and not relevant_tasks:
+                answer_source = "documentation"
+            elif doc_context and relevant_tasks:
+                answer_source = "mixed"
+        
+        # When answer is from documentation, don't attach codebundle cards
+        response_tasks = relevant_tasks if answer_source != "documentation" else []
+        
         response = ChatResponse(
             answer=answer,
-            relevant_tasks=relevant_tasks,
+            relevant_tasks=response_tasks,
             confidence_score=None,
             sources_used=sources_used,
             query_metadata={
@@ -487,7 +557,8 @@ I have access to:
                 "platform_filter": platform,
                 "mcp_tools": mcp_tools_called
             },
-            no_match=no_match
+            no_match=no_match,
+            answer_source=answer_source
         )
         
         # Store chat for debugging (non-blocking, best effort)
@@ -641,7 +712,7 @@ async def get_example_queries():
                 "queries": [
                     "I'm new to writing codebundles, how do I run kubectl commands?",
                     "What's the difference between SLI and TaskSet codebundles?",
-                    "How do I properly configure secrets in my meta.yaml file?",
+                    "How do I configure secrets and credentials for my workspace?",
                     "Can you show me how to parse JSON output in Robot Framework?"
                 ]
             },
@@ -788,7 +859,8 @@ async def _generate_llm_answer(
     mcp_context: str,
     relevant_tasks: List[RelevantTask],
     conversation_history: Optional[List[ConversationMessage]] = None,
-    is_followup: bool = False
+    is_followup: bool = False,
+    doc_context: str = ""
 ) -> str:
     """
     Generate a natural language answer using the AI service.
@@ -798,6 +870,7 @@ async def _generate_llm_answer(
     
     Args:
         is_followup: If True, prioritizes conversation context over search results
+        doc_context: Documentation search results to include alongside codebundle context
     """
     try:
         client = ai_service._get_ai_client()
@@ -806,15 +879,24 @@ async def _generate_llm_answer(
         # Build context from tasks
         task_context = _build_task_context(relevant_tasks)
         
-        system_prompt = """You are a helpful assistant that helps users find and use RunWhen CodeBundles and documentation.
+        system_prompt = """You are a helpful assistant that helps users find and use RunWhen CodeBundles, documentation, and guides.
 
 CodeBundles are automation scripts for troubleshooting and managing infrastructure (Kubernetes, AWS, Azure, GCP, databases, etc.).
 
-You have access to:
-1. CodeBundles - automation scripts for specific tasks
-2. Documentation - guides, tutorials, and reference materials for codebundle development
+You have access to TWO key sources of knowledge:
+1. **CodeBundles** - automation scripts for specific operational tasks (troubleshooting, monitoring, scaling, etc.)
+2. **Documentation** - guides, tutorials, installation instructions, configuration references, FAQs, and conceptual explanations about RunWhen products, runwhen-local, generation rules, secrets, SLIs, tasks, etc.
+
+Additionally:
 3. Libraries - Robot Framework keyword libraries (RW.CLI, RW.K8s, etc.)
 4. Examples - sample codebundles and configurations
+
+CRITICAL: ANSWERING FROM DOCUMENTATION
+- When documentation results are provided, READ THEM CAREFULLY and use their CONTENT to answer the question directly
+- Do NOT just provide a link and say "check the docs" - actually summarize/explain the relevant information FROM the docs
+- For installation, setup, configuration, and conceptual questions, documentation is your PRIMARY source
+- Include documentation links as references AFTER providing the actual answer content
+- If the docs contain step-by-step instructions, reproduce or summarize the key steps in your answer
 
 FORMATTING RULES:
 - Always use **bold** for CodeBundle names (e.g., **azure-appservice-webapp-ops**)
@@ -823,14 +905,15 @@ FORMATTING RULES:
 
 CRITICAL RULES:
 1. ONLY recommend resources that DIRECTLY ADDRESS the user's specific question
-2. For "how to" questions about configuration/development, prioritize documentation
-3. For troubleshooting/automation questions, recommend relevant codebundles
-4. Be STRICT about relevance - fewer accurate recommendations are better than many tangential ones
-5. IGNORE results that don't match the user's platform (e.g., don't show Kubernetes results for Azure App Service questions)
-6. REMEMBER the conversation history - if the user refers to "this codebundle" or "it", they mean the one discussed previously
-7. If the user asks about YOU or what YOU can do, answer about your capabilities, DON'T search for codebundles
-8. When you see kubectl output or command output, IMMEDIATELY ask clarifying questions before recommending specific codebundles
-9. For Kubernetes troubleshooting, always consider BOTH the workload level (Deployment/StatefulSet) AND pod level - don't assume one without asking
+2. For "how to" questions about installation, configuration, setup, or development: PRIORITIZE DOCUMENTATION and answer from its content
+3. For troubleshooting/automation questions: recommend relevant codebundles
+4. For mixed questions: provide BOTH documentation answers AND relevant codebundles
+5. Be STRICT about relevance - fewer accurate recommendations are better than many tangential ones
+6. IGNORE results that don't match the user's platform (e.g., don't show Kubernetes results for Azure App Service questions)
+7. REMEMBER the conversation history - if the user refers to "this codebundle" or "it", they mean the one discussed previously
+8. If the user asks about YOU or what YOU can do, answer about your capabilities, DON'T search for codebundles
+9. When you see kubectl output or command output, IMMEDIATELY ask clarifying questions before recommending specific codebundles
+10. For Kubernetes troubleshooting, always consider BOTH the workload level (Deployment/StatefulSet) AND pod level - don't assume one without asking
 
 ASK CLARIFYING QUESTIONS PROACTIVELY when context is missing:
 - If kubectl output shows pods in error state (CrashLoopBackOff, Error, etc.), ask: "Are these standalone Pods or part of a Deployment, StatefulSet, or DaemonSet?"
@@ -844,8 +927,8 @@ ASK CLARIFYING QUESTIONS PROACTIVELY when context is missing:
 When recommending:
 - Always use **bold** for CodeBundle names
 - Explain what each resource does in plain language
-- For documentation, explain what the guide covers and include the URL
-- For codebundles, mention the SPECIFIC TASKS it contains that are relevant
+- For documentation: EXPLAIN what the docs say (don't just link) and include the URL as a reference
+- For codebundles: mention the SPECIFIC TASKS it contains that are relevant
 - Be conversational and keep responses concise but informative
 - If multiple layers of troubleshooting exist (e.g., Pod-level AND Deployment-level), mention both options
 - For Kubernetes issues, consider both workload-level (Deployment, StatefulSet) and resource-level (Pod, Container) codebundles
@@ -884,17 +967,43 @@ The user is asking about CodeBundles we JUST discussed in the conversation above
 
 {f"New search results (if available):{chr(10)}{task_context}" if task_context else "No new search performed - use conversation context only."}"""
         else:
+            # Build documentation section for the prompt
+            doc_section = ""
+            if doc_context:
+                doc_section = f"""
+
+## Documentation Results:
+{doc_context}
+
+"""
+            
             user_prompt = f"""User Question: {question}
 
-Available CodeBundles from search (sorted by relevance score):
+## Available CodeBundles from search (sorted by relevance score):
 
 {task_context}
+{doc_section}
+ANSWER SOURCE CLASSIFICATION - You MUST start your response with exactly one of these tags:
+- [SOURCE:documentation] — if your answer is primarily based on documentation results (installation, setup, how-to, configuration, conceptual questions)
+- [SOURCE:codebundles] — if your answer recommends specific CodeBundles for automation/troubleshooting
+- [SOURCE:libraries] — if your answer is about Robot Framework keyword libraries (RW.CLI, RW.K8s, etc.)
+- [SOURCE:mixed] — if your answer uses BOTH documentation content AND CodeBundle recommendations
 
-IMPORTANT: Only recommend codebundles that DIRECTLY solve the user's problem. 
+CRITICAL RULES FOR DOCUMENTATION-SOURCED ANSWERS:
+- If documentation results answer the user's question, USE THEM as your primary source
+- For documentation answers: provide the actual content/steps from the docs, DO NOT recommend or mention CodeBundles at all
+- For documentation answers: include documentation URLs as references at the end
+- Do NOT mix in CodeBundle suggestions when the answer clearly comes from documentation
+- The user will see CodeBundle cards separately — you do NOT need to mention them in your text
+
+CRITICAL RULES FOR CODEBUNDLE-SOURCED ANSWERS:
+- Only recommend codebundles that DIRECTLY solve the user's problem
 - If a codebundle doesn't specifically address their question, don't include it
-- If none are truly relevant, say so honestly
 - Quality over quantity - 1-2 good matches is better than 5 mediocre ones
-- If the user is asking a follow-up about a previously mentioned codebundle, answer based on the conversation history"""
+
+GENERAL RULES:
+- If the user is asking a follow-up about a previously mentioned codebundle, answer based on the conversation history
+- If documentation fully answers the question, use [SOURCE:documentation] — do NOT force CodeBundle recommendations"""
 
         messages.append({"role": "user", "content": user_prompt})
 
