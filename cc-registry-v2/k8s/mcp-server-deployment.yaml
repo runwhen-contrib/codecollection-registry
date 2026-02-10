@@ -35,11 +35,18 @@ spec:
           value: "1"
         - name: MCP_LOG_LEVEL
           value: "INFO"
-        - name: DATABASE_URL
+        - name: DB_USER
           valueFrom:
             secretKeyRef:
-              name: cc-registry-secrets
-              key: database-url
+              name: registry-user.registry-db.credentials.postgresql.acid.zalan.do
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: registry-user.registry-db.credentials.postgresql.acid.zalan.do
+              key: password
+        - name: DATABASE_URL
+          value: "postgresql://$(DB_USER):$(DB_PASSWORD)@registry-db:5432/registry"
         envFrom:
         - secretRef:
             name: azure-openai-credentials
