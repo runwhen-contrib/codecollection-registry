@@ -1,7 +1,7 @@
 services:
-  # Database Service
+  # Database Service (pgvector/pgvector image includes the vector extension)
   database:
-    image: postgres:15
+    image: pgvector/pgvector:pg15
     container_name: registry-database
     environment:
       POSTGRES_DB: codecollection_registry

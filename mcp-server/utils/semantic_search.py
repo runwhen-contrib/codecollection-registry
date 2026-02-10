@@ -68,16 +68,29 @@ class SemanticSearch:
     to provide semantic search capabilities.
     """
     
-    def __init__(self, prefer_local: bool = None):
+    def __init__(self, prefer_local: bool = None, database_url: str = None):
         """
         Initialize semantic search.
         
         Args:
             prefer_local: If True, use local embeddings. If None, auto-detect.
+            database_url: PostgreSQL connection string for pgvector store.
+                         If not set and DATABASE_URL env var is not set,
+                         uses a local in-memory vector store (no infra needed).
         """
-        self.vector_store = VectorStore()
+        # VectorStore() is a factory -- always returns something usable.
+        # With DATABASE_URL: returns PgVectorStore (production).
+        # Without: returns LocalVectorStore (standalone/embedded).
+        try:
+            self.vector_store = VectorStore(database_url=database_url)
+        except Exception as e:
+            logger.error(f"Failed to initialize VectorStore: {e}")
+            self.vector_store = None
+            self._is_available = False
+            self.embedding_generator = None
+            return
         
-        # Auto-detect or use preference
+        # Auto-detect embedding provider
         if prefer_local is None:
             # Use Azure if available (embedding-specific or main credentials), otherwise local
             embedding_endpoint = os.getenv("AZURE_OPENAI_EMBEDDING_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
@@ -87,7 +100,8 @@ class SemanticSearch:
         try:
             self.embedding_generator = get_embedding_generator(prefer_local=prefer_local)
             self._is_available = True
-            logger.info(f"SemanticSearch initialized with {self.embedding_generator.provider_name}")
+            backend = type(self.vector_store).__name__
+            logger.info(f"SemanticSearch initialized with {self.embedding_generator.provider_name} + {backend}")
         except Exception as e:
             logger.warning(f"SemanticSearch unavailable: {e}")
             self._is_available = False
@@ -96,7 +110,12 @@ class SemanticSearch:
     @property
     def is_available(self) -> bool:
         """Check if semantic search is available"""
-        return self._is_available and self.vector_store.get_stats().get('codebundles', 0) > 0
+        if not self._is_available or not self.vector_store:
+            return False
+        try:
+            return self.vector_store.get_stats().get('codebundles', 0) > 0
+        except Exception:
+            return False
     
     def recommend_codebundles(
         self,
@@ -326,10 +345,10 @@ class SemanticSearch:
 _semantic_search: Optional[SemanticSearch] = None
 
 
-def get_semantic_search() -> SemanticSearch:
+def get_semantic_search(database_url: str = None) -> SemanticSearch:
     """Get the singleton SemanticSearch instance"""
     global _semantic_search
     if _semantic_search is None:
-        _semantic_search = SemanticSearch()
+        _semantic_search = SemanticSearch(database_url=database_url)
     return _semantic_search
 

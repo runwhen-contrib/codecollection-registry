@@ -48,6 +48,7 @@ namePrefix: ""
 nameSuffix: ""
 
 # Replicas - can be overridden per environment
+# mcp-server now uses pgvector (shared PostgreSQL) so it can scale freely
 replicas:
   - name: mcp-server
     count: 2

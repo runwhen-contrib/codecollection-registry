@@ -38,7 +38,7 @@ spec:
     spec:
       containers:
       - name: postgres
-        image: postgres:15
+        image: pgvector/pgvector:pg15  # Includes pgvector extension for semantic search
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5432

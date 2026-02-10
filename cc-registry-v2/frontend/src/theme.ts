@@ -95,6 +95,20 @@ const theme = createTheme({
         },
       },
     },
+    MuiTableCell: {
+      styleOverrides: {
+        root: {
+          fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
+          fontSize: '0.875rem',
+          color: '#858484',
+        },
+        head: {
+          fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
+          fontWeight: 600,
+          color: '#3f3f3f',
+        },
+      },
+    },
     MuiLink: {
       styleOverrides: {
         root: {

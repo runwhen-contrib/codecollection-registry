@@ -1,18 +1,37 @@
 """
-Vector store for semantic search using ChromaDB.
+Vector store for semantic search.
+
+Two backends, same interface, auto-detected:
+
+1. **pgvector (PostgreSQL)** -- used when DATABASE_URL is set.
+   Shared database, scales horizontally, suitable for production/k8s.
+
+2. **Local (in-memory + JSON file)** -- used when DATABASE_URL is NOT set.
+   Zero infrastructure. Embeddings are stored in a local JSON file and
+   loaded into memory on startup. Brute-force cosine similarity with numpy.
+   Fast enough for thousands of vectors (our dataset is ~200-500 items).
+
+This means the MCP server can be embedded in any tool (IDE plugin,
+CLI, standalone container) with no external dependencies beyond the
+embedding API itself.
 """
 import os
 import json
 import logging
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
+from contextlib import contextmanager
 
-import chromadb
-from chromadb.config import Settings
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
+
+# =========================================================================
+# Shared types
+# =========================================================================
 
 @dataclass
 class SearchResult:
@@ -21,338 +40,65 @@ class SearchResult:
     content: str
     metadata: Dict[str, Any]
     distance: float  # Lower is better (closer match)
-    
+
     @property
     def score(self) -> float:
         """Convert distance to similarity score (higher is better)"""
         return 1.0 / (1.0 + self.distance)
 
 
-class VectorStore:
-    """
-    ChromaDB-based vector store for semantic search.
-    
-    Supports:
-    - Codebundle embeddings
-    - Codecollection embeddings  
-    - Library embeddings
-    """
-    
-    def __init__(self, persist_dir: str = None):
-        """
-        Initialize the vector store.
-        
-        Args:
-            persist_dir: Directory to persist the database. 
-                        Defaults to mcp-server/data/vectordb
-        """
-        if persist_dir is None:
-            persist_dir = str(Path(__file__).parent.parent / "data" / "vectordb")
-        
-        self.persist_dir = persist_dir
-        Path(persist_dir).mkdir(parents=True, exist_ok=True)
-        
-        # Initialize ChromaDB with persistence
-        self.client = chromadb.PersistentClient(
-            path=persist_dir,
-            settings=Settings(anonymized_telemetry=False)
-        )
-        
-        # Collection names
-        self.CODEBUNDLES = "codebundles"
-        self.CODECOLLECTIONS = "codecollections"
-        self.LIBRARIES = "libraries"
-        self.DOCUMENTATION = "documentation"
-        
-        logger.info(f"VectorStore initialized at {persist_dir}")
-    
-    def _get_or_create_collection(self, name: str):
-        """Get or create a collection"""
-        return self.client.get_or_create_collection(
-            name=name,
-            metadata={"hnsw:space": "cosine"}  # Use cosine similarity
-        )
-    
-    def clear_collection(self, name: str):
-        """Clear and recreate a collection"""
-        try:
-            self.client.delete_collection(name)
-        except Exception:
-            pass
-        return self._get_or_create_collection(name)
-    
-    # =========================================================================
-    # Codebundle operations
-    # =========================================================================
-    
-    def add_codebundles(
-        self,
-        codebundles: List[Dict[str, Any]],
-        embeddings: List[List[float]],
-        clear_existing: bool = True
-    ):
-        """
-        Add codebundles to the vector store.
-        
-        Args:
-            codebundles: List of codebundle dicts with metadata
-            embeddings: Corresponding embedding vectors
-            clear_existing: Whether to clear existing data first
-        """
-        if clear_existing:
-            collection = self.clear_collection(self.CODEBUNDLES)
-        else:
-            collection = self._get_or_create_collection(self.CODEBUNDLES)
-        
-        if not codebundles:
-            return
-        
-        ids = []
-        documents = []
-        metadatas = []
-        
-        for cb in codebundles:
-            # Create unique ID
-            cb_id = f"{cb.get('collection_slug', 'unknown')}/{cb.get('slug', 'unknown')}"
-            ids.append(cb_id)
-            
-            # Create searchable document text
-            doc = self._codebundle_to_document(cb)
-            documents.append(doc)
-            
-            # Store metadata (ChromaDB requires simple types)
-            # Include tasks and capabilities as JSON strings
-            import json
-            tasks = cb.get("tasks", [])
-            capabilities = cb.get("capabilities", [])
-            
-            metadatas.append({
-                "slug": cb.get("slug", ""),
-                "collection_slug": cb.get("collection_slug", ""),
-                "name": cb.get("name", ""),
-                "display_name": cb.get("display_name", ""),
-                "description": cb.get("description", "")[:500],  # Truncate for storage
-                "platform": cb.get("platform", ""),
-                "author": cb.get("author", ""),
-                "tags": ",".join(cb.get("support_tags", [])[:10]),  # Store as comma-separated
-                "tasks": json.dumps(tasks[:15]),  # Store as JSON string (top 15 tasks)
-                "capabilities": json.dumps(capabilities[:10]),  # Store as JSON string (top 10)
-            })
-        
-        collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            documents=documents,
-            metadatas=metadatas
-        )
-        
-        logger.info(f"Added {len(codebundles)} codebundles to vector store")
-    
-    def search_codebundles(
-        self,
-        query_embedding: List[float],
-        n_results: int = 10,
-        platform_filter: str = None,
-        collection_filter: str = None
-    ) -> List[SearchResult]:
-        """
-        Search codebundles by semantic similarity.
-        
-        Args:
-            query_embedding: Embedding vector for the query
-            n_results: Maximum number of results
-            platform_filter: Optional platform to filter by
-            collection_filter: Optional collection slug to filter by
-            
-        Returns:
-            List of SearchResult objects
-        """
-        collection = self._get_or_create_collection(self.CODEBUNDLES)
-        
-        # Build where filter
-        where_filter = None
-        if platform_filter or collection_filter:
-            conditions = []
-            if platform_filter:
-                conditions.append({"platform": platform_filter})
-            if collection_filter:
-                conditions.append({"collection_slug": collection_filter})
-            
-            if len(conditions) == 1:
-                where_filter = conditions[0]
-            else:
-                where_filter = {"$and": conditions}
-        
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            where=where_filter,
-            include=["documents", "metadatas", "distances"]
-        )
-        
-        return self._format_results(results)
-    
-    # =========================================================================
-    # Codecollection operations
-    # =========================================================================
-    
-    def add_codecollections(
-        self,
-        collections: List[Dict[str, Any]],
-        embeddings: List[List[float]],
-        clear_existing: bool = True
-    ):
-        """Add codecollections to the vector store"""
-        if clear_existing:
-            collection = self.clear_collection(self.CODECOLLECTIONS)
-        else:
-            collection = self._get_or_create_collection(self.CODECOLLECTIONS)
-        
-        if not collections:
-            return
-        
-        ids = []
-        documents = []
-        metadatas = []
-        
-        for cc in collections:
-            ids.append(cc.get("slug", "unknown"))
-            
-            # Create document text
-            doc = f"{cc.get('name', '')} - {cc.get('description', '')}"
-            documents.append(doc)
-            
-            metadatas.append({
-                "slug": cc.get("slug", ""),
-                "name": cc.get("name", ""),
-                "description": cc.get("description", "")[:500],
-                "git_url": cc.get("git_url", ""),
-                "owner": cc.get("owner", ""),
-            })
-        
-        collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            documents=documents,
-            metadatas=metadatas
-        )
-        
-        logger.info(f"Added {len(collections)} codecollections to vector store")
-    
-    def search_codecollections(
-        self,
-        query_embedding: List[float],
-        n_results: int = 10
-    ) -> List[SearchResult]:
-        """Search codecollections by semantic similarity"""
-        collection = self._get_or_create_collection(self.CODECOLLECTIONS)
-        
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            include=["documents", "metadatas", "distances"]
-        )
-        
-        return self._format_results(results)
-    
-    # =========================================================================
-    # Library operations
-    # =========================================================================
-    
-    def add_libraries(
-        self,
-        libraries: List[Dict[str, Any]],
-        embeddings: List[List[float]],
-        clear_existing: bool = True
-    ):
-        """Add libraries to the vector store"""
-        if clear_existing:
-            collection = self.clear_collection(self.LIBRARIES)
-        else:
-            collection = self._get_or_create_collection(self.LIBRARIES)
-        
-        if not libraries:
-            return
-        
-        ids = []
-        documents = []
-        metadatas = []
-        
-        seen_ids = set()
-        for lib in libraries:
-            # Create unique ID from collection + module path (use full module_path for uniqueness)
-            base_id = f"{lib.get('collection_slug', 'unknown')}/{lib.get('module_path', lib.get('import_path', lib.get('name', 'unknown')))}"
-            lib_id = base_id
-            # Handle duplicates by appending a counter
-            counter = 1
-            while lib_id in seen_ids:
-                lib_id = f"{base_id}_{counter}"
-                counter += 1
-            seen_ids.add(lib_id)
-            ids.append(lib_id)
-            
-            # Create document text
-            doc_parts = [
-                lib.get("name", ""),
-                lib.get("description", ""),
-            ]
-            # Add function names for searchability
-            if lib.get("functions"):
-                func_names = [f.get("name", "") for f in lib["functions"][:20]]
-                doc_parts.append("Functions: " + ", ".join(func_names))
-            # Add keywords
-            if lib.get("keywords"):
-                doc_parts.append("Keywords: " + ", ".join(lib["keywords"][:20]))
-            documents.append(" ".join(doc_parts))
-            
-            metadatas.append({
-                "name": lib.get("name", ""),
-                "description": lib.get("description", "")[:500],
-                "category": lib.get("category", ""),
-                "import_path": lib.get("import_path", lib.get("import_name", "")),
-                "collection_slug": lib.get("collection_slug", ""),
-                "git_url": lib.get("git_url", ""),
-            })
-        
-        collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            documents=documents,
-            metadatas=metadatas
-        )
-        
-        logger.info(f"Added {len(libraries)} libraries to vector store")
-    
-    def search_libraries(
-        self,
-        query_embedding: List[float],
-        n_results: int = 10,
-        category_filter: str = None
-    ) -> List[SearchResult]:
-        """Search libraries by semantic similarity"""
-        collection = self._get_or_create_collection(self.LIBRARIES)
-        
-        where_filter = None
-        if category_filter and category_filter != "all":
-            where_filter = {"category": category_filter}
-        
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            where=where_filter,
-            include=["documents", "metadatas", "distances"]
-        )
-        
-        return self._format_results(results)
-    
-    # =========================================================================
-    # Helper methods
-    # =========================================================================
-    
+# Table / collection names
+TABLE_CODEBUNDLES = "vector_codebundles"
+TABLE_CODECOLLECTIONS = "vector_codecollections"
+TABLE_LIBRARIES = "vector_libraries"
+TABLE_DOCUMENTATION = "vector_documentation"
+
+ALL_TABLES = [TABLE_CODEBUNDLES, TABLE_CODECOLLECTIONS, TABLE_LIBRARIES, TABLE_DOCUMENTATION]
+
+
+# =========================================================================
+# Abstract base
+# =========================================================================
+
+class BaseVectorStore(ABC):
+    """Interface that both backends implement."""
+
+    @property
+    @abstractmethod
+    def available(self) -> bool: ...
+
+    @abstractmethod
+    def add_codebundles(self, codebundles: List[Dict[str, Any]], embeddings: List[List[float]], clear_existing: bool = True): ...
+
+    @abstractmethod
+    def search_codebundles(self, query_embedding: List[float], n_results: int = 10, platform_filter: str = None, collection_filter: str = None) -> List[SearchResult]: ...
+
+    @abstractmethod
+    def add_codecollections(self, collections: List[Dict[str, Any]], embeddings: List[List[float]], clear_existing: bool = True): ...
+
+    @abstractmethod
+    def search_codecollections(self, query_embedding: List[float], n_results: int = 10) -> List[SearchResult]: ...
+
+    @abstractmethod
+    def add_libraries(self, libraries: List[Dict[str, Any]], embeddings: List[List[float]], clear_existing: bool = True): ...
+
+    @abstractmethod
+    def search_libraries(self, query_embedding: List[float], n_results: int = 10, category_filter: str = None) -> List[SearchResult]: ...
+
+    @abstractmethod
+    def add_documentation(self, docs: List[Dict[str, Any]], embeddings: List[List[float]], clear_existing: bool = True): ...
+
+    @abstractmethod
+    def search_documentation(self, query_embedding: List[float], n_results: int = 10, category_filter: str = None) -> List[SearchResult]: ...
+
+    @abstractmethod
+    def get_stats(self) -> Dict[str, int]: ...
+
+    # Shared helpers
+
     def _codebundle_to_document(self, cb: Dict[str, Any]) -> str:
-        """Convert a codebundle to searchable document text"""
+        """Convert a codebundle to searchable document text."""
         parts = []
-        
         if cb.get("display_name"):
             parts.append(cb["display_name"])
         if cb.get("name"):
@@ -368,143 +114,543 @@ class VectorStore:
         if cb.get("capabilities"):
             parts.append(f"Capabilities: {', '.join(cb['capabilities'][:10])}")
         if cb.get("readme"):
-            # Include first 1000 chars of readme
             parts.append(cb["readme"][:1000])
-        
         return "\n".join(parts)
-    
-    def _format_results(self, results: Dict) -> List[SearchResult]:
-        """Format ChromaDB results into SearchResult objects"""
-        formatted = []
-        
-        if not results or not results.get("ids") or not results["ids"][0]:
-            return formatted
-        
-        ids = results["ids"][0]
-        documents = results.get("documents", [[]])[0]
-        metadatas = results.get("metadatas", [[]])[0]
-        distances = results.get("distances", [[]])[0]
-        
-        for i, id_ in enumerate(ids):
-            formatted.append(SearchResult(
-                id=id_,
-                content=documents[i] if i < len(documents) else "",
-                metadata=metadatas[i] if i < len(metadatas) else {},
-                distance=distances[i] if i < len(distances) else 1.0
-            ))
-        
-        return formatted
-    
-    # =========================================================================
-    # Documentation operations
-    # =========================================================================
-    
-    def add_documentation(
-        self,
-        docs: List[Dict[str, Any]],
-        embeddings: List[List[float]],
-        clear_existing: bool = True
-    ):
-        """Add documentation resources to the vector store"""
-        if clear_existing:
-            collection = self.clear_collection(self.DOCUMENTATION)
+
+    def _build_codebundle_metadata(self, cb: Dict[str, Any]) -> Dict[str, Any]:
+        tasks = cb.get("tasks", [])
+        capabilities = cb.get("capabilities", [])
+        return {
+            "slug": cb.get("slug", ""),
+            "collection_slug": cb.get("collection_slug", ""),
+            "name": cb.get("name", ""),
+            "display_name": cb.get("display_name", ""),
+            "description": (cb.get("description", "") or "")[:500],
+            "platform": cb.get("platform", ""),
+            "author": cb.get("author", ""),
+            "tags": ",".join(cb.get("support_tags", [])[:10]),
+            "tasks": json.dumps(tasks[:15]),
+            "capabilities": json.dumps(capabilities[:10]),
+        }
+
+    def _build_library_document(self, lib: Dict[str, Any]) -> str:
+        doc_parts = [lib.get("name", ""), lib.get("description", "")]
+        if lib.get("functions"):
+            func_names = [f.get("name", "") for f in lib["functions"][:20]]
+            doc_parts.append("Functions: " + ", ".join(func_names))
+        if lib.get("keywords"):
+            doc_parts.append("Keywords: " + ", ".join(lib["keywords"][:20]))
+        return " ".join(doc_parts)
+
+    def _build_library_metadata(self, lib: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "name": lib.get("name", ""),
+            "description": (lib.get("description", "") or "")[:500],
+            "category": lib.get("category", ""),
+            "import_path": lib.get("import_path", lib.get("import_name", "")),
+            "collection_slug": lib.get("collection_slug", ""),
+            "git_url": lib.get("git_url", ""),
+        }
+
+    def _build_doc_document(self, doc: Dict[str, Any]) -> str:
+        doc_parts = [f"# {doc.get('name', '')}", doc.get("description", "")]
+        if doc.get("crawled_content"):
+            doc_parts.append(doc["crawled_content"][:12000])
         else:
-            collection = self._get_or_create_collection(self.DOCUMENTATION)
-        
-        if not docs:
-            return
-        
-        ids = []
-        documents = []
-        metadatas = []
-        
-        seen_ids = set()
-        for i, doc in enumerate(docs):
-            # Create unique ID from name and category
-            name = doc.get('name', doc.get('question', f'doc-{i}'))
-            base_id = f"{doc.get('category', 'general')}/{name}".lower().replace(' ', '-')
-            doc_id = base_id
-            # Handle duplicates
-            counter = 1
-            while doc_id in seen_ids:
-                doc_id = f"{base_id}_{counter}"
-                counter += 1
-            seen_ids.add(doc_id)
-            ids.append(doc_id)
-            
-            # Create document text for ChromaDB storage.
-            # This is what gets returned on search, so include crawled content.
-            doc_parts = [
-                f"# {doc.get('name', '')}",
-                doc.get("description", ""),
-            ]
-            # Include actual crawled page content (this is the critical data for
-            # the LLM to answer documentation questions with real content)
-            if doc.get("crawled_content"):
-                doc_parts.append(doc["crawled_content"][:12000])
-            else:
-                # Fallback to metadata-only content
-                if doc.get("topics"):
-                    doc_parts.append(f"Topics: {', '.join(doc['topics'])}")
-                if doc.get("key_points"):
-                    doc_parts.append(f"Key points: {', '.join(doc['key_points'])}")
-                if doc.get("usage_examples"):
-                    doc_parts.append(f"Examples: {', '.join(doc['usage_examples'])}")
-                if doc.get("answer"):
-                    doc_parts.append(f"Answer: {doc['answer'][:500]}")
-            documents.append("\n\n".join(doc_parts))
-            
-            metadatas.append({
-                "name": doc.get("name", doc.get("question", "")),
-                "description": doc.get("description", doc.get("answer", ""))[:500],
-                "url": doc.get("url", ""),
-                "category": doc.get("category", "general"),
-                "topics": ",".join(doc.get("topics", [])),
-                "priority": doc.get("priority", "medium"),
-                "has_crawled_content": "true" if doc.get("crawled_content") else "false",
-            })
-        
-        collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            documents=documents,
-            metadatas=metadatas
+            if doc.get("topics"):
+                doc_parts.append(f"Topics: {', '.join(doc['topics'])}")
+            if doc.get("key_points"):
+                doc_parts.append(f"Key points: {', '.join(doc['key_points'])}")
+            if doc.get("usage_examples"):
+                doc_parts.append(f"Examples: {', '.join(doc['usage_examples'])}")
+            if doc.get("answer"):
+                doc_parts.append(f"Answer: {doc['answer'][:500]}")
+        return "\n\n".join(doc_parts)
+
+    def _build_doc_metadata(self, doc: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "name": doc.get("name", doc.get("question", "")),
+            "description": (doc.get("description", doc.get("answer", "")) or "")[:500],
+            "url": doc.get("url", ""),
+            "category": doc.get("category", "general"),
+            "topics": ",".join(doc.get("topics", [])),
+            "priority": doc.get("priority", "medium"),
+            "has_crawled_content": "true" if doc.get("crawled_content") else "false",
+        }
+
+    def _dedup_id(self, base_id: str, seen: set) -> str:
+        """Generate a unique ID, appending _N if needed."""
+        doc_id = base_id
+        counter = 1
+        while doc_id in seen:
+            doc_id = f"{base_id}_{counter}"
+            counter += 1
+        seen.add(doc_id)
+        return doc_id
+
+
+# =========================================================================
+# Backend 1: Local (in-memory numpy + JSON file persistence)
+# =========================================================================
+
+class LocalVectorStore(BaseVectorStore):
+    """
+    Zero-infrastructure vector store. Stores embeddings in a local JSON file,
+    loads them into memory, and searches with brute-force cosine similarity.
+
+    Fast enough for thousands of vectors. No database required.
+    """
+
+    def __init__(self, persist_path: str = None):
+        self._persist_path = persist_path or str(
+            Path(__file__).parent.parent / "data" / "vector_index.json"
         )
-        
-        logger.info(f"Added {len(docs)} documentation resources to vector store")
-    
-    def search_documentation(
+        # In-memory store: {table_name: {id: {embedding, document, metadata}}}
+        self._data: Dict[str, Dict[str, Dict[str, Any]]] = {t: {} for t in ALL_TABLES}
+        self._load()
+        logger.info(f"LocalVectorStore initialized (file: {self._persist_path})")
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    def _load(self):
+        """Load persisted data from JSON file."""
+        try:
+            if Path(self._persist_path).exists():
+                with open(self._persist_path, "r") as f:
+                    raw = json.load(f)
+                for table in ALL_TABLES:
+                    if table in raw:
+                        self._data[table] = raw[table]
+                total = sum(len(v) for v in self._data.values())
+                logger.info(f"Loaded {total} vectors from {self._persist_path}")
+        except Exception as e:
+            logger.warning(f"Could not load local vector index: {e}")
+
+    def _save(self):
+        """Persist data to JSON file."""
+        try:
+            Path(self._persist_path).parent.mkdir(parents=True, exist_ok=True)
+            with open(self._persist_path, "w") as f:
+                json.dump(self._data, f)
+        except Exception as e:
+            logger.error(f"Failed to save local vector index: {e}")
+
+    def _cosine_search(
         self,
+        table: str,
         query_embedding: List[float],
         n_results: int = 10,
-        category_filter: str = None
+        where: Optional[Dict[str, str]] = None,
     ) -> List[SearchResult]:
-        """Search documentation by semantic similarity"""
-        collection = self._get_or_create_collection(self.DOCUMENTATION)
-        
-        where_filter = None
+        """Brute-force cosine distance search."""
+        entries = self._data.get(table, {})
+        if not entries:
+            return []
+
+        query_vec = np.array(query_embedding, dtype=np.float32)
+        query_norm = np.linalg.norm(query_vec)
+        if query_norm == 0:
+            return []
+        query_vec = query_vec / query_norm
+
+        scored = []
+        for entry_id, entry in entries.items():
+            # Apply metadata filters
+            if where:
+                meta = entry.get("metadata", {})
+                if not all(meta.get(k) == v for k, v in where.items()):
+                    continue
+
+            emb = np.array(entry["embedding"], dtype=np.float32)
+            emb_norm = np.linalg.norm(emb)
+            if emb_norm == 0:
+                continue
+            # Cosine distance = 1 - cosine_similarity
+            cosine_sim = float(np.dot(query_vec, emb / emb_norm))
+            distance = 1.0 - cosine_sim
+            scored.append((entry_id, entry, distance))
+
+        # Sort by distance (ascending = most similar first)
+        scored.sort(key=lambda x: x[2])
+
+        results = []
+        for entry_id, entry, distance in scored[:n_results]:
+            results.append(SearchResult(
+                id=entry_id,
+                content=entry.get("document", ""),
+                metadata=entry.get("metadata", {}),
+                distance=distance,
+            ))
+        return results
+
+    def _add_entries(
+        self,
+        table: str,
+        ids: List[str],
+        embeddings: List[List[float]],
+        documents: List[str],
+        metadatas: List[Dict[str, Any]],
+        clear_existing: bool = True,
+    ):
+        if clear_existing:
+            self._data[table] = {}
+        for i in range(len(ids)):
+            self._data[table][ids[i]] = {
+                "embedding": embeddings[i],
+                "document": documents[i],
+                "metadata": metadatas[i],
+            }
+        self._save()
+
+    # -- Codebundles --
+
+    def add_codebundles(self, codebundles, embeddings, clear_existing=True):
+        if not codebundles:
+            return
+        ids, docs, metas = [], [], []
+        for cb in codebundles:
+            ids.append(f"{cb.get('collection_slug', 'unknown')}/{cb.get('slug', 'unknown')}")
+            docs.append(self._codebundle_to_document(cb))
+            metas.append(self._build_codebundle_metadata(cb))
+        self._add_entries(TABLE_CODEBUNDLES, ids, embeddings, docs, metas, clear_existing)
+        logger.info(f"Added {len(codebundles)} codebundles to local vector store")
+
+    def search_codebundles(self, query_embedding, n_results=10, platform_filter=None, collection_filter=None):
+        where = {}
+        if platform_filter:
+            where["platform"] = platform_filter
+        if collection_filter:
+            where["collection_slug"] = collection_filter
+        return self._cosine_search(TABLE_CODEBUNDLES, query_embedding, n_results, where or None)
+
+    # -- Codecollections --
+
+    def add_codecollections(self, collections, embeddings, clear_existing=True):
+        if not collections:
+            return
+        ids, docs, metas = [], [], []
+        for cc in collections:
+            ids.append(cc.get("slug", "unknown"))
+            docs.append(f"{cc.get('name', '')} - {cc.get('description', '')}")
+            metas.append({
+                "slug": cc.get("slug", ""), "name": cc.get("name", ""),
+                "description": (cc.get("description", "") or "")[:500],
+                "git_url": cc.get("git_url", ""), "owner": cc.get("owner", ""),
+            })
+        self._add_entries(TABLE_CODECOLLECTIONS, ids, embeddings, docs, metas, clear_existing)
+        logger.info(f"Added {len(collections)} codecollections to local vector store")
+
+    def search_codecollections(self, query_embedding, n_results=10):
+        return self._cosine_search(TABLE_CODECOLLECTIONS, query_embedding, n_results)
+
+    # -- Libraries --
+
+    def add_libraries(self, libraries, embeddings, clear_existing=True):
+        if not libraries:
+            return
+        ids, docs, metas = [], [], []
+        seen: set = set()
+        for lib in libraries:
+            base_id = f"{lib.get('collection_slug', 'unknown')}/{lib.get('module_path', lib.get('import_path', lib.get('name', 'unknown')))}"
+            ids.append(self._dedup_id(base_id, seen))
+            docs.append(self._build_library_document(lib))
+            metas.append(self._build_library_metadata(lib))
+        self._add_entries(TABLE_LIBRARIES, ids, embeddings, docs, metas, clear_existing)
+        logger.info(f"Added {len(libraries)} libraries to local vector store")
+
+    def search_libraries(self, query_embedding, n_results=10, category_filter=None):
+        where = {}
         if category_filter and category_filter != "all":
-            where_filter = {"category": category_filter}
-        
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            where=where_filter,
-            include=["documents", "metadatas", "distances"]
+            where["category"] = category_filter
+        return self._cosine_search(TABLE_LIBRARIES, query_embedding, n_results, where or None)
+
+    # -- Documentation --
+
+    def add_documentation(self, docs_list, embeddings, clear_existing=True):
+        if not docs_list:
+            return
+        ids, docs, metas = [], [], []
+        seen: set = set()
+        for i, doc in enumerate(docs_list):
+            name = doc.get("name", doc.get("question", f"doc-{i}"))
+            base_id = f"{doc.get('category', 'general')}/{name}".lower().replace(" ", "-")
+            ids.append(self._dedup_id(base_id, seen))
+            docs.append(self._build_doc_document(doc))
+            metas.append(self._build_doc_metadata(doc))
+        self._add_entries(TABLE_DOCUMENTATION, ids, embeddings, docs, metas, clear_existing)
+        logger.info(f"Added {len(docs_list)} documentation resources to local vector store")
+
+    def search_documentation(self, query_embedding, n_results=10, category_filter=None):
+        where = {}
+        if category_filter and category_filter != "all":
+            where["category"] = category_filter
+        return self._cosine_search(TABLE_DOCUMENTATION, query_embedding, n_results, where or None)
+
+    # -- Stats --
+
+    def get_stats(self):
+        return {
+            "codebundles": len(self._data.get(TABLE_CODEBUNDLES, {})),
+            "codecollections": len(self._data.get(TABLE_CODECOLLECTIONS, {})),
+            "libraries": len(self._data.get(TABLE_LIBRARIES, {})),
+            "documentation": len(self._data.get(TABLE_DOCUMENTATION, {})),
+        }
+
+
+# =========================================================================
+# Backend 2: PostgreSQL + pgvector
+# =========================================================================
+
+class PgVectorStore(BaseVectorStore):
+    """
+    PostgreSQL + pgvector backend for production deployments.
+
+    Uses cosine distance (<=> operator) and HNSW indexes.
+    Requires DATABASE_URL and pgvector extension in PostgreSQL.
+    """
+
+    def __init__(self, database_url: str):
+        import psycopg2 as _psycopg2
+        import psycopg2.pool as _pool
+        import psycopg2.extras as _extras
+        from pgvector.psycopg2 import register_vector as _register
+
+        self._psycopg2 = _psycopg2
+        self._pool_cls = _pool
+        self._extras = _extras
+        self._register_vector = _register
+
+        self._pool = _pool.ThreadedConnectionPool(
+            minconn=1, maxconn=5, dsn=database_url,
         )
-        
-        return self._format_results(results)
-    
-    def get_stats(self) -> Dict[str, int]:
-        """Get statistics about stored data"""
+        self._ensure_schema()
+        logger.info("PgVectorStore initialized (pgvector/PostgreSQL)")
+
+    @property
+    def available(self) -> bool:
+        return self._pool is not None
+
+    @contextmanager
+    def _get_conn(self):
+        conn = self._pool.getconn()
+        try:
+            self._register_vector(conn)
+            yield conn
+        finally:
+            self._pool.putconn(conn)
+
+    def _ensure_schema(self):
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                for table in ALL_TABLES:
+                    cur.execute(f"""
+                        CREATE TABLE IF NOT EXISTS {table} (
+                            id TEXT PRIMARY KEY,
+                            embedding vector(1536),
+                            document TEXT,
+                            metadata JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                        )
+                    """)
+                    cur.execute(f"""
+                        CREATE INDEX IF NOT EXISTS idx_{table}_embedding
+                        ON {table} USING hnsw (embedding vector_cosine_ops)
+                    """)
+                conn.commit()
+
+    def _clear_table(self, table: str):
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"DELETE FROM {table}")
+            conn.commit()
+
+    def _bulk_upsert(self, table, ids, embeddings, documents, metadatas, clear_existing=True):
+        if not ids:
+            return
+        if clear_existing:
+            self._clear_table(table)
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                values = [
+                    (ids[i], np.array(embeddings[i], dtype=np.float32), documents[i], json.dumps(metadatas[i]))
+                    for i in range(len(ids))
+                ]
+                self._extras.execute_values(
+                    cur,
+                    f"""INSERT INTO {table} (id, embedding, document, metadata) VALUES %s
+                        ON CONFLICT (id) DO UPDATE SET
+                            embedding = EXCLUDED.embedding, document = EXCLUDED.document,
+                            metadata = EXCLUDED.metadata, updated_at = NOW()""",
+                    values,
+                    template="(%s, %s, %s, %s::jsonb)",
+                    page_size=100,
+                )
+            conn.commit()
+
+    def _search(self, table, query_embedding, n_results=10, where=None):
+        query_vec = np.array(query_embedding, dtype=np.float32)
+        filter_clause = ""
+        filter_params: list = []
+        if where:
+            conditions = []
+            for key, val in where.items():
+                conditions.append("metadata->>%s = %s")
+                filter_params.extend([key, val])
+            filter_clause = "WHERE " + " AND ".join(conditions)
+
+        sql = f"""
+            SELECT id, document, metadata, embedding <=> %s AS distance
+            FROM {table} {filter_clause}
+            ORDER BY embedding <=> %s LIMIT %s
+        """
+        params = [query_vec] + filter_params + [query_vec, n_results]
+        with self._get_conn() as conn:
+            with conn.cursor(cursor_factory=self._extras.RealDictCursor) as cur:
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+        results = []
+        for row in rows:
+            meta = row["metadata"] if isinstance(row["metadata"], dict) else json.loads(row["metadata"])
+            results.append(SearchResult(
+                id=row["id"], content=row["document"] or "",
+                metadata=meta, distance=float(row["distance"]),
+            ))
+        return results
+
+    # -- Codebundles --
+
+    def add_codebundles(self, codebundles, embeddings, clear_existing=True):
+        if not codebundles:
+            return
+        ids, docs, metas = [], [], []
+        for cb in codebundles:
+            ids.append(f"{cb.get('collection_slug', 'unknown')}/{cb.get('slug', 'unknown')}")
+            docs.append(self._codebundle_to_document(cb))
+            metas.append(self._build_codebundle_metadata(cb))
+        self._bulk_upsert(TABLE_CODEBUNDLES, ids, embeddings, docs, metas, clear_existing)
+        logger.info(f"Added {len(codebundles)} codebundles to vector store")
+
+    def search_codebundles(self, query_embedding, n_results=10, platform_filter=None, collection_filter=None):
+        where = {}
+        if platform_filter:
+            where["platform"] = platform_filter
+        if collection_filter:
+            where["collection_slug"] = collection_filter
+        return self._search(TABLE_CODEBUNDLES, query_embedding, n_results, where or None)
+
+    # -- Codecollections --
+
+    def add_codecollections(self, collections, embeddings, clear_existing=True):
+        if not collections:
+            return
+        ids, docs, metas = [], [], []
+        for cc in collections:
+            ids.append(cc.get("slug", "unknown"))
+            docs.append(f"{cc.get('name', '')} - {cc.get('description', '')}")
+            metas.append({
+                "slug": cc.get("slug", ""), "name": cc.get("name", ""),
+                "description": (cc.get("description", "") or "")[:500],
+                "git_url": cc.get("git_url", ""), "owner": cc.get("owner", ""),
+            })
+        self._bulk_upsert(TABLE_CODECOLLECTIONS, ids, embeddings, docs, metas, clear_existing)
+        logger.info(f"Added {len(collections)} codecollections to vector store")
+
+    def search_codecollections(self, query_embedding, n_results=10):
+        return self._search(TABLE_CODECOLLECTIONS, query_embedding, n_results)
+
+    # -- Libraries --
+
+    def add_libraries(self, libraries, embeddings, clear_existing=True):
+        if not libraries:
+            return
+        ids, docs, metas = [], [], []
+        seen: set = set()
+        for lib in libraries:
+            base_id = f"{lib.get('collection_slug', 'unknown')}/{lib.get('module_path', lib.get('import_path', lib.get('name', 'unknown')))}"
+            ids.append(self._dedup_id(base_id, seen))
+            docs.append(self._build_library_document(lib))
+            metas.append(self._build_library_metadata(lib))
+        self._bulk_upsert(TABLE_LIBRARIES, ids, embeddings, docs, metas, clear_existing)
+        logger.info(f"Added {len(libraries)} libraries to vector store")
+
+    def search_libraries(self, query_embedding, n_results=10, category_filter=None):
+        where = {}
+        if category_filter and category_filter != "all":
+            where["category"] = category_filter
+        return self._search(TABLE_LIBRARIES, query_embedding, n_results, where or None)
+
+    # -- Documentation --
+
+    def add_documentation(self, docs_list, embeddings, clear_existing=True):
+        if not docs_list:
+            return
+        ids, docs, metas = [], [], []
+        seen: set = set()
+        for i, doc in enumerate(docs_list):
+            name = doc.get("name", doc.get("question", f"doc-{i}"))
+            base_id = f"{doc.get('category', 'general')}/{name}".lower().replace(" ", "-")
+            ids.append(self._dedup_id(base_id, seen))
+            docs.append(self._build_doc_document(doc))
+            metas.append(self._build_doc_metadata(doc))
+        self._bulk_upsert(TABLE_DOCUMENTATION, ids, embeddings, docs, metas, clear_existing)
+        logger.info(f"Added {len(docs_list)} documentation resources to vector store")
+
+    def search_documentation(self, query_embedding, n_results=10, category_filter=None):
+        where = {}
+        if category_filter and category_filter != "all":
+            where["category"] = category_filter
+        return self._search(TABLE_DOCUMENTATION, query_embedding, n_results, where or None)
+
+    # -- Stats --
+
+    def get_stats(self):
         stats = {}
-        
-        for name in [self.CODEBUNDLES, self.CODECOLLECTIONS, self.LIBRARIES, self.DOCUMENTATION]:
-            try:
-                collection = self._get_or_create_collection(name)
-                stats[name] = collection.count()
-            except Exception:
-                stats[name] = 0
-        
+        table_map = {
+            "codebundles": TABLE_CODEBUNDLES, "codecollections": TABLE_CODECOLLECTIONS,
+            "libraries": TABLE_LIBRARIES, "documentation": TABLE_DOCUMENTATION,
+        }
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                for key, table in table_map.items():
+                    try:
+                        cur.execute(f"SELECT COUNT(*) FROM {table}")
+                        stats[key] = cur.fetchone()[0]
+                    except Exception:
+                        conn.rollback()
+                        stats[key] = 0
         return stats
 
+    def close(self):
+        if self._pool:
+            self._pool.closeall()
+
+
+# =========================================================================
+# Factory: auto-detect backend
+# =========================================================================
+
+def VectorStore(database_url: str = None) -> BaseVectorStore:
+    """
+    Create the appropriate vector store backend.
+
+    - If DATABASE_URL is set (env var or argument): uses pgvector in PostgreSQL.
+    - Otherwise: uses local in-memory store with JSON file persistence.
+
+    Both backends have the exact same interface.
+    """
+    db_url = database_url or os.getenv("DATABASE_URL")
+
+    if db_url:
+        try:
+            store = PgVectorStore(database_url=db_url)
+            return store
+        except Exception as e:
+            logger.error(f"Failed to connect to PostgreSQL: {e}")
+            logger.warning("Falling back to local vector store")
+
+    # Local fallback -- always works, no external deps
+    return LocalVectorStore()

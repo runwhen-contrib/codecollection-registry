@@ -105,7 +105,7 @@ tasks:
       - docker system prune -f
 
   clean-index:
-    desc: Remove indexed data (vector store + cloned repos)
+    desc: Remove indexed data (cloned repos + legacy vectordb)
     cmds:
       - rm -rf data/vectordb data/repos
-      - echo "✅ Index data cleared"
+      - echo "✅ Index data cleared (note: pgvector data lives in PostgreSQL)"
