@@ -33,7 +33,7 @@ Thumbs.db
 tmp/
 temp/
 
-# Vector database (legacy ChromaDB - now uses pgvector in PostgreSQL)
+# Vector database (legacy ChromaDB)
 data/vectordb/
 *.sqlite3
 *.bin

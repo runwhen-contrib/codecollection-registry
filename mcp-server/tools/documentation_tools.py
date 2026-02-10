@@ -207,7 +207,7 @@ class FindDocumentationTool(BaseTool):
     ) -> str:
         """
         Find documentation using a two-layer approach:
-        1. Semantic search (pgvector with crawled page content) - PRIMARY
+        1. Semantic search (vector store with crawled page content) - PRIMARY
         2. docs.yaml keyword matching - for URL enrichment and fallback
         
         Semantic search uses actual crawled page content with embeddings,

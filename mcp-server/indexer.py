@@ -118,14 +118,14 @@ class CodeCollectionIndexer:
         # Initialize components
         self.robot_parser = RobotParser()
         self.python_parser = PythonParser()
-        self.vector_store = VectorStore()  # Uses DATABASE_URL env var
+        self.vector_store = VectorStore()
         self.embedding_generator = get_embedding_generator(prefer_local=prefer_local_embeddings)
         
         logger.info(f"Indexer initialized")
         logger.info(f"  Workspace: {self.workspace_dir}")
         logger.info(f"  Collections file: {self.collections_file}")
         logger.info(f"  Embedding provider: {self.embedding_generator.provider_name}")
-        logger.info(f"  Vector store: pgvector (PostgreSQL)")
+        logger.info(f"  Vector store: local (in-memory + JSON)")
     
     def load_collections_config(self) -> List[Dict[str, Any]]:
         """Load codecollections from YAML config"""

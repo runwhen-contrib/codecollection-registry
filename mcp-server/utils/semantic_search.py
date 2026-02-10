@@ -68,21 +68,15 @@ class SemanticSearch:
     to provide semantic search capabilities.
     """
     
-    def __init__(self, prefer_local: bool = None, database_url: str = None):
+    def __init__(self, prefer_local: bool = None):
         """
         Initialize semantic search.
         
         Args:
             prefer_local: If True, use local embeddings. If None, auto-detect.
-            database_url: PostgreSQL connection string for pgvector store.
-                         If not set and DATABASE_URL env var is not set,
-                         uses a local in-memory vector store (no infra needed).
         """
-        # VectorStore() is a factory -- always returns something usable.
-        # With DATABASE_URL: returns PgVectorStore (production).
-        # Without: returns LocalVectorStore (standalone/embedded).
         try:
-            self.vector_store = VectorStore(database_url=database_url)
+            self.vector_store = VectorStore()
         except Exception as e:
             logger.error(f"Failed to initialize VectorStore: {e}")
             self.vector_store = None

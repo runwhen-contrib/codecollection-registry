@@ -43,7 +43,6 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - MCP_LOG_LEVEL=INFO
-      - DATABASE_URL=postgresql://user:password@database:5432/codecollection_registry
     command: python server_http.py
     restart: unless-stopped
     healthcheck:
@@ -71,7 +70,6 @@ services:
       - az.secret
     environment:
       - PYTHONUNBUFFERED=1
-      - DATABASE_URL=postgresql://user:password@database:5432/codecollection_registry
     command: python indexer.py --config /app/codecollections.yaml
     networks:
       - mcp-network
@@ -91,7 +89,6 @@ services:
       - ../../codecollections.yaml:/app/codecollections.yaml:ro
     environment:
       - PYTHONUNBUFFERED=1
-      - DATABASE_URL=postgresql://user:password@database:5432/codecollection_registry
     command: python indexer.py --config /app/codecollections.yaml --local
     networks:
       - mcp-network
@@ -115,7 +112,6 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - MCP_LOG_LEVEL=INFO
-      - DATABASE_URL=postgresql://user:password@database:5432/codecollection_registry
     command: python server.py
     restart: unless-stopped
     networks:

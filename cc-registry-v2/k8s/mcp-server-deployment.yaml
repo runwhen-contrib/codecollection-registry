@@ -7,7 +7,9 @@ metadata:
     app: cc-registry
     component: mcp-server
 spec:
-  replicas: 2  # Can now scale horizontally - no more ReadWriteOnce PVC
+  replicas: 1  # Single instance - LocalVectorStore uses PVC (ReadWriteOnce)
+  strategy:
+    type: Recreate  # Ensure old pod releases PVC before new one starts
   selector:
     matchLabels:
       app: cc-registry
@@ -35,18 +37,6 @@ spec:
           value: "1"
         - name: MCP_LOG_LEVEL
           value: "INFO"
-        - name: DB_USER
-          valueFrom:
-            secretKeyRef:
-              name: registry-user.registry-db.credentials.postgresql.acid.zalan.do
-              key: username
-        - name: DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: registry-user.registry-db.credentials.postgresql.acid.zalan.do
-              key: password
-        - name: DATABASE_URL
-          value: "postgresql://$(DB_USER):$(DB_PASSWORD)@registry-db:5432/registry"
         envFrom:
         - secretRef:
             name: azure-openai-credentials
@@ -56,6 +46,8 @@ spec:
           mountPath: /app/codecollections.yaml
           subPath: codecollections.yaml
           readOnly: true
+        - name: mcp-data
+          mountPath: /app/data
         resources:
           requests:
             memory: "512Mi"
@@ -89,8 +81,26 @@ spec:
       - name: codecollections-yaml
         configMap:
           name: codecollections-config
+      - name: mcp-data
+        persistentVolumeClaim:
+          claimName: mcp-server-data
       imagePullSecrets:
       - name: ghcr-pull-secret
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mcp-server-data
+  namespace: codecollection-registry
+  labels:
+    app: cc-registry
+    component: mcp-server
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
 ---
 apiVersion: v1
 kind: Service
@@ -110,11 +120,6 @@ spec:
   selector:
     app: cc-registry
     component: mcp-server
----
-# PVC removed - vector data now lives in PostgreSQL via pgvector
-# The mcp-server-data PVC is no longer needed.
-# To clean up the old PVC after migration:
-#   kubectl delete pvc mcp-server-data -n codecollection-registry
 ---
 apiVersion: v1
 kind: ConfigMap

@@ -72,7 +72,7 @@ The MCP server provides these semantic search tools:
 
 - **CodeBundles** - Parsed from `codecollections.yaml`
 - **Documentation** - Indexed from `docs.yaml`
-- **Embeddings** - Stored in PostgreSQL via pgvector
+- **Embeddings** - Stored locally in JSON with in-memory cosine similarity
 
 ## 🔄 Indexing
 

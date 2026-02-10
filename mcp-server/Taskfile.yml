@@ -107,5 +107,5 @@ tasks:
   clean-index:
     desc: Remove indexed data (cloned repos + legacy vectordb)
     cmds:
-      - rm -rf data/vectordb data/repos
-      - echo "✅ Index data cleared (note: pgvector data lives in PostgreSQL)"
+      - rm -rf data/vectordb data/repos data/vector_index.json
+      - echo "✅ Index data cleared"
