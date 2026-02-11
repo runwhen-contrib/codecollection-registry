@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from typing import Optional
 from app.core.config import settings
 from app.core.database import engine, Base
@@ -20,10 +20,10 @@ from app.models import *
 # Create FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Interactive CodeCollection Registry",
-    version="1.0.0",
-    docs_url="/docs" if settings.DEBUG else None,
-    redoc_url="/redoc" if settings.DEBUG else None,
+    description="Interactive CodeCollection Registry API — see /openapi.yaml for the full spec.",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # Add middleware
@@ -53,13 +53,26 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal server error"}
     )
 
+@app.get("/openapi.yaml", include_in_schema=False)
+async def openapi_yaml():
+    """Serve the hand-written OpenAPI spec as YAML."""
+    from pathlib import Path
+    spec_path = Path(__file__).parent.parent / "openapi.yaml"
+    if spec_path.exists():
+        return FileResponse(spec_path, media_type="application/x-yaml")
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="openapi.yaml not found")
+
+
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {
         "message": "CodeCollection Registry API",
-        "version": "1.0.0",
-        "docs": "/docs" if settings.DEBUG else "Documentation not available in production",
+        "version": "2.0.0",
+        "docs": "/docs",
+        "redoc": "/redoc",
+        "openapi_yaml": "/openapi.yaml",
         "health": "/api/v1/health"
     }
 

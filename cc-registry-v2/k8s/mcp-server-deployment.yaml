@@ -7,9 +7,7 @@ metadata:
     app: cc-registry
     component: mcp-server
 spec:
-  replicas: 1  # Single instance - LocalVectorStore uses PVC (ReadWriteOnce)
-  strategy:
-    type: Recreate  # Ensure old pod releases PVC before new one starts
+  replicas: 2  # Stateless — scales freely
   selector:
     matchLabels:
       app: cc-registry
@@ -37,29 +35,20 @@ spec:
           value: "1"
         - name: MCP_LOG_LEVEL
           value: "INFO"
-        envFrom:
-        - secretRef:
-            name: azure-openai-credentials
-            optional: false  # Embeddings MUST be configured for search to work
-        volumeMounts:
-        - name: codecollections-yaml
-          mountPath: /app/codecollections.yaml
-          subPath: codecollections.yaml
-          readOnly: true
-        - name: mcp-data
-          mountPath: /app/data
+        - name: REGISTRY_API_URL
+          value: "http://cc-registry-backend:8001"  # Backend service in same namespace
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "250m"
+            memory: "128Mi"
+            cpu: "100m"
           limits:
-            memory: "2Gi"
-            cpu: "1000m"
+            memory: "512Mi"
+            cpu: "500m"
         livenessProbe:
           httpGet:
             path: /health
             port: 8000
-          initialDelaySeconds: 30
+          initialDelaySeconds: 10
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
@@ -67,7 +56,7 @@ spec:
           httpGet:
             path: /health
             port: 8000
-          initialDelaySeconds: 10
+          initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 3
@@ -76,31 +65,9 @@ spec:
           capabilities:
             drop:
             - ALL
-          readOnlyRootFilesystem: false
-      volumes:
-      - name: codecollections-yaml
-        configMap:
-          name: codecollections-config
-      - name: mcp-data
-        persistentVolumeClaim:
-          claimName: mcp-server-data
+          readOnlyRootFilesystem: true
       imagePullSecrets:
       - name: ghcr-pull-secret
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mcp-server-data
-  namespace: codecollection-registry
-  labels:
-    app: cc-registry
-    component: mcp-server
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 5Gi
 ---
 apiVersion: v1
 kind: Service
@@ -120,14 +87,3 @@ spec:
   selector:
     app: cc-registry
     component: mcp-server
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: codecollections-config
-  namespace: codecollection-registry
-data:
-  codecollections.yaml: |
-    # CodeCollections configuration
-    # Add your codecollections here
-    collections: []

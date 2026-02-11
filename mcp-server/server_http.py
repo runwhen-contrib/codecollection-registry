@@ -24,9 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 
-from utils.data_loader import DataLoader
-from utils.search import SearchEngine
-from utils.semantic_search import get_semantic_search, SemanticSearch
+from utils.registry_client import get_registry_client
 
 # Import the tool registry
 from tools import register_all_tools, get_tool_registry
@@ -39,8 +37,14 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="RunWhen Registry MCP Server",
-    description="HTTP API for querying RunWhen codecollection data, libraries, and documentation",
-    version="2.0.0"
+    description=(
+        "Thin, stateless MCP server that provides tool-based access to the "
+        "RunWhen CodeCollection Registry. All data is fetched from the backend "
+        "Registry API via REGISTRY_API_URL. See /openapi.yaml for the full spec."
+    ),
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # CORS middleware for cross-origin requests
@@ -52,31 +56,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize data loader and search engine
-data_loader = DataLoader()
-search_engine = SearchEngine()
-
-# Initialize semantic search (lazy loading)
-semantic_search: SemanticSearch = None
-
-def get_semantic_search_instance() -> SemanticSearch:
-    """Get or create semantic search instance"""
-    global semantic_search
-    if semantic_search is None:
-        semantic_search = get_semantic_search()
-    return semantic_search
-
-
 # Initialize tool registry on startup
 @app.on_event("startup")
 async def startup_event():
     """Register all tools on startup"""
+    client = get_registry_client()
+    logger.info(f"Registry API: {client.base_url}")
     logger.info("Registering MCP tools...")
-    registry = register_all_tools(
-        semantic_search_getter=get_semantic_search_instance,
-        data_loader=data_loader,
-        search_engine=search_engine
-    )
+    registry = register_all_tools(registry_client=client)
     logger.info(f"Registered {registry.count} tools")
 
 
@@ -110,6 +97,21 @@ class HealthResponse(BaseModel):
 
 
 # ============================================================================
+# OpenAPI Spec (static YAML)
+# ============================================================================
+
+@app.get("/openapi.yaml", include_in_schema=False)
+async def openapi_yaml():
+    """Serve the hand-written OpenAPI spec as YAML."""
+    from fastapi.responses import FileResponse
+    from pathlib import Path
+    spec_path = Path(__file__).parent / "openapi.yaml"
+    if spec_path.exists():
+        return FileResponse(spec_path, media_type="application/x-yaml")
+    raise HTTPException(status_code=404, detail="openapi.yaml not found")
+
+
+# ============================================================================
 # Health and Info Endpoints
 # ============================================================================
 
@@ -129,31 +131,27 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     try:
-        # Load data to verify it's accessible
-        codebundles = data_loader.load_codebundles()
-        collections = data_loader.load_codecollections()
-        libraries = data_loader.load_libraries()
-        docs = data_loader.load_documentation_resources()
+        client = get_registry_client()
         
-        # Check semantic search status
-        semantic_stats = None
+        # Check backend API connectivity
+        backend_stats = {}
         try:
-            ss = get_semantic_search_instance()
-            semantic_stats = ss.get_stats()
+            backend_stats = await client.get_stats()
         except Exception as e:
-            semantic_stats = {"error": str(e), "is_available": False}
+            logger.warning(f"Backend API unreachable: {e}")
+            backend_stats = {"error": str(e)}
         
         return HealthResponse(
             status="healthy",
-            version="1.0.0",
+            version="2.0.0",
             timestamp=datetime.utcnow().isoformat(),
             data_stats={
-                "codebundles": len(codebundles),
-                "collections": len(collections),
-                "libraries": len(libraries),
-                "documentation": len(docs)
+                "codebundles": backend_stats.get("codebundles", 0),
+                "collections": backend_stats.get("collections", 0),
+                "libraries": 0,
+                "documentation": 0
             },
-            semantic_search=semantic_stats
+            semantic_search={"backend_api": client.base_url, "status": "ok" if "error" not in backend_stats else "unreachable"}
         )
     except Exception as e:
         logger.error(f"Health check failed: {e}")

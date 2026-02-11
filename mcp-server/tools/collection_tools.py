@@ -2,6 +2,7 @@
 CodeCollection Tools
 
 Tools for finding and listing CodeCollections.
+All data is fetched from the Registry API.
 """
 import json
 import logging
@@ -13,16 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 class FindCodeCollectionTool(BaseTool):
-    """Semantic search for codecollections."""
+    """Search for codecollections matching a query."""
     
-    def __init__(self, semantic_search_getter):
-        self._get_semantic_search = semantic_search_getter
+    def __init__(self, registry_client):
+        self._client = registry_client
     
     @property
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="find_codecollection",
-            description="Find the right codecollection for your use case using semantic search.",
+            description="Find the right codecollection for your use case.",
             category="search",
             parameters=[
                 ToolParameter(
@@ -42,13 +43,38 @@ class FindCodeCollectionTool(BaseTool):
         )
     
     async def execute(self, query: str, max_results: int = 5) -> str:
-        """Find codecollections using semantic search"""
-        ss = self._get_semantic_search()
+        """Find codecollections via the Registry API."""
+        try:
+            collections = await self._client.list_collections()
+        except Exception as e:
+            logger.error(f"Registry API failed: {e}")
+            return f"Search unavailable: {e}"
         
-        if not ss.is_available:
-            return "Semantic search is not available."
+        # Client-side keyword matching until backend has semantic search
+        query_lower = query.lower()
+        query_words = set(query_lower.split())
         
-        results = ss.search_codecollections(query=query, n_results=max_results)
+        scored = []
+        for coll in collections:
+            score = 0
+            name = (coll.get('name') or '').lower()
+            desc = (coll.get('description') or '').lower()
+            slug = (coll.get('slug') or '').lower()
+            text = f"{name} {desc} {slug}"
+            
+            if query_lower in name:
+                score += 5
+            if query_lower in desc:
+                score += 3
+            for word in query_words:
+                if word in text:
+                    score += 1
+            
+            if score > 0:
+                scored.append((score, coll))
+        
+        scored.sort(key=lambda x: x[0], reverse=True)
+        results = [coll for _, coll in scored[:max_results]]
         
         if not results:
             return f"No codecollections found matching: {query}"
@@ -63,7 +89,6 @@ class FindCodeCollectionTool(BaseTool):
                 output += f"**Description:** {coll['description']}\n\n"
             if coll.get('git_url'):
                 output += f"**Repository:** [{coll['git_url']}]({coll['git_url']})\n\n"
-            output += f"**Relevance:** {coll.get('score', 0):.0%}\n\n"
             output += "---\n\n"
         
         return output
@@ -72,8 +97,8 @@ class FindCodeCollectionTool(BaseTool):
 class ListCodeCollectionsTool(BaseTool):
     """List all available codecollections."""
     
-    def __init__(self, data_loader):
-        self._data_loader = data_loader
+    def __init__(self, registry_client):
+        self._client = registry_client
     
     @property
     def definition(self) -> ToolDefinition:
@@ -94,26 +119,21 @@ class ListCodeCollectionsTool(BaseTool):
         )
     
     async def execute(self, format: str = "markdown") -> str:
-        """List all codecollections"""
-        collections = self._data_loader.load_codecollections()
-        codebundles = self._data_loader.load_codebundles()
-        
-        # Count codebundles per collection
-        cb_counts = {}
-        for cb in codebundles:
-            coll = cb.get('collection_slug', 'unknown')
-            cb_counts[coll] = cb_counts.get(coll, 0) + 1
+        """List all codecollections from the Registry API."""
+        try:
+            collections = await self._client.list_collections()
+        except Exception as e:
+            logger.error(f"Registry API failed: {e}")
+            return f"Failed to list collections: {e}"
         
         if format == "json":
-            for coll in collections:
-                coll['codebundle_count'] = cb_counts.get(coll.get('slug', ''), 0)
-            return json.dumps({"collections": collections}, indent=2)
+            return json.dumps({"collections": collections}, indent=2, default=str)
         
         output = f"# CodeCollections ({len(collections)})\n\n"
         
         for coll in collections:
             slug = coll.get('slug', '')
-            cb_count = cb_counts.get(slug, 0)
+            cb_count = coll.get('codebundle_count', 0)
             
             output += f"## **{coll.get('name')}**\n\n"
             output += f"**Slug:** {slug}\n\n"
@@ -121,12 +141,8 @@ class ListCodeCollectionsTool(BaseTool):
             
             if coll.get('description'):
                 output += f"**Description:** {coll['description']}\n\n"
-            
             if coll.get('git_url'):
                 output += f"**Repository:** {coll['git_url']}\n\n"
-            
             output += "---\n\n"
         
         return output
-
-

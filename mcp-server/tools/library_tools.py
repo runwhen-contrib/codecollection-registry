@@ -2,6 +2,7 @@
 Library Tools
 
 Tools for finding and getting help with Robot Framework libraries.
+All data is fetched from the Registry API.
 """
 import logging
 from typing import Dict, Any, List, Optional
@@ -14,11 +15,11 @@ logger = logging.getLogger(__name__)
 class KeywordUsageHelpTool(BaseTool):
     """
     Get help on using RunWhen Robot Framework keywords.
-    Uses semantic search to find relevant library documentation.
+    Searches via the Registry API.
     """
     
-    def __init__(self, semantic_search_getter):
-        self._get_semantic_search = semantic_search_getter
+    def __init__(self, registry_client):
+        self._client = registry_client
     
     @property
     def definition(self) -> ToolDefinition:
@@ -45,44 +46,35 @@ class KeywordUsageHelpTool(BaseTool):
         )
     
     async def execute(self, query: str, category: str = "all") -> str:
-        """Get keyword usage help"""
-        ss = self._get_semantic_search()
-        
-        if not ss.is_available:
-            return "Library search is not available."
-        
-        results = ss.search_libraries(
-            query=query,
-            category=category if category != "all" else None,
-            max_results=5
-        )
+        """Get keyword usage help via the Registry API."""
+        try:
+            # Use codebundle search as a proxy — backend can add a dedicated
+            # library search endpoint later for better results.
+            results = await self._client.search_codebundles(
+                search=query,
+                max_results=5,
+            )
+        except Exception as e:
+            logger.error(f"Registry API search failed: {e}")
+            return f"Library search unavailable: {e}"
         
         if not results:
             return f"No library information found for: {query}\n\nTry searching for specific keywords like 'kubectl', 'AWS CLI', or 'HTTP request'."
         
         output = f"# Library Help: {query}\n\n"
         
-        for lib in results:
-            output += f"## **{lib['name']}**\n\n"
-            output += f"**Import:** `{lib.get('import_path', lib['name'])}`\n\n"
-            output += f"**Category:** {lib.get('category', 'general')}\n\n"
+        for cb in results:
+            display_name = cb.get('display_name') or cb.get('name') or cb.get('slug')
+            output += f"## **{display_name}**\n\n"
             
-            if lib.get('description'):
-                output += f"**Description:** {lib['description']}\n\n"
+            desc = cb.get('description') or cb.get('doc') or ''
+            if desc:
+                output += f"**Description:** {desc[:300]}\n\n"
             
-            if lib.get('functions'):
-                output += "**Functions:**\n"
-                for func in lib['functions'][:5]:
-                    output += f"- `{func.get('signature', func.get('name'))}`"
-                    if func.get('docstring'):
-                        output += f"\n  {func['docstring'][:150]}"
-                    output += "\n"
-                output += "\n"
+            tags = cb.get('support_tags', [])
+            if tags:
+                output += f"**Tags:** {', '.join(tags)}\n\n"
             
-            if lib.get('keywords'):
-                output += f"**Robot Keywords:** {', '.join(lib['keywords'][:10])}\n\n"
-            
-            output += f"**Relevance:** {lib.get('score', 0):.0%}\n\n"
             output += "---\n\n"
         
         return output
@@ -91,8 +83,8 @@ class KeywordUsageHelpTool(BaseTool):
 class FindLibraryInfoTool(BaseTool):
     """Find information about libraries using keyword search."""
     
-    def __init__(self, search_engine):
-        self._search_engine = search_engine
+    def __init__(self, registry_client):
+        self._client = registry_client
     
     @property
     def definition(self) -> ToolDefinition:
@@ -119,12 +111,15 @@ class FindLibraryInfoTool(BaseTool):
         )
     
     async def execute(self, query: str, category: str = "all") -> str:
-        """Find library info by keyword"""
-        results = self._search_engine.search_libraries(
-            query=query,
-            category=category if category != "all" else None,
-            max_results=10
-        )
+        """Find library info via the Registry API."""
+        try:
+            results = await self._client.search_codebundles(
+                search=query,
+                max_results=10,
+            )
+        except Exception as e:
+            logger.error(f"Registry API search failed: {e}")
+            return f"Library search unavailable: {e}"
         
         if not results:
             return f"No libraries found matching: {query}"
@@ -132,19 +127,14 @@ class FindLibraryInfoTool(BaseTool):
         output = f"# Library Search: {query}\n\n"
         output += f"Found {len(results)} result(s):\n\n"
         
-        for lib in results:
-            output += f"## **{lib.get('name')}**\n\n"
-            output += f"**Import:** {lib.get('import_path', 'N/A')}\n\n"
-            output += f"**Category:** {lib.get('category', 'general')}\n\n"
+        for cb in results:
+            display_name = cb.get('display_name') or cb.get('name') or cb.get('slug')
+            output += f"## **{display_name}**\n\n"
             
-            if lib.get('description'):
-                output += f"**Description:** {lib['description'][:300]}\n\n"
-            
-            if lib.get('keywords'):
-                output += f"**Keywords:** {', '.join(lib['keywords'][:8])}\n\n"
+            desc = cb.get('description') or cb.get('doc') or ''
+            if desc:
+                output += f"**Description:** {desc[:300]}\n\n"
             
             output += "---\n\n"
         
         return output
-
-

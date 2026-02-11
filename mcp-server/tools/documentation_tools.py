@@ -2,7 +2,7 @@
 Documentation Tools
 
 Tools for finding documentation, guides, and development resources.
-Uses the managed docs.yaml for accurate URLs.
+Uses docs.yaml for curated URLs and the Registry API for search.
 """
 import os
 import yaml
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Documentation Data Management
+# Documentation Data Management (local docs.yaml — ships with the MCP server)
 # =============================================================================
 
 @dataclass
@@ -58,7 +58,6 @@ class DocumentationManager:
             with open(self.docs_file, 'r') as f:
                 self._docs = yaml.safe_load(f) or {}
             
-            # Parse all entries
             docs = self._docs.get("documentation", {})
             for category, items in docs.items():
                 if isinstance(items, list):
@@ -73,7 +72,6 @@ class DocumentationManager:
                                 examples=item.get("examples")
                             ))
                         elif "question" in item:
-                            # FAQ entry
                             self._entries.append(DocEntry(
                                 name=item.get("question", ""),
                                 url="",
@@ -98,21 +96,13 @@ class DocumentationManager:
                 continue
             
             score = 0
-            
-            # Name match (highest priority)
             if query_lower in entry.name.lower():
                 score += 5
-            
-            # Keyword match
             for kw in entry.keywords:
                 if kw.lower() in query_lower or query_lower in kw.lower():
                     score += 3
-            
-            # Description match
             if query_lower in entry.description.lower():
                 score += 2
-            
-            # Word-level matching
             all_text = f"{entry.name} {entry.description} {' '.join(entry.keywords)}".lower()
             for word in query_words:
                 if word in all_text:
@@ -125,17 +115,14 @@ class DocumentationManager:
         return [entry for _, entry in scored[:limit]]
     
     def get_by_category(self, category: str) -> List[DocEntry]:
-        """Get all docs in a category"""
         self._load()
         return [e for e in self._entries if e.category == category]
     
     def list_categories(self) -> List[str]:
-        """List all documentation categories"""
         self._load()
         return list(set(e.category for e in self._entries))
     
     def get_all_urls(self) -> Dict[str, str]:
-        """Get mapping of all doc names to URLs"""
         self._load()
         return {e.name: e.url for e in self._entries if e.url}
 
@@ -144,7 +131,6 @@ class DocumentationManager:
 _doc_manager: Optional[DocumentationManager] = None
 
 def get_doc_manager() -> DocumentationManager:
-    """Get or create the documentation manager"""
     global _doc_manager
     if _doc_manager is None:
         _doc_manager = DocumentationManager()
@@ -158,15 +144,11 @@ def get_doc_manager() -> DocumentationManager:
 class FindDocumentationTool(BaseTool):
     """
     Find documentation, guides, and FAQs.
-    Uses managed docs.yaml for accurate URLs.
+    Uses docs.yaml for curated URLs and keyword matching.
     """
     
-    def __init__(self, semantic_search_getter=None):
-        """
-        Args:
-            semantic_search_getter: Optional fallback to semantic search
-        """
-        self._get_semantic_search = semantic_search_getter
+    def __init__(self, registry_client=None):
+        self._client = registry_client
     
     @property
     def definition(self) -> ToolDefinition:
@@ -205,113 +187,43 @@ class FindDocumentationTool(BaseTool):
         category: str = "all",
         max_results: int = 10
     ) -> str:
-        """
-        Find documentation using a two-layer approach:
-        1. Semantic search (vector store with crawled page content) - PRIMARY
-        2. docs.yaml keyword matching - for URL enrichment and fallback
-        
-        Semantic search uses actual crawled page content with embeddings,
-        so it can answer detailed questions. docs.yaml provides curated
-        URLs and descriptions for enrichment.
-        """
+        """Find documentation using docs.yaml keyword matching."""
         doc_manager = get_doc_manager()
-        semantic_results = []
-        keyword_results = []
         
-        # Layer 1: Semantic search against crawled documentation content (PRIMARY)
-        if self._get_semantic_search:
-            try:
-                ss = self._get_semantic_search()
-                if ss.is_available:
-                    semantic_results = ss.search_documentation(
-                        query=query,
-                        category=category if category != "all" else None,
-                        max_results=max_results
-                    ) or []
-            except Exception as e:
-                logger.warning(f"Semantic documentation search failed: {e}")
-        
-        # Layer 2: Keyword search against docs.yaml (for URLs and curated descriptions)
-        keyword_results = doc_manager.search(
+        results = doc_manager.search(
             query=query,
             category=category if category != "all" else None,
             limit=max_results
         )
         
-        # Build a URL lookup from keyword results for enrichment
-        url_lookup = {}
-        for entry in keyword_results:
-            name_key = entry.name.lower().strip()
-            url_lookup[name_key] = entry
+        if not results:
+            return f"No documentation found matching: {query}\n\nCheck the official RunWhen documentation at https://docs.runwhen.com"
         
-        # Merge results: semantic results first (richer content), enriched with docs.yaml URLs
-        output_parts = []
-        seen_names = set()
+        output = f"# Documentation: {query}\n\n"
+        output += f"Found {len(results)} resource(s):\n\n"
         
-        # Add semantic results (these have actual page content from crawling)
-        for doc in semantic_results:
-            name = doc.get('name', doc.get('question', 'Untitled'))
-            seen_names.add(name.lower().strip())
+        for entry in results:
+            output += f"## **{entry.name}**\n\n"
+            output += f"**Category:** {entry.category}\n\n"
             
-            part = f"## **{name}**\n\n"
-            part += f"**Category:** {doc.get('category', 'documentation')}\n\n"
-            
-            # Use crawled content if available (much richer than docs.yaml descriptions)
-            if doc.get('crawled_content'):
-                # Include actual page content - this is the gold
-                content = doc['crawled_content'][:3000]
-                part += f"**Content:**\n{content}\n\n"
-            elif doc.get('description'):
-                part += f"**Description:** {doc['description']}\n\n"
-            
-            # Enrich with URL from docs.yaml if available
-            url = doc.get('url', '')
-            name_key = name.lower().strip()
-            if name_key in url_lookup and url_lookup[name_key].url:
-                url = url_lookup[name_key].url
-            if url:
-                part += f"**Link:** [{url}]({url})\n\n"
-            
-            part += f"**Relevance:** {doc.get('score', 0):.0%}\n\n"
-            part += "---\n\n"
-            output_parts.append(part)
+            if entry.description:
+                output += f"**Description:** {entry.description}\n\n"
+            if entry.url:
+                output += f"**Link:** [{entry.url}]({entry.url})\n\n"
+            if entry.examples:
+                output += "**Examples:**\n"
+                for ex in entry.examples[:2]:
+                    output += f"```robot\n{ex}\n```\n\n"
+            output += "---\n\n"
         
-        # Add keyword-only results that weren't in semantic results
-        for entry in keyword_results:
-            if entry.name.lower().strip() not in seen_names:
-                seen_names.add(entry.name.lower().strip())
-                
-                part = f"## **{entry.name}**\n\n"
-                part += f"**Category:** {entry.category}\n\n"
-                
-                if entry.description:
-                    part += f"**Description:** {entry.description}\n\n"
-                
-                if entry.url:
-                    part += f"**Link:** [{entry.url}]({entry.url})\n\n"
-                
-                if entry.examples:
-                    part += "**Examples:**\n"
-                    for ex in entry.examples[:2]:
-                        part += f"```robot\n{ex}\n```\n\n"
-                
-                part += "---\n\n"
-                output_parts.append(part)
-        
-        if output_parts:
-            output = f"# Documentation: {query}\n\n"
-            output += f"Found {len(output_parts)} resource(s):\n\n"
-            output += "".join(output_parts[:max_results])
-            return output
-        
-        return f"No documentation found matching: {query}\n\nCheck the official RunWhen documentation at https://docs.runwhen.com"
+        return output
 
 
 class GetDevelopmentRequirementsTool(BaseTool):
     """Get development requirements and best practices."""
     
-    def __init__(self, data_loader):
-        self._data_loader = data_loader
+    def __init__(self, registry_client=None):
+        self._client = registry_client
     
     @property
     def definition(self) -> ToolDefinition:
@@ -330,10 +242,7 @@ class GetDevelopmentRequirementsTool(BaseTool):
         )
     
     async def execute(self, feature: str) -> str:
-        """Get development requirements"""
-        feature_lower = feature.lower()
-        
-        # Search documentation manager for the feature
+        """Get development requirements from docs.yaml."""
         doc_manager = get_doc_manager()
         results = doc_manager.search(feature, limit=3)
         
@@ -356,5 +265,3 @@ class GetDevelopmentRequirementsTool(BaseTool):
             output += "Check the official RunWhen documentation at https://docs.runwhen.com/public/runwhen-authors\n"
         
         return output
-
-
