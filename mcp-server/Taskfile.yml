@@ -52,48 +52,27 @@ tasks:
       - docker-compose run --rm test
 
   # ===========================================
-  # Indexing Commands
+  # Indexing Commands (legacy — indexing now handled by backend)
   # ===========================================
   index:
-    desc: Run indexer with Azure OpenAI embeddings
+    desc: "[Legacy] Run indexer with Azure OpenAI embeddings"
     cmds:
-      - echo "🔄 Running indexer with Azure OpenAI embeddings..."
-      - docker-compose --profile index run --rm indexer
+      - echo "⚠️  Indexing is now handled by the backend Registry API."
+      - echo "   The MCP server is stateless and fetches data from REGISTRY_API_URL."
+      - echo "   To re-index, trigger a sync via the backend admin API."
 
   index-local:
-    desc: Run indexer with local embeddings (no API)
+    desc: "[Legacy] Run indexer with local embeddings (no API)"
     cmds:
-      - echo "🔄 Running indexer with local embeddings..."
-      - docker-compose --profile index-local run --rm indexer-local
-
-  reindex:
-    desc: Rebuild index and restart services
-    cmds:
-      - task: index
-      - echo "🔄 Restarting services..."
-      - docker-compose restart mcp-http web-client
-      - echo "✅ Done! Semantic search is now available."
-
-  reindex-local:
-    desc: Rebuild index (local embeddings) and restart services
-    cmds:
-      - task: index-local
-      - echo "🔄 Restarting services..."
-      - docker-compose restart mcp-http web-client
-      - echo "✅ Done! Semantic search is now available."
+      - echo "⚠️  Indexing is now handled by the backend Registry API."
+      - echo "   The MCP server is stateless and fetches data from REGISTRY_API_URL."
 
   index-status:
-    desc: Check vector store statistics
+    desc: Check MCP server health and backend connectivity
     cmds:
       - |
-        docker-compose exec mcp-http python -c "
-        from utils.semantic_search import get_semantic_search
-        ss = get_semantic_search()
-        stats = ss.get_stats()
-        print('Vector Store Stats:')
-        for k, v in stats.items():
-            print(f'  {k}: {v}')
-        "
+        echo "🔍 Checking MCP server health..."
+        curl -s http://localhost:8000/health | python -m json.tool 2>/dev/null || echo "❌ MCP server not reachable at localhost:8000"
 
   # ===========================================
   # Cleanup

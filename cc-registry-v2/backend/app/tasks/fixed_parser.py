@@ -274,14 +274,22 @@ def parse_robot_file_content(content: str, file_path: str, collection_slug: str 
                     support_tags = re.split(r'\s*,\s*|\s+', v.strip().upper())
                     ret["support_tags"] = support_tags
             
-            # Extract tasks
+            # Extract tasks — include per-task tags and data classifications
             tasks = []
+            all_data_tags = set()  # Collect data: tags across all tasks
             for task in suite.tests:
                 tags = [str(tag) for tag in task.tags if tag not in ["skipped"]]
+                
+                # Extract data classification tags (data:config, data:logs-regexp, etc.)
+                data_tags = [t for t in tags if t.startswith("data:")]
+                all_data_tags.update(data_tags)
+                
                 tasks.append({
                     "id": task.id,
                     "name": task.name,
                     "doc": str(task.doc),
+                    "tags": tags,
+                    "data_tags": data_tags,
                     "keywords": []
                 })
                 ret["tags"] = list(set(ret.get("tags", []) + tags))
@@ -305,6 +313,20 @@ def parse_robot_file_content(content: str, file_path: str, collection_slug: str 
             # Parse user variables
             user_variables = parse_user_variables(content)
             
+            # Build data classification summary from all task-level data: tags
+            data_classifications = {}
+            DATA_TAG_LABELS = {
+                'data:config': 'Configuration data',
+                'data:logs-regexp': 'Filtered logs',
+                'data:logs-bulk': 'General/unfiltered logs',
+                'data:logs-stacktrace': 'Stacktrace logs',
+            }
+            for dt in sorted(all_data_tags):
+                data_classifications[dt] = {
+                    'label': DATA_TAG_LABELS.get(dt, dt.replace('data:', '').replace('-', ' ').title()),
+                    'count': sum(1 for t in tasks if dt in t.get('data_tags', [])),
+                }
+            
             return {
                 'name': name,
                 'slug': slug,
@@ -315,6 +337,7 @@ def parse_robot_file_content(content: str, file_path: str, collection_slug: str 
                 'tasks': [task["name"] for task in tasks],
                 'detailed_tasks': tasks,
                 'support_tags': ret.get("support_tags", []),
+                'data_classifications': data_classifications,
                 'runbook_path': file_path,
                 'task_count': len(tasks),
                 'collection_slug': collection_slug,

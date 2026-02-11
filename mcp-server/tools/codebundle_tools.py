@@ -12,6 +12,41 @@ from .base import BaseTool, ToolDefinition, ToolParameter
 
 logger = logging.getLogger(__name__)
 
+# Common stop words stripped from NL queries before sending to the backend
+_STOP_WORDS = frozenset({
+    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been',
+    'am', 'do', 'does', 'did', 'have', 'has', 'had', 'having',
+    'i', 'me', 'my', 'we', 'our', 'you', 'your', 'he', 'she',
+    'it', 'its', 'they', 'them', 'their', 'there', 'here',
+    'and', 'or', 'but', 'if', 'so', 'yet', 'nor', 'not', 'no',
+    'at', 'by', 'for', 'from', 'in', 'into', 'of', 'on', 'to',
+    'up', 'out', 'off', 'with', 'as', 'than', 'too', 'very',
+    'how', 'what', 'when', 'where', 'why', 'which', 'who',
+    'whom', 'this', 'that', 'these', 'those', 'can', 'could',
+    'will', 'would', 'shall', 'should', 'may', 'might',
+    'about', 'over', 'just', 'also', 'some', 'any', 'all',
+    "isn't", "aren't", "don't", "doesn't", "didn't", "won't",
+})
+
+
+def _extract_search_keywords(query: str) -> str:
+    """
+    Extract meaningful keywords from a natural language query.
+    
+    Strips stop words and punctuation so the backend text search
+    receives only content-bearing terms.
+    
+    Examples:
+        "How do I scale out my Azure App Service when traffic spikes?"
+        → "scale Azure App Service traffic spikes"
+    """
+    raw = [w.strip('?.,!:;()[]"\' ') for w in query.split()]
+    keywords = [w for w in raw if len(w) >= 2 and w.lower() not in _STOP_WORDS]
+    if not keywords:
+        # Nothing survived filtering — keep the longest raw words
+        keywords = sorted(raw, key=len, reverse=True)[:4]
+    return ' '.join(keywords[:8])
+
 
 class FindCodeBundleTool(BaseTool):
     """
@@ -66,9 +101,14 @@ class FindCodeBundleTool(BaseTool):
         max_results: int = 10
     ) -> str:
         """Find codebundles via the Registry API."""
+        # Extract keywords from the natural language query so the
+        # backend text search has clean terms to work with.
+        search_terms = _extract_search_keywords(query)
+        logger.info(f"find_codebundle: query={query!r} → search_terms={search_terms!r}")
+        
         try:
             results = await self._client.search_codebundles(
-                search=query,
+                search=search_terms,
                 platform=platform,
                 collection_slug=collection,
                 max_results=max_results,
@@ -78,15 +118,56 @@ class FindCodeBundleTool(BaseTool):
             return f"Search unavailable: {e}"
         
         if not results:
+            # Retry without platform filter — some codebundles have
+            # a mismatched or null discovery_platform
+            if platform:
+                try:
+                    results = await self._client.search_codebundles(
+                        search=search_terms,
+                        collection_slug=collection,
+                        max_results=max_results,
+                    )
+                except Exception:
+                    pass
+        
+        if not results:
             return f"No codebundles found matching: {query}\n\nTry rephrasing your query or using broader terms."
+        
+        # Compute relevance scores.  The backend already sorts by weighted
+        # field relevance, so we use position-based scoring that preserves
+        # that order, plus a name-match check to penalise results that don't
+        # contain any search keyword in their name/slug/tags (i.e. they only
+        # matched via a long description field).
+        search_kws = [w.lower() for w in search_terms.split() if len(w) >= 2]
         
         output = f"# CodeBundles for: {query}\n\n"
         output += f"Found {len(results)} matching codebundle(s):\n\n"
         
         for i, cb in enumerate(results, 1):
             display_name = cb.get('display_name') or cb.get('name') or cb.get('slug', 'Unknown')
+            
+            # Position-based score: first result = 0.95, decreasing by 0.04
+            score = max(0.95 - (i - 1) * 0.04, 0.55)
+            
+            # Check if any search keyword appears in name/display_name/tags
+            _name = (cb.get('name', '') or '').lower()
+            _dname = (cb.get('display_name', '') or '').lower()
+            _tags = ' '.join(cb.get('support_tags', [])).lower()
+            
+            has_keyword_in_identity = any(
+                kw in _name or kw in _dname or kw in _tags
+                for kw in search_kws
+            ) if search_kws else True
+            
+            if not has_keyword_in_identity:
+                # Penalise: this result only matched via description/doc text
+                score = max(score - 0.20, 0.40)
+            
             output += f"## {i}. **{display_name}**\n\n"
-            output += f"**Collection:** {cb.get('collection_slug', cb.get('codecollection', {}).get('slug', 'N/A'))}\n\n"
+            
+            coll = cb.get('codecollection', {})
+            collection_slug = coll.get('slug') if isinstance(coll, dict) else cb.get('collection_slug', 'N/A')
+            output += f"**Collection:** {collection_slug}\n\n"
             output += f"**Platform:** {cb.get('platform', cb.get('discovery_platform', 'N/A'))}\n\n"
             
             description = cb.get('description') or cb.get('doc') or ''
@@ -104,6 +185,13 @@ class FindCodeBundleTool(BaseTool):
             tags = cb.get('support_tags', [])
             if tags:
                 output += f"**Tags:** {', '.join(tags)}\n\n"
+            
+            # Relevance score is read by the chatbot's markdown parser
+            output += f"**Relevance:** {int(score * 100)}%\n\n"
+            
+            # Source link for the markdown parser
+            slug = cb.get('slug', '')
+            output += f"**Source:** [{collection_slug}/codebundles/{slug}](/collections/{collection_slug}/codebundles/{slug})\n\n"
             
             output += "---\n\n"
         
@@ -239,9 +327,10 @@ class SearchCodeBundlesTool(BaseTool):
         max_results: int = 10
     ) -> str:
         """Search codebundles via the Registry API."""
+        search_terms = _extract_search_keywords(query)
         try:
             results = await self._client.search_codebundles(
-                search=query,
+                search=search_terms,
                 platform=platform,
                 tags=",".join(tags) if tags else None,
                 max_results=max_results,

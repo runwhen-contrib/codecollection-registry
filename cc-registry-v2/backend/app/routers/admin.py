@@ -226,6 +226,9 @@ async def trigger_data_population(token: str = Depends(verify_admin_token)):
                                 existing.author = primary_parsed.get('author', '')
                                 existing.support_tags = support_tags
                                 existing.tasks = taskset_tasks
+                                existing.data_classifications = (
+                                    runbook_parsed.get('data_classifications', {}) if runbook_parsed else {}
+                                )
                                 existing.slis = sli_tasks
                                 existing.task_count = len(taskset_tasks)
                                 existing.sli_count = len(sli_tasks)
@@ -257,6 +260,9 @@ async def trigger_data_population(token: str = Depends(verify_admin_token)):
                                     author=primary_parsed.get('author', ''),
                                     support_tags=support_tags,
                                     tasks=taskset_tasks,
+                                    data_classifications=(
+                                        runbook_parsed.get('data_classifications', {}) if runbook_parsed else {}
+                                    ),
                                     slis=sli_tasks,
                                     task_count=len(taskset_tasks),
                                     sli_count=len(sli_tasks),

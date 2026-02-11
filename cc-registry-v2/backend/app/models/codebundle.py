@@ -47,6 +47,10 @@ class Codebundle(Base):
     access_level = Column(String(20), default="unknown")  # read-only, read-write, unknown
     minimum_iam_requirements = Column(JSON, default=list)  # List of required IAM permissions/roles
     
+    # Data classification — summarizes what types of data each task produces
+    # e.g. {"data:config": {"label": "Configuration data", "count": 5}, ...}
+    data_classifications = Column(JSON, default=dict)
+    
     # Generation metadata
     has_genrules = Column(Boolean, default=False)
     found_in_cheatsheet = Column(Boolean, default=False)

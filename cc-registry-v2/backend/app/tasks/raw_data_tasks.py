@@ -265,6 +265,7 @@ def parse_stored_data_task(self):
                                 author=codebundle_data.get('author', ''),
                                 support_tags=codebundle_data.get('support_tags', []),
                                 tasks=[] if is_sli_file else parsed_tasks,
+                                data_classifications=codebundle_data.get('data_classifications', {}),
                                 slis=parsed_tasks if is_sli_file else [],
                                 task_count=0 if is_sli_file else len(parsed_tasks),
                                 sli_count=len(parsed_tasks) if is_sli_file else 0,
@@ -288,6 +289,7 @@ def parse_stored_data_task(self):
                             else:
                                 codebundle.tasks = parsed_tasks
                                 codebundle.task_count = len(parsed_tasks)
+                            codebundle.data_classifications = codebundle_data.get('data_classifications', {})
                     
                     # Mark file as processed
                     raw_file.is_processed = True

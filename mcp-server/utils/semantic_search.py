@@ -339,10 +339,15 @@ class SemanticSearch:
 _semantic_search: Optional[SemanticSearch] = None
 
 
-def get_semantic_search(database_url: str = None) -> SemanticSearch:
-    """Get the singleton SemanticSearch instance"""
+def get_semantic_search() -> SemanticSearch:
+    """Get the singleton SemanticSearch instance.
+    
+    NOTE: This module is legacy — the MCP server now uses RegistryClient
+    to fetch data from the backend API.  This helper remains for any
+    standalone / indexer scripts that still rely on local vector search.
+    """
     global _semantic_search
     if _semantic_search is None:
-        _semantic_search = SemanticSearch(database_url=database_url)
+        _semantic_search = SemanticSearch()
     return _semantic_search
 

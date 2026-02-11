@@ -107,12 +107,12 @@ tasks:
   dev:logs:
     desc: Show logs for development services
     cmds:
-      - docker-compose logs -f backend frontend
+      - docker-compose logs -f backend frontend mcp-server
 
   dev:restart:
     desc: Restart development services
     cmds:
-      - docker-compose restart backend frontend
+      - docker-compose restart backend frontend mcp-server
 
   # Database commands
   db:shell:
@@ -135,6 +135,7 @@ tasks:
         echo "Database:" && curl -s http://localhost:5432 > /dev/null && echo "✅ Reachable" || echo "❌ Not reachable"
         echo "Redis:" && docker-compose exec redis redis-cli ping && echo "✅ Redis OK" || echo "❌ Redis down"
         echo "Backend:" && curl -s http://localhost:8001/api/v1/health | jq -r '.status' && echo "✅ Backend OK" || echo "❌ Backend down"
+        echo "MCP Server:" && curl -s http://localhost:8000/health | jq -r '.status' && echo "✅ MCP Server OK" || echo "❌ MCP Server down"
         echo "Frontend:" && curl -s http://localhost:3000 > /dev/null && echo "✅ Frontend OK" || echo "❌ Frontend down"
 
   # Container image commands

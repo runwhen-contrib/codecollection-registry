@@ -227,7 +227,10 @@ def parse_all_codebundles_task(self):
                                 existing.task_count = len(taskset_tasks)
                                 existing.sli_count = len(sli_tasks)
                                 existing.runbook_source_url = runbook_source_url
-                                existing.user_variables = primary_parsed.get('user_variables', [])  # Extract user variables
+                                existing.user_variables = primary_parsed.get('user_variables', [])
+                                existing.data_classifications = (
+                                    runbook_parsed.get('data_classifications', {}) if runbook_parsed else {}
+                                )  # Extract user variables
                                 if git_date:
                                     existing.git_updated_at = git_date
                                 codebundles_updated += 1
@@ -247,7 +250,10 @@ def parse_all_codebundles_task(self):
                                     sli_count=len(sli_tasks),
                                     codecollection_id=collection.id,
                                     runbook_source_url=runbook_source_url,
-                                    user_variables=primary_parsed.get('user_variables', []),  # Extract user variables
+                                    user_variables=primary_parsed.get('user_variables', []),
+                                    data_classifications=(
+                                        runbook_parsed.get('data_classifications', {}) if runbook_parsed else {}
+                                    ),
                                     is_active=True,
                                     git_updated_at=git_date
                                 )

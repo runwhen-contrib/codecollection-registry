@@ -420,6 +420,7 @@ async def list_codebundles(
     try:
         from app.core.database import SessionLocal
         from app.models import Codebundle, CodeCollection
+        import sqlalchemy
         from sqlalchemy import or_, desc, func
         
         db = SessionLocal()
@@ -427,17 +428,85 @@ async def list_codebundles(
             # Build base query
             query = db.query(Codebundle).filter(Codebundle.is_active == True)
             
-            # Apply search filter
+            # Apply search filter — supports natural language queries
+            # by splitting into keywords and matching word-by-word
             if search:
-                search_term = f"%{search}%"
-                query = query.filter(
-                    or_(
-                        Codebundle.name.ilike(search_term),
-                        Codebundle.display_name.ilike(search_term),
-                        Codebundle.description.ilike(search_term),
-                        Codebundle.doc.ilike(search_term)
+                _STOP_WORDS = {
+                    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been',
+                    'am', 'do', 'does', 'did', 'have', 'has', 'had', 'having',
+                    'i', 'me', 'my', 'we', 'our', 'you', 'your', 'he', 'she',
+                    'it', 'its', 'they', 'them', 'their', 'there', 'here',
+                    'and', 'or', 'but', 'if', 'so', 'yet', 'nor', 'not', 'no',
+                    'at', 'by', 'for', 'from', 'in', 'into', 'of', 'on', 'to',
+                    'up', 'out', 'off', 'with', 'as', 'than', 'too', 'very',
+                    'how', 'what', 'when', 'where', 'why', 'which', 'who',
+                    'whom', 'this', 'that', 'these', 'those', 'can', 'could',
+                    'will', 'would', 'shall', 'should', 'may', 'might',
+                    'about', 'over', 'just', 'also', 'some', 'any', 'all',
+                }
+                raw_words = [w.strip('?.,!:;()[]"\' ') for w in search.split()]
+                keywords = [w for w in raw_words
+                            if len(w) >= 2 and w.lower() not in _STOP_WORDS]
+                # Fallback: if everything was filtered, keep the longest words
+                if not keywords:
+                    keywords = sorted(raw_words, key=len, reverse=True)[:3]
+                
+                # support_tags is a JSON column — cast to text for ILIKE
+                tags_text = func.cast(Codebundle.support_tags, sqlalchemy.Text)
+                
+                def _kw_filter(kw):
+                    """Match a keyword in any searchable field."""
+                    t = f"%{kw}%"
+                    return or_(
+                        Codebundle.name.ilike(t),
+                        Codebundle.display_name.ilike(t),
+                        Codebundle.description.ilike(t),
+                        Codebundle.doc.ilike(t),
+                        tags_text.ilike(t),
                     )
-                )
+                
+                if len(keywords) == 1:
+                    # Single keyword: simple substring search
+                    query = query.filter(_kw_filter(keywords[0]))
+                elif len(keywords) == 2:
+                    # Two keywords: require BOTH to match (AND)
+                    for kw in keywords:
+                        query = query.filter(_kw_filter(kw))
+                else:
+                    # Natural-language query (4+ keywords):
+                    # Use OR matching — a codebundle matches if ANY keyword
+                    # appears in its searchable fields.  Results are scored
+                    # by how many keywords match so the most relevant bubble up.
+                    from sqlalchemy import case, literal
+                    keyword_conditions = [_kw_filter(kw) for kw in keywords[:6]]
+                    query = query.filter(or_(*keyword_conditions))
+                    
+                    # Build a weighted relevance score per keyword.
+                    # Name/slug matches are much more specific than
+                    # description matches (which often contain common words).
+                    #   name match:         +4  (most specific)
+                    #   display_name match: +3
+                    #   tags match:         +3  (curated metadata)
+                    #   description match:  +1
+                    #   doc match:          +1  (long text, many false positives)
+                    score_terms = []
+                    for kw in keywords[:6]:
+                        t = f"%{kw}%"
+                        kw_score = (
+                            case((Codebundle.name.ilike(t), literal(4)), else_=literal(0))
+                            + case((Codebundle.display_name.ilike(t), literal(3)), else_=literal(0))
+                            + case((tags_text.ilike(t), literal(3)), else_=literal(0))
+                            + case((Codebundle.description.ilike(t), literal(1)), else_=literal(0))
+                            + case((Codebundle.doc.ilike(t), literal(1)), else_=literal(0))
+                        )
+                        score_terms.append(kw_score)
+                    relevance = score_terms[0]
+                    for term in score_terms[1:]:
+                        relevance = relevance + term
+                    
+                    # Override default sort: rank by relevance first
+                    sort_by = "__relevance__"
+                    query = query.order_by(relevance.desc(), Codebundle.name)
             
             # Apply collection filter
             if collection_id:
@@ -446,12 +515,11 @@ async def list_codebundles(
             # Apply tags filter (match any of the provided tags)
             if tags:
                 tag_list = [tag.strip().upper() for tag in tags.split(',')]
-                # Match any codebundle that has at least one of the specified tags
+                # support_tags is a JSON column — cast to text for ILIKE matching
+                tags_as_text = func.cast(Codebundle.support_tags, sqlalchemy.Text)
                 tag_conditions = []
                 for tag in tag_list:
-                    tag_conditions.append(
-                        func.array_to_string(Codebundle.support_tags, ',').ilike(f'%{tag}%')
-                    )
+                    tag_conditions.append(tags_as_text.ilike(f'%{tag}%'))
                 if tag_conditions:
                     query = query.filter(or_(*tag_conditions))
             
@@ -470,8 +538,10 @@ async def list_codebundles(
             # Get total count before pagination
             total_count = query.count()
             
-            # Apply sorting
-            if sort_by == "updated":
+            # Apply sorting (skip if relevance scoring already applied)
+            if sort_by == "__relevance__":
+                pass  # Already sorted by keyword-match relevance
+            elif sort_by == "updated":
                 query = query.order_by(desc(Codebundle.git_updated_at), desc(Codebundle.updated_at))
             elif sort_by == "tasks":
                 query = query.order_by(desc(Codebundle.task_count))
@@ -506,9 +576,12 @@ async def list_codebundles(
                     "enhancement_status": cb.enhancement_status or "pending",
                     "ai_enhanced_description": cb.ai_enhanced_description,
                     "access_level": cb.access_level or "unknown",
+                    "data_classifications": cb.data_classifications or {},
                     "minimum_iam_requirements": cb.minimum_iam_requirements or [],
                     "ai_enhanced_metadata": cb.ai_enhanced_metadata or {},
                     "last_enhanced": cb.last_enhanced,
+                    # Top-level platform for easy access by MCP / API consumers
+                    "platform": cb.discovery_platform,
                     # Discovery information
                     "configuration_type": {
                         "type": "Automatically Discovered" if cb.has_genrules else "Manual",
@@ -604,6 +677,7 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
                 "enhancement_status": codebundle.enhancement_status or "pending",
                 "ai_enhanced_description": codebundle.ai_enhanced_description,
                 "access_level": codebundle.access_level or "unknown",
+                "data_classifications": codebundle.data_classifications or {},
                 "minimum_iam_requirements": codebundle.minimum_iam_requirements or [],
                 "ai_enhanced_metadata": codebundle.ai_enhanced_metadata or {},
                 "last_enhanced": codebundle.last_enhanced,

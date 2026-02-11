@@ -294,6 +294,7 @@ def parse_stored_data_task(self, previous_result=None):
                             else:
                                 existing_codebundle.tasks = parsed_tasks
                                 existing_codebundle.task_count = len(parsed_tasks)
+                            existing_codebundle.data_classifications = codebundle_data.get('data_classifications', {})
                             codebundles_updated += 1
                         else:
                             # Create new with proper task/sli separation
@@ -306,6 +307,7 @@ def parse_stored_data_task(self, previous_result=None):
                                 author=codebundle_data['author'],
                                 support_tags=codebundle_data['support_tags'],
                                 tasks=[] if is_sli_file else parsed_tasks,
+                                data_classifications=codebundle_data.get('data_classifications', {}),
                                 slis=parsed_tasks if is_sli_file else [],
                                 task_count=0 if is_sli_file else len(parsed_tasks),
                                 sli_count=len(parsed_tasks) if is_sli_file else 0,

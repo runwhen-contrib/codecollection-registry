@@ -159,6 +159,7 @@ export interface CodeBundle {
   // AI Enhancement fields
   ai_enhanced_description?: string;
   access_level?: 'read-only' | 'read-write' | 'unknown';
+  data_classifications?: Record<string, { label: string; count: number }>;
   minimum_iam_requirements?: string[];
   enhancement_status?: 'pending' | 'processing' | 'completed' | 'failed';
   last_enhanced?: string;

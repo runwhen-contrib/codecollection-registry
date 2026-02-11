@@ -24,7 +24,7 @@ services:
     networks:
       - mcp-network
 
-  # HTTP API Server - Primary production service
+  # HTTP API Server - Primary production service (stateless, API-driven)
   mcp-http:
     build:
       context: .
@@ -36,13 +36,15 @@ services:
     volumes:
       # Mount code for development
       - .:/app
-      # Mount data directory (for JSON fallback files, repos)
-      - ./data:/app/data
     env_file:
       - az.secret
     environment:
       - PYTHONUNBUFFERED=1
       - MCP_LOG_LEVEL=INFO
+      # Point to the backend Registry API (host machine by default)
+      - REGISTRY_API_URL=http://host.docker.internal:8001
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: python server_http.py
     restart: unless-stopped
     healthcheck:
@@ -50,7 +52,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
     networks:
       - mcp-network
 

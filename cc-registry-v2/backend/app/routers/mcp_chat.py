@@ -355,15 +355,11 @@ I have access to:
             search_query = query.question
             
             # Detect if user is explicitly asking for codebundles
-            # e.g. "what codebundles are useful for this", "show me codebundles", "which codebundles"
-            explicitly_wants_codebundles = any(phrase in question_lower for phrase in [
-                'what codebundle', 'which codebundle', 'show me codebundle',
-                'find codebundle', 'find me codebundle', 'list codebundle',
-                'what code bundle', 'which code bundle', 'show me code bundle',
-                'codebundles for', 'codebundle for', 'codebundles can',
-                'recommend codebundle', 'suggest codebundle',
-                'useful codebundle', 'relevant codebundle',
-            ])
+            # e.g. "what codebundles are useful for this", "show me codebundles", "find me a codebundle"
+            # Use 'codebundle' as a catch-all — if the user mentions the word, they want one
+            explicitly_wants_codebundles = (
+                'codebundle' in question_lower or 'code bundle' in question_lower
+            )
             if explicitly_wants_codebundles:
                 answer_source = "codebundles"  # Force codebundles, don't let LLM override to docs
             
@@ -456,6 +452,15 @@ I have access to:
                 resource_excludes = ['webapp-health', 'webapp-ops']
             elif 'container' in query_lower:
                 resource_hints = ['container']
+            elif any(kw in query_lower for kw in ['postgres', 'postgresql', 'patroni', 'psql']):
+                resource_hints = ['postgres', 'patroni']
+                resource_excludes = ['github-', 'gitlab-', 'aws-', 'gcp-', 'azure-', 'jenkins']
+            elif 'mysql' in query_lower or 'mariadb' in query_lower:
+                resource_hints = ['mysql', 'mariadb']
+            elif 'redis' in query_lower:
+                resource_hints = ['redis']
+            elif 'mongo' in query_lower:
+                resource_hints = ['mongo']
             
             relevant_tasks = []
             for t in all_tasks:
@@ -482,9 +487,12 @@ I have access to:
                             continue
                 
                 # Include if platform matches (or no platform specified)
-                if platform:
-                    if not t.platform or t.platform.lower() != platform.lower():
-                        # Platform mismatch - only include very strong matches
+                # Note: many codebundles have platform=None/"N/A" even when clearly
+                # platform-specific (e.g., azure-appservice-* without discovery_platform set).
+                # Don't exclude them — the slug/name filters above already ensure relevance.
+                if platform and t.platform and t.platform not in ('N/A', 'None', 'null', ''):
+                    if t.platform.lower() != platform.lower():
+                        # Explicit platform mismatch - only include very strong matches
                         if t.relevance_score < 0.70:
                             continue
                 
@@ -541,8 +549,11 @@ I have access to:
             elif doc_context and relevant_tasks:
                 answer_source = "mixed"
         
-        # When answer is from documentation, don't attach codebundle cards
-        response_tasks = relevant_tasks if answer_source != "documentation" else []
+        # Always show codebundle cards when relevant tasks were found.
+        # Previously this hid cards for "documentation" sources, but that confused
+        # users who could see the chatbot found codebundles yet weren't shown them.
+        # The UI shows cards separately from the text answer, so both can coexist.
+        response_tasks = relevant_tasks
         
         response = ChatResponse(
             answer=answer,
@@ -905,8 +916,8 @@ FORMATTING RULES:
 
 CRITICAL RULES:
 1. ONLY recommend resources that DIRECTLY ADDRESS the user's specific question
-2. For "how to" questions about installation, configuration, setup, or development: PRIORITIZE DOCUMENTATION and answer from its content
-3. For troubleshooting/automation questions: recommend relevant codebundles
+2. For "how to" questions about installation, configuration, setup, or development of RunWhen itself: PRIORITIZE DOCUMENTATION
+3. For questions about troubleshooting, monitoring, or managing cloud/infrastructure resources (Azure, AWS, GCP, Kubernetes, databases, etc.): ALWAYS recommend relevant codebundles — these ARE our product
 4. For mixed questions: provide BOTH documentation answers AND relevant codebundles
 5. Be STRICT about relevance - fewer accurate recommendations are better than many tangential ones
 6. IGNORE results that don't match the user's platform (e.g., don't show Kubernetes results for Azure App Service questions)
@@ -914,6 +925,7 @@ CRITICAL RULES:
 8. If the user asks about YOU or what YOU can do, answer about your capabilities, DON'T search for codebundles
 9. When you see kubectl output or command output, IMMEDIATELY ask clarifying questions before recommending specific codebundles
 10. For Kubernetes troubleshooting, always consider BOTH the workload level (Deployment/StatefulSet) AND pod level - don't assume one without asking
+11. If codebundles are provided in the search results that relate to the user's infrastructure question, you MUST mention them — do NOT say "no matching codebundle" when related ones exist
 
 ASK CLARIFYING QUESTIONS PROACTIVELY when context is missing:
 - If kubectl output shows pods in error state (CrashLoopBackOff, Error, etc.), ask: "Are these standalone Pods or part of a Deployment, StatefulSet, or DaemonSet?"
@@ -933,12 +945,13 @@ When recommending:
 - If multiple layers of troubleshooting exist (e.g., Pod-level AND Deployment-level), mention both options
 - For Kubernetes issues, consider both workload-level (Deployment, StatefulSet) and resource-level (Pod, Container) codebundles
 
-If NO resources directly address the query:
+If ZERO codebundles were provided in the search results above:
 - Start your response with exactly: "[NO_MATCHING_CODEBUNDLE]"
 - Be honest: "I couldn't find a codebundle specifically for [user's need]"
-- Don't show marginally related results just to have something
 - Tell them they can request this automation by clicking the "Request CodeBundle" button below
-- Keep the response short since the button will handle the request"""
+- Keep the response short since the button will handle the request
+
+IMPORTANT: If codebundles ARE listed in the search results and they relate to the user's topic (even if they don't do exactly what was asked), you MUST recommend them. For example, if the user asks about scaling Azure App Service and you see an "App Service Plan Health" codebundle that provides scaling recommendations — that IS relevant and should be recommended."""
 
         # Build messages array with conversation history
         messages = [{"role": "system", "content": system_prompt}]
@@ -984,26 +997,17 @@ The user is asking about CodeBundles we JUST discussed in the conversation above
 {task_context}
 {doc_section}
 ANSWER SOURCE CLASSIFICATION - You MUST start your response with exactly one of these tags:
-- [SOURCE:documentation] — if your answer is primarily based on documentation results (installation, setup, how-to, configuration, conceptual questions)
-- [SOURCE:codebundles] — if your answer recommends specific CodeBundles for automation/troubleshooting
+- [SOURCE:codebundles] — if CodeBundles from the search results are relevant to the user's question (DEFAULT when codebundles are listed)
+- [SOURCE:documentation] — ONLY if no codebundles are listed AND the answer comes from documentation
 - [SOURCE:libraries] — if your answer is about Robot Framework keyword libraries (RW.CLI, RW.K8s, etc.)
 - [SOURCE:mixed] — if your answer uses BOTH documentation content AND CodeBundle recommendations
 
-CRITICAL RULES FOR DOCUMENTATION-SOURCED ANSWERS:
-- If documentation results answer the user's question, USE THEM as your primary source
-- For documentation answers: provide the actual content/steps from the docs, DO NOT recommend or mention CodeBundles at all
-- For documentation answers: include documentation URLs as references at the end
-- Do NOT mix in CodeBundle suggestions when the answer clearly comes from documentation
-- The user will see CodeBundle cards separately — you do NOT need to mention them in your text
-
-CRITICAL RULES FOR CODEBUNDLE-SOURCED ANSWERS:
-- Only recommend codebundles that DIRECTLY solve the user's problem
-- If a codebundle doesn't specifically address their question, don't include it
+RULES:
+- When CodeBundles are listed in search results that relate to the user's topic, use [SOURCE:codebundles] or [SOURCE:mixed]
+- Mention the most relevant CodeBundle(s) by name, explain what they do, and list their key tasks
 - Quality over quantity - 1-2 good matches is better than 5 mediocre ones
-
-GENERAL RULES:
 - If the user is asking a follow-up about a previously mentioned codebundle, answer based on the conversation history
-- If documentation fully answers the question, use [SOURCE:documentation] — do NOT force CodeBundle recommendations"""
+- Only use [SOURCE:documentation] when NO codebundles are available and docs answer the question"""
 
         messages.append({"role": "user", "content": user_prompt})
 
@@ -1115,8 +1119,8 @@ def _parse_markdown_to_tasks(markdown: str) -> List[RelevantTask]:
         if not lines:
             continue
         
-        # First line is the name
-        name = lines[0].strip()
+        # First line is the name (strip markdown bold markers if present)
+        name = lines[0].strip().strip('*')
         
         # Parse other fields
         description = ""

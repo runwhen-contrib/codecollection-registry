@@ -353,6 +353,39 @@ const CodeBundleDetail: React.FC = () => {
             </Card>
           )}
 
+          {/* Data Classification Section */}
+          {codebundle.data_classifications && Object.keys(codebundle.data_classifications).length > 0 && (
+            <Card sx={{ mb: 2 }}>
+              <CardContent sx={{ p: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
+                  <StorageIcon sx={{ fontSize: '1.1rem', mr: 1, color: 'primary.main' }} />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>
+                    Data Classification
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {Object.entries(codebundle.data_classifications).map(([tag, info]) => {
+                    const isConfig = tag === 'data:config';
+                    const isLogs = tag.startsWith('data:logs');
+                    const chipColor = isConfig ? 'info' : isLogs ? 'warning' : 'default';
+                    const tagLabel = tag.replace('data:', '');
+                    return (
+                      <Tooltip key={tag} title={`${info.label} — ${info.count} task${info.count !== 1 ? 's' : ''}`}>
+                        <Chip
+                          label={tagLabel}
+                          size="small"
+                          color={chipColor as any}
+                          variant="outlined"
+                          sx={{ fontWeight: 600, fontSize: '0.75rem' }}
+                        />
+                      </Tooltip>
+                    );
+                  })}
+                </Box>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Details Section */}
           <Card sx={{ mb: 2 }}>
             <CardContent sx={{ p: 2 }}>
@@ -574,17 +607,37 @@ const CodeBundleDetail: React.FC = () => {
                     {codebundle.tasks && codebundle.tasks.length > 0 && tasksTab === 0 && (
                       <Box sx={{ mt: 2 }}>
                         <List>
-                          {codebundle.tasks.map((task, index) => (
-                            <React.Fragment key={index}>
-                              <ListItem>
-                                <ListItemText 
-                                  primary={typeof task === 'string' ? task : task.name}
-                                  secondary={typeof task === 'object' ? task.doc : undefined}
-                                />
-                              </ListItem>
-                              {index < codebundle.tasks!.length - 1 && <Divider />}
-                            </React.Fragment>
-                          ))}
+                          {codebundle.tasks.map((task, index) => {
+                            const taskName = typeof task === 'string' ? task : task.name;
+                            const taskDoc = typeof task === 'object' ? task.doc : undefined;
+                            const taskTags = typeof task === 'object' ? (task as any).tags || [] : [];
+                            const dataTags = taskTags.filter((t: string) => t.startsWith('data:'));
+                            return (
+                              <React.Fragment key={index}>
+                                <ListItem sx={{ alignItems: 'flex-start' }}>
+                                  <ListItemText 
+                                    primary={
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                        <Typography variant="body1">{taskName}</Typography>
+                                        {dataTags.map((dt: string) => (
+                                          <Chip
+                                            key={dt}
+                                            label={dt.replace('data:', '')}
+                                            size="small"
+                                            color={dt === 'data:config' ? 'info' : 'warning'}
+                                            variant="outlined"
+                                            sx={{ fontSize: '0.65rem', height: 18, fontWeight: 600 }}
+                                          />
+                                        ))}
+                                      </Box>
+                                    }
+                                    secondary={taskDoc}
+                                  />
+                                </ListItem>
+                                {index < codebundle.tasks!.length - 1 && <Divider />}
+                              </React.Fragment>
+                            );
+                          })}
                         </List>
                       </Box>
                     )}

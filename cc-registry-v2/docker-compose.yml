@@ -30,6 +30,27 @@ services:
       timeout: 3s
       retries: 5
 
+  # MCP Server — thin, stateless API client for semantic search tools
+  mcp-server:
+    build: ../mcp-server
+    container_name: registry-mcp-server
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REGISTRY_API_URL=http://backend:8001
+      - MCP_LOG_LEVEL=INFO
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
   # Backend API Service
   backend:
     build: ./backend
@@ -42,8 +63,8 @@ services:
       - DATABASE_URL=postgresql://user:password@database:5432/codecollection_registry
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=development
-      # MCP Server for semantic search
-      - MCP_SERVER_URL=http://host.docker.internal:8000
+      # MCP Server for semantic search (in-compose service)
+      - MCP_SERVER_URL=http://mcp-server:8000
       # AI Configuration (override in .env)
       - AI_SERVICE_PROVIDER=azure-openai
       - AI_ENHANCEMENT_ENABLED=true
@@ -52,8 +73,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - ./backend:/app
       - /app/__pycache__
