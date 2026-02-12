@@ -5,7 +5,6 @@ import {
   Typography,
   Card,
   CardContent,
-  CardActionArea,
   CircularProgress,
   Alert,
   Button,
@@ -13,12 +12,17 @@ import {
   TextField,
   InputAdornment,
   IconButton,
+  Tooltip,
 } from '@mui/material';
 import { 
   Search as SearchIcon,
   TrendingUp as TrendingIcon,
   MonetizationOn as MoneyIcon,
   ArrowForward as ArrowIcon,
+  FolderSpecialOutlined as CollectionIcon,
+  IntegrationInstructionsOutlined as BundleIcon,
+  TerminalOutlined as TaskIcon,
+  MenuBookOutlined as DocsIcon,
 } from '@mui/icons-material';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
@@ -54,9 +58,6 @@ interface RecentTask {
   collection_slug: string;
   git_updated_at: string | null;
 }
-
-// Featured category names to display on homepage
-const FEATURED_CATEGORIES = ['KUBERNETES', 'GKE', 'AKS', 'EKS', 'AWS', 'AZURE', 'GCP', 'POSTGRES'];
 
 // Example search queries to cycle through
 const EXAMPLE_SEARCHES = [
@@ -149,12 +150,6 @@ const Home: React.FC = () => {
 
     return () => clearInterval(interval);
   }, []);
-
-  // Build featured categories from fetched tag icons
-  const featuredCategories = FEATURED_CATEGORIES.map(name => ({
-    name,
-    icon: tagIcons[name] || tagIcons[name.toUpperCase()] || ''
-  }));
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'Unknown';
@@ -252,7 +247,7 @@ const Home: React.FC = () => {
               mx: 'auto'
             }}
           >
-            Ask Eager Edgar to help explore CodeBundles, documentation, and authoring guidelines. Get assistance with troubleshooting tasks, SLIs, and automation workflows across the CodeCollection ecosystem.
+            Explore the largest open library of AI SRE tools. Describe your problem and the assistant will suggest the right automation — then run it securely in your own environment.
           </Typography>
 
           {/* Search Bar that routes to Registry Chat */}
@@ -296,216 +291,410 @@ const Home: React.FC = () => {
             />
           </Box>
 
-          {/* Stats Bar - Now inside hero */}
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            gap: { xs: 4, md: 8 },
-            flexWrap: 'wrap'
+          {/* Taxonomy bar — sleek inline row */}
+          <Box sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: { xs: 1.5, md: 2.5 },
+            flexWrap: 'wrap',
+            alignItems: 'stretch',
           }}>
-            <Box 
-              component={Link}
-              to="/codebundles"
-              sx={{ 
-                textAlign: 'center',
-                textDecoration: 'none',
-                cursor: 'pointer',
-                transition: 'transform 0.2s',
-                '&:hover': {
-                  transform: 'translateY(-4px)'
+            {[
+              {
+                icon: CollectionIcon, label: 'Collections', count: stats?.collections || 0, to: '/collections',
+                desc: 'Groups of bundles by provider',
+                tooltip: 'Collections group related CodeBundles by technology or provider — like aws-codecollection or k8s-codecollection. Each collection is backed by a Git repository maintained by the community.',
+              },
+              {
+                icon: BundleIcon, label: 'CodeBundles', count: stats?.codebundles || 0, to: '/codebundles',
+                desc: 'Scripted automation packages',
+                tooltip: 'A CodeBundle is a self-contained automation package that targets a specific service or resource — like "Postgres Health" or "AKS Triage." Each bundle contains one or more executable tasks, configuration variables, and documentation.',
+              },
+              {
+                icon: TaskIcon, label: 'Tasks', count: stats?.tasks || 0, to: '/all-tasks',
+                desc: 'CLI & API actions to run',
+                tooltip: 'Tasks are the runnable units inside a CodeBundle. Each task is a scripted action — CLI commands, API calls, or queries — that performs a specific operation like "Check Pod Restarts" or "Query Connection Pool." Tasks run on private runners in your environment.',
+              },
+              {
+                icon: DocsIcon, label: 'Docs', count: null, to: '/chat',
+                desc: 'Guides & references',
+                tooltip: 'Documentation includes authoring guides, platform configuration references, and keyword library docs. Ask the assistant or browse directly.',
+              },
+            ].map((item) => (
+              <Tooltip
+                key={item.label}
+                title={
+                  <Box sx={{ p: 0.5, maxWidth: 280 }}>
+                    <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 0.5 }}>{item.label}</Typography>
+                    <Typography sx={{ fontSize: 12, lineHeight: 1.5 }}>{item.tooltip}</Typography>
+                  </Box>
                 }
-              }}
-            >
-              <Typography 
-                variant="h4" 
-                sx={{ 
-                  fontWeight: 700, 
-                  color: 'white', 
-                  mb: 0.5,
-                  fontSize: { xs: '20px', md: '24px' }
+                arrow
+                placement="bottom"
+                enterDelay={200}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      bgcolor: '#1a1a2e',
+                      color: 'rgba(255,255,255,0.88)',
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                      borderRadius: 2,
+                      px: 2,
+                      py: 1.5,
+                      '& .MuiTooltip-arrow': { color: '#1a1a2e' },
+                    },
+                  },
                 }}
               >
-                {stats?.codebundles || 0}
-              </Typography>
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  color: 'rgba(255,255,255,0.88)',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  letterSpacing: '0.3px'
-                }}
-              >
-                CodeBundles
-              </Typography>
-            </Box>
-            <Box 
-              component={Link}
-              to="/all-tasks"
-              sx={{ 
-                textAlign: 'center',
-                textDecoration: 'none',
-                cursor: 'pointer',
-                transition: 'transform 0.2s',
-                '&:hover': {
-                  transform: 'translateY(-4px)'
-                }
-              }}
-            >
-              <Typography 
-                variant="h4" 
-                sx={{ 
-                  fontWeight: 700, 
-                  color: 'white', 
-                  mb: 0.5,
-                  fontSize: { xs: '20px', md: '24px' }
-                }}
-              >
-                {stats?.tasks || 0}
-              </Typography>
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  color: 'rgba(255,255,255,0.88)',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  letterSpacing: '0.3px'
-                }}
-              >
-                Tasks
-              </Typography>
-            </Box>
-            <Box 
-              component={Link}
-              to="/collections"
-              sx={{ 
-                textAlign: 'center',
-                textDecoration: 'none',
-                cursor: 'pointer',
-                transition: 'transform 0.2s',
-                '&:hover': {
-                  transform: 'translateY(-4px)'
-                }
-              }}
-            >
-              <Typography 
-                variant="h4" 
-                sx={{ 
-                  fontWeight: 700, 
-                  color: 'white', 
-                  mb: 0.5,
-                  fontSize: { xs: '20px', md: '24px' }
-                }}
-              >
-                {stats?.collections || 0}
-              </Typography>
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  color: 'rgba(255,255,255,0.88)',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  letterSpacing: '0.3px'
-                }}
-              >
-                Collections
-              </Typography>
-            </Box>
+                <Box
+                  component={Link}
+                  to={item.to}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    bgcolor: 'rgba(255,255,255,0.12)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: 2,
+                    px: { xs: 1.5, md: 2 },
+                    py: 1,
+                    textDecoration: 'none',
+                    color: 'white',
+                    transition: 'all 0.2s',
+                    backdropFilter: 'blur(8px)',
+                    '&:hover': {
+                      bgcolor: 'rgba(255,255,255,0.2)',
+                      transform: 'translateY(-2px)',
+                    },
+                  }}
+                >
+                  <item.icon sx={{ fontSize: 20, color: 'rgba(255,255,255,0.85)' }} />
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
+                      {item.count !== null && (
+                        <Typography sx={{ fontSize: 18, fontWeight: 700, color: 'white', lineHeight: 1 }}>
+                          {item.count}
+                        </Typography>
+                      )}
+                      <Typography sx={{ fontSize: 13, fontWeight: 600, color: 'white', lineHeight: 1 }}>
+                        {item.label}
+                      </Typography>
+                    </Box>
+                    <Typography sx={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', mt: 0.25 }}>
+                      {item.desc}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Tooltip>
+            ))}
           </Box>
         </Container>
       </Box>
 
-      {/* Featured Categories Section */}
-      <Container maxWidth="lg" sx={{ py: 6 }}>
-        <Typography 
-          variant="h2" 
-          sx={{ 
-            mb: 3, 
-            textAlign: 'center', 
-            fontWeight: 600, 
-            fontSize: { xs: '20px', md: '24px' },
-            letterSpacing: '-0.2px'
-          }}
-        >
-          Featured Categories
-        </Typography>
-        
-        <Box sx={{ 
-          display: 'grid',
-          gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)', lg: 'repeat(5, 1fr)' },
-          gap: 2,
-          mb: 2
-        }}>
-          {featuredCategories.map((category) => (
-            <Card
-              key={category.name}
+      {/* How It Works — Vertical Flow */}
+      <Box sx={{ py: { xs: 4, md: 5 }, bgcolor: 'white', overflow: 'hidden' }}>
+        <Container maxWidth="md">
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+
+            {/* ─── ROW 1: Workspace Chat ─── */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%', justifyContent: 'center' }}>
+              <Box
+                sx={{
+                  width: { xs: 160, md: 180 },
+                  borderRadius: 3,
+                  border: '2px solid #e0e4ec',
+                  bgcolor: 'white',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                }}
+              >
+                <Box sx={{ bgcolor: '#5282f1', px: 1.5, py: 0.75, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.5)' }} />
+                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.5)' }} />
+                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.5)' }} />
+                  <Typography sx={{ fontSize: 9, color: 'white', ml: 0.5, fontWeight: 600 }}>Workspace Chat</Typography>
+                </Box>
+                <Box sx={{ p: 1.25, display: 'flex', flexDirection: 'column', gap: 0.6 }}>
+                  <Box sx={{ bgcolor: '#f0f2f5', borderRadius: 1.5, px: 1, py: 0.4, alignSelf: 'flex-start', maxWidth: '85%' }}>
+                    <Typography sx={{ fontSize: 8, color: '#444' }}>My pods keep crashing...</Typography>
+                  </Box>
+                  <Box sx={{ bgcolor: '#5282f1', borderRadius: 1.5, px: 1, py: 0.4, alignSelf: 'flex-end', maxWidth: '85%' }}>
+                    <Typography sx={{ fontSize: 8, color: 'white' }}>Found 3 matching tools!</Typography>
+                  </Box>
+                  <Box sx={{ bgcolor: '#f0f2f5', borderRadius: 1.5, px: 1, py: 0.4, alignSelf: 'flex-start', maxWidth: '85%' }}>
+                    <Typography sx={{ fontSize: 8, color: '#444' }}>Check my database...</Typography>
+                  </Box>
+                  <Box sx={{ bgcolor: '#5282f1', borderRadius: 1.5, px: 1, py: 0.4, alignSelf: 'flex-end', maxWidth: '85%' }}>
+                    <Typography sx={{ fontSize: 8, color: 'white' }}>Running health check...</Typography>
+                  </Box>
+                </Box>
+              </Box>
+              <Box sx={{ maxWidth: 260 }}>
+                <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', mb: 0.5 }}>
+                  Chat With Your Environment
+                </Typography>
+                <Typography sx={{ fontSize: 12, color: 'text.secondary', lineHeight: 1.5 }}>
+                  Ask questions in natural language — AI interprets real-time data from your applications, infrastructure, and services.
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* ─── Vertical connector ─── */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.5 }}>
+              <Box sx={{
+                width: 3, height: 36,
+                background: 'linear-gradient(180deg, #b8caf7 0%, #5282f1 100%)',
+                borderRadius: 2,
+                position: 'relative',
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  bottom: -5,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: 0, height: 0,
+                  borderTop: '7px solid #5282f1',
+                  borderLeft: '4px solid transparent',
+                  borderRight: '4px solid transparent',
+                },
+              }} />
+            </Box>
+
+            {/* ─── ROW 2: RunWhen Platform ─── */}
+            <Box
               sx={{
                 display: 'flex',
-                flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: 100,
-                textAlign: 'center',
-                border: '1px solid #e0e0e0',
-                '&:hover': {
-                  boxShadow: 3,
-                  borderColor: '#5282f1',
+                gap: 2,
+                px: 3,
+                py: 2,
+                borderRadius: 3,
+                bgcolor: '#ffffff',
+                boxShadow: '0 4px 24px rgba(82,130,241,0.2)',
+                border: '2px solid #e0e8f5',
+                animation: 'corePulse 3s ease-in-out infinite',
+                '@keyframes corePulse': {
+                  '0%, 100%': { boxShadow: '0 4px 24px rgba(82,130,241,0.2)' },
+                  '50%': { boxShadow: '0 4px 36px rgba(82,130,241,0.35)' },
                 },
-                transition: 'all 0.2s'
               }}
             >
-              <CardActionArea
-                onClick={() => handleTagClick(category.name)}
-                sx={{ p: 1.5, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
-              >
-                {category.icon && (
-                  <Box
-                    component="img"
-                    src={category.icon}
-                    alt={`${category.name} icon`}
-                    sx={{
-                      width: 50,
-                      height: 50,
-                      mb: 0.5,
-                      borderRadius: 1,
-                      padding: 0.5,
-                    }}
-                  />
-                )}
-                <Typography variant="body2" fontWeight="600" sx={{ fontSize: '14px', letterSpacing: '0.2px' }}>
-                  {category.name}
+              <Box
+                component="img"
+                src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png"
+                alt="RunWhen AI Assistant"
+                sx={{ width: 48, height: 48, borderRadius: '50%', border: '2px solid #e0e8f5', flexShrink: 0 }}
+              />
+              <Box>
+                <Typography sx={{ fontSize: 15, fontWeight: 700, color: '#3a5cb8', lineHeight: 1.1 }}>
+                  RunWhen Platform
                 </Typography>
-              </CardActionArea>
-            </Card>
-          ))}
-          <Card
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: 100,
-              textAlign: 'center',
-              border: '1px solid #e0e0e0',
-              '&:hover': {
-                boxShadow: 3,
-                borderColor: '#5282f1',
-              },
-              transition: 'all 0.2s'
-            }}
-          >
-            <CardActionArea
-              component={Link}
-              to="/all-tasks"
-              sx={{ p: 1.5, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+                <Typography sx={{ fontSize: 11, color: '#5282f1', mt: 0.25 }}>
+                  Builds context from your systems and decides what to run, and when
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* ─── Vertical connector ─── */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.5 }}>
+              <Box sx={{
+                width: 3, height: 36,
+                background: 'linear-gradient(180deg, #5282f1 0%, #2E7D32 100%)',
+                borderRadius: 2,
+                position: 'relative',
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  bottom: -5,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: 0, height: 0,
+                  borderTop: '7px solid #2E7D32',
+                  borderLeft: '4px solid transparent',
+                  borderRight: '4px solid transparent',
+                },
+              }} />
+            </Box>
+
+            {/* ─── ROW 3: Private Runners (Your VPC) ─── */}
+            <Box
+              sx={{
+                border: '2px dashed #43a047',
+                borderRadius: 3,
+                px: 3,
+                py: 2,
+                bgcolor: 'rgba(46,125,50,0.03)',
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2.5,
+              }}
             >
-              <Typography variant="body2" fontWeight="600" sx={{ fontSize: '14px', letterSpacing: '0.2px' }}>
-                View All →
+              <Typography sx={{
+                position: 'absolute',
+                top: -10,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                bgcolor: 'white',
+                px: 1.5,
+                fontSize: 9,
+                fontWeight: 600,
+                color: '#2E7D32',
+                letterSpacing: '0.5px',
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+              }}>
+                Your VPC
               </Typography>
-            </CardActionArea>
-          </Card>
-        </Box>
-      </Container>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                {[1, 2].map((n) => (
+                  <Box
+                    key={n}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.75,
+                      bgcolor: 'white',
+                      border: '1px solid #c8e6c9',
+                      borderRadius: 2,
+                      px: 1.5,
+                      py: 0.75,
+                    }}
+                  >
+                    <Box sx={{
+                      width: 8, height: 8, borderRadius: '50%', bgcolor: '#4caf50', flexShrink: 0,
+                      boxShadow: '0 0 0 2px rgba(76,175,80,0.25)',
+                      animation: 'runnerPulse 2s ease-in-out infinite',
+                      animationDelay: `${n * 0.5}s`,
+                      '@keyframes runnerPulse': { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.5 } },
+                    }} />
+                    <Typography sx={{ fontSize: 10, fontWeight: 600, color: '#2E7D32', whiteSpace: 'nowrap' }}>
+                      Runner {n}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+              <Box>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#2E7D32' }}>
+                  Private Runners
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: '#558b2f', lineHeight: 1.4 }}>
+                  Tasks run securely inside your environment
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* ─── Vertical connector ─── */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.5 }}>
+              <Box sx={{
+                width: 3, height: 36,
+                background: 'linear-gradient(180deg, #2E7D32 0%, #b8caf7 100%)',
+                borderRadius: 2,
+                position: 'relative',
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  bottom: -5,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: 0, height: 0,
+                  borderTop: '7px solid #b8caf7',
+                  borderLeft: '4px solid transparent',
+                  borderRight: '4px solid transparent',
+                },
+              }} />
+            </Box>
+
+            {/* ─── ROW 4: Category grid fan-out ─── */}
+            <Box sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+              gap: 1.5,
+              width: '100%',
+              maxWidth: 800,
+            }}>
+              {[
+                { name: 'Kubernetes', tag: 'KUBERNETES', color: '#326CE5', tasks: ['Deployment Health', 'CrashLoopBackOff Triage'] },
+                { name: 'AWS', tag: 'AWS', color: '#FF9900', tasks: ['IAM Audit', 'CloudWatch Alerts'] },
+                { name: 'Azure', tag: 'AZURE', color: '#0078D4', tasks: ['App Service Health', 'AKS Monitoring'] },
+                { name: 'Database', tag: 'POSTGRES', color: '#336791', tasks: ['Connection Health', 'Replication Lag'] },
+                { name: 'Applications', tag: 'APPLICATION', color: '#7B1FA2', tasks: ['Python Troubleshoot', 'Go Services'],
+                  langIcons: [
+                    'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg',
+                    'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/go/go-original-wordmark.svg',
+                  ],
+                },
+                { name: 'Cost', tag: 'COST', color: '#2E7D32', tasks: ['Find Savings', 'Idle Resources'] },
+                { name: 'Observability', tag: 'PROMETHEUS', color: '#E6522C', tasks: ['Prometheus Health', 'Log Pipelines'] },
+                { name: 'GCP', tag: 'GCP', color: '#4285F4', tasks: ['GKE Health', 'Cloud SQL'] },
+              ].map((cat, idx) => (
+                <Box
+                  key={cat.name}
+                  onClick={() => handleTagClick(cat.tag)}
+                  sx={{
+                    cursor: 'pointer',
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: 'white',
+                    border: '1px solid #e8ecf2',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      borderColor: cat.color,
+                      boxShadow: `0 2px 12px ${cat.color}22`,
+                      transform: 'translateY(-2px)',
+                    },
+                    animation: 'fadeSlideUp 0.4s ease-out both',
+                    animationDelay: `${idx * 0.06}s`,
+                    '@keyframes fadeSlideUp': {
+                      from: { opacity: 0, transform: 'translateY(12px)' },
+                      to: { opacity: 1, transform: 'translateY(0)' },
+                    },
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+                    <Box sx={{
+                      width: 10, height: 10, borderRadius: '50%', bgcolor: cat.color, flexShrink: 0,
+                      boxShadow: `0 0 0 3px ${cat.color}22`,
+                    }} />
+                    {(cat as any).langIcons ? (
+                      <Box sx={{ display: 'flex', gap: 0.25 }}>
+                        {(cat as any).langIcons.map((src: string, i: number) => (
+                          <Box key={i} component="img" src={src} alt="" sx={{ width: 16, height: 16, flexShrink: 0 }} />
+                        ))}
+                      </Box>
+                    ) : tagIcons[cat.tag] ? (
+                      <Box component="img" src={tagIcons[cat.tag]} alt={cat.name} sx={{ width: 18, height: 18, flexShrink: 0 }} />
+                    ) : null}
+                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#1a1a2e', lineHeight: 1 }}>
+                      {cat.name}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+                    {cat.tasks.map((task) => (
+                      <Chip
+                        key={task}
+                        label={task}
+                        size="small"
+                        sx={{
+                          fontSize: '9px',
+                          height: 20,
+                          bgcolor: `${cat.color}0D`,
+                          color: cat.color,
+                          fontWeight: 500,
+                          border: `1px solid ${cat.color}33`,
+                          '& .MuiChip-label': { px: 0.75 },
+                        }}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+
+          </Box>
+        </Container>
+      </Box>
 
       {/* Content Section - Two Columns */}
       <Container maxWidth="lg" sx={{ py: 4 }}>
