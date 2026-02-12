@@ -301,9 +301,9 @@ const Home: React.FC = () => {
           }}>
             {[
               {
-                icon: CollectionIcon, label: 'Collections', count: stats?.collections || 0, to: '/collections',
+                icon: CollectionIcon, label: 'CodeCollections', count: stats?.collections || 0, to: '/collections',
                 desc: 'Groups of bundles by provider',
-                tooltip: 'Collections group related CodeBundles by technology or provider — like aws-codecollection or k8s-codecollection. Each collection is backed by a Git repository maintained by the community.',
+                tooltip: 'CodeCollections group related CodeBundles by technology or provider — like aws-codecollection or k8s-codecollection. Each collection is backed by a Git repository maintained by the community.',
               },
               {
                 icon: BundleIcon, label: 'CodeBundles', count: stats?.codebundles || 0, to: '/codebundles',
@@ -393,7 +393,7 @@ const Home: React.FC = () => {
 
       {/* How It Works — Vertical Flow */}
       <Box sx={{ py: { xs: 4, md: 5 }, bgcolor: 'white', overflow: 'hidden' }}>
-        <Container maxWidth="md">
+        <Container maxWidth="lg">
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
 
             {/* ─── ROW 1: Workspace Chat ─── */}
@@ -612,7 +612,6 @@ const Home: React.FC = () => {
               gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
               gap: 1.5,
               width: '100%',
-              maxWidth: 800,
             }}>
               {[
                 { name: 'Kubernetes', tag: 'KUBERNETES', color: '#326CE5', tasks: ['Deployment Health', 'CrashLoopBackOff Triage'] },
