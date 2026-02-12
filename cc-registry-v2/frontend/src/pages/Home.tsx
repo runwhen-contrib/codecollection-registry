@@ -413,28 +413,28 @@ const Home: React.FC = () => {
                   <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.5)' }} />
                   <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.5)' }} />
                   <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.5)' }} />
-                  <Typography sx={{ fontSize: 9, color: 'white', ml: 0.5, fontWeight: 600 }}>Workspace Chat</Typography>
+                  <Typography sx={{ fontSize: 10, color: 'white', ml: 0.5, fontWeight: 600 }}>Workspace Chat</Typography>
                 </Box>
                 <Box sx={{ p: 1.25, display: 'flex', flexDirection: 'column', gap: 0.6 }}>
                   <Box sx={{ bgcolor: '#f0f2f5', borderRadius: 1.5, px: 1, py: 0.4, alignSelf: 'flex-start', maxWidth: '85%' }}>
-                    <Typography sx={{ fontSize: 8, color: '#444' }}>My pods keep crashing...</Typography>
+                    <Typography sx={{ fontSize: 9.5, color: '#444' }}>My pods keep crashing...</Typography>
                   </Box>
                   <Box sx={{ bgcolor: '#5282f1', borderRadius: 1.5, px: 1, py: 0.4, alignSelf: 'flex-end', maxWidth: '85%' }}>
-                    <Typography sx={{ fontSize: 8, color: 'white' }}>Found 3 matching tools!</Typography>
+                    <Typography sx={{ fontSize: 9.5, color: 'white' }}>Found 3 matching tools!</Typography>
                   </Box>
                   <Box sx={{ bgcolor: '#f0f2f5', borderRadius: 1.5, px: 1, py: 0.4, alignSelf: 'flex-start', maxWidth: '85%' }}>
-                    <Typography sx={{ fontSize: 8, color: '#444' }}>Check my database...</Typography>
+                    <Typography sx={{ fontSize: 9.5, color: '#444' }}>Check my database...</Typography>
                   </Box>
                   <Box sx={{ bgcolor: '#5282f1', borderRadius: 1.5, px: 1, py: 0.4, alignSelf: 'flex-end', maxWidth: '85%' }}>
-                    <Typography sx={{ fontSize: 8, color: 'white' }}>Running health check...</Typography>
+                    <Typography sx={{ fontSize: 9.5, color: 'white' }}>Running health check...</Typography>
                   </Box>
                 </Box>
               </Box>
-              <Box sx={{ maxWidth: 260 }}>
-                <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', mb: 0.5 }}>
+              <Box sx={{ maxWidth: 300 }}>
+                <Typography sx={{ fontSize: 16, fontWeight: 700, color: '#1a1a2e', mb: 0.5 }}>
                   Chat With Your Environment
                 </Typography>
-                <Typography sx={{ fontSize: 12, color: 'text.secondary', lineHeight: 1.5 }}>
+                <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.5 }}>
                   Ask questions in natural language — AI interprets real-time data from your applications, infrastructure, and services.
                 </Typography>
               </Box>
@@ -487,10 +487,10 @@ const Home: React.FC = () => {
                 sx={{ width: 48, height: 48, borderRadius: '50%', border: '2px solid #e0e8f5', flexShrink: 0 }}
               />
               <Box>
-                <Typography sx={{ fontSize: 15, fontWeight: 700, color: '#3a5cb8', lineHeight: 1.1 }}>
+                <Typography sx={{ fontSize: 17, fontWeight: 700, color: '#3a5cb8', lineHeight: 1.1 }}>
                   RunWhen Platform
                 </Typography>
-                <Typography sx={{ fontSize: 11, color: '#5282f1', mt: 0.25 }}>
+                <Typography sx={{ fontSize: 13, color: '#5282f1', mt: 0.25 }}>
                   Builds context from your systems and decides what to run, and when
                 </Typography>
               </Box>
@@ -538,7 +538,7 @@ const Home: React.FC = () => {
                 transform: 'translateX(-50%)',
                 bgcolor: 'white',
                 px: 1.5,
-                fontSize: 9,
+                fontSize: 10,
                 fontWeight: 600,
                 color: '#2E7D32',
                 letterSpacing: '0.5px',
@@ -569,17 +569,17 @@ const Home: React.FC = () => {
                       animationDelay: `${n * 0.5}s`,
                       '@keyframes runnerPulse': { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.5 } },
                     }} />
-                    <Typography sx={{ fontSize: 10, fontWeight: 600, color: '#2E7D32', whiteSpace: 'nowrap' }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#2E7D32', whiteSpace: 'nowrap' }}>
                       Runner {n}
                     </Typography>
                   </Box>
                 ))}
               </Box>
               <Box>
-                <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#2E7D32' }}>
+                <Typography sx={{ fontSize: 15, fontWeight: 700, color: '#2E7D32' }}>
                   Private Runners
                 </Typography>
-                <Typography sx={{ fontSize: 11, color: '#558b2f', lineHeight: 1.4 }}>
+                <Typography sx={{ fontSize: 13, color: '#558b2f', lineHeight: 1.4 }}>
                   Tasks run securely inside your environment
                 </Typography>
               </Box>
@@ -653,19 +653,19 @@ const Home: React.FC = () => {
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
                     <Box sx={{
-                      width: 10, height: 10, borderRadius: '50%', bgcolor: cat.color, flexShrink: 0,
+                      width: 12, height: 12, borderRadius: '50%', bgcolor: cat.color, flexShrink: 0,
                       boxShadow: `0 0 0 3px ${cat.color}22`,
                     }} />
                     {(cat as any).langIcons ? (
                       <Box sx={{ display: 'flex', gap: 0.25 }}>
                         {(cat as any).langIcons.map((src: string, i: number) => (
-                          <Box key={i} component="img" src={src} alt="" sx={{ width: 16, height: 16, flexShrink: 0 }} />
+                          <Box key={i} component="img" src={src} alt="" sx={{ width: 20, height: 20, flexShrink: 0 }} />
                         ))}
                       </Box>
                     ) : tagIcons[cat.tag] ? (
-                      <Box component="img" src={tagIcons[cat.tag]} alt={cat.name} sx={{ width: 18, height: 18, flexShrink: 0 }} />
+                      <Box component="img" src={tagIcons[cat.tag]} alt={cat.name} sx={{ width: 22, height: 22, flexShrink: 0 }} />
                     ) : null}
-                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#1a1a2e', lineHeight: 1 }}>
+                    <Typography sx={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e', lineHeight: 1 }}>
                       {cat.name}
                     </Typography>
                   </Box>
@@ -676,8 +676,8 @@ const Home: React.FC = () => {
                         label={task}
                         size="small"
                         sx={{
-                          fontSize: '9px',
-                          height: 20,
+                          fontSize: '12px',
+                          height: 26,
                           bgcolor: `${cat.color}0D`,
                           color: cat.color,
                           fontWeight: 500,

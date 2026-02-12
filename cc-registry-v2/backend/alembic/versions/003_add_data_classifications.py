@@ -21,10 +21,18 @@ def upgrade() -> None:
     # of data: tags extracted from task-level [Tags] in robot files.
     # Example: {"data:config": {"label": "Configuration data", "count": 5},
     #           "data:logs-regexp": {"label": "Filtered logs", "count": 2}}
-    op.add_column(
-        'codebundles',
-        sa.Column('data_classifications', postgresql.JSON(), server_default='{}', nullable=True)
-    )
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'codebundles' AND column_name = 'data_classifications'
+            ) THEN
+                ALTER TABLE codebundles
+                ADD COLUMN data_classifications JSON DEFAULT '{}';
+            END IF;
+        END $$;
+    """)
 
 
 def downgrade() -> None:
