@@ -417,7 +417,7 @@ const Home: React.FC = () => {
               left: '12%',
               right: '12%',
               height: 2,
-              background: 'linear-gradient(90deg, #5282f1 0%, #3a5cb8 35%, #2E7D32 70%, #1a1a2e 100%)',
+              background: '#5282f1',
               borderRadius: 1,
               zIndex: 0,
             }} />
@@ -425,9 +425,9 @@ const Home: React.FC = () => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: 700, position: 'relative', zIndex: 1 }}>
               {[
                 { label: 'Ask', color: '#5282f1', muiIcon: ChatIcon },
-                { label: 'Run Tools', color: '#3a5cb8', muiIcon: RunnerIcon },
-                { label: 'Collect Insights', color: '#2E7D32', img: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png' },
-                { label: 'Resolve', color: '#1a1a2e', muiIcon: ResolveIcon },
+                { label: 'Run Tools', color: '#5282f1', muiIcon: RunnerIcon },
+                { label: 'Collect Insights', color: '#5282f1', img: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png' },
+                { label: 'Resolve', color: '#5282f1', muiIcon: ResolveIcon },
               ].map((step) => (
                 <Box key={step.label} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.75 }}>
                   <Box sx={{
