@@ -109,16 +109,19 @@ jobs:
         with:
           github-token: ${{ secrets.PAT }}
           script: |
+            const tag = '${{ needs.create-release.outputs.release_tag }}';
             await github.rest.actions.createWorkflowDispatch({
               owner: 'runwhen',
               repo: 'infra-flux-nonprod-shared',
               workflow_id: 'update-registry-test-images.yaml',
               ref: 'main',
               inputs: {
-                image_tag: '${{ needs.create-release.outputs.release_tag }}'
+                environment: 'test',
+                mcp_server_tag: tag,
+                branch_prefix: 'chore/registry-image-update'
               }
             });
-            console.log('Triggered update-registry-test-images.yaml with tag: ${{ needs.create-release.outputs.release_tag }}');
+            console.log(`Triggered test deploy for MCP server with release tag: ${tag}`);
 
   summary:
     name: Release Summary

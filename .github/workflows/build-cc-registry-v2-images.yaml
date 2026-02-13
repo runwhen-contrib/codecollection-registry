@@ -183,16 +183,22 @@ jobs:
         with:
           github-token: ${{ secrets.PAT }}
           script: |
+            const tag = '${{ needs.generate-tag.outputs.tag }}';
             await github.rest.actions.createWorkflowDispatch({
               owner: 'runwhen',
               repo: 'infra-flux-nonprod-shared',
               workflow_id: 'update-registry-test-images.yaml',
               ref: 'main',
               inputs: {
-                image_tag: '${{ needs.generate-tag.outputs.tag }}'
+                environment: 'test',
+                backend_tag: tag,
+                frontend_tag: tag,
+                worker_tag: tag,
+                pr_number: String(context.issue?.number || ''),
+                branch_prefix: 'chore/registry-image-update'
               }
             });
-            console.log('Triggered update-registry-test-images.yaml with tag: ${{ needs.generate-tag.outputs.tag }}');
+            console.log(`Triggered test deploy with tag: ${tag}`);
 
   # Comment on PR with image info
   comment-on-pr:
