@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from celery import current_task
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.models import Codebundle, AIConfiguration
@@ -34,8 +34,10 @@ def enhance_codebundle_task(self, codebundle_id: int):
     try:
         db = next(get_db())
         
-        # Get the codebundle
-        codebundle = db.query(Codebundle).filter(Codebundle.id == codebundle_id).first()
+        # Get the codebundle with codecollection relationship loaded
+        codebundle = db.query(Codebundle).options(
+            joinedload(Codebundle.codecollection)
+        ).filter(Codebundle.id == codebundle_id).first()
         if not codebundle:
             raise ValueError(f"CodeBundle with id {codebundle_id} not found")
         
@@ -91,7 +93,10 @@ def enhance_codebundle_task(self, codebundle_id: int):
         }
         
     except Exception as e:
-        logger.error(f"Error enhancing CodeBundle {codebundle_id}: {e}")
+        import traceback
+        error_msg = str(e)
+        logger.error(f"Error enhancing CodeBundle {codebundle_id}: {error_msg}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         
         # Update status to failed
         try:
@@ -103,8 +108,13 @@ def enhance_codebundle_task(self, codebundle_id: int):
         except Exception as db_error:
             logger.error(f"Error updating failed status: {db_error}")
         
-        self.update_state(state='FAILURE', meta={'error': str(e)})
-        raise
+        # Return error as dict instead of raising (JSON-serializable)
+        return {
+            'status': 'failed',
+            'codebundle_id': codebundle_id,
+            'error': error_msg,
+            'error_type': type(e).__name__
+        }
 
 
 @celery_app.task(bind=True)
@@ -131,8 +141,10 @@ def enhance_multiple_codebundles_task(self, codebundle_ids: List[int]):
             )
             
             try:
-                # Get the codebundle
-                codebundle = db.query(Codebundle).filter(Codebundle.id == codebundle_id).first()
+                # Get the codebundle with codecollection relationship loaded
+                codebundle = db.query(Codebundle).options(
+                    joinedload(Codebundle.codecollection)
+                ).filter(Codebundle.id == codebundle_id).first()
                 if not codebundle:
                     failed += 1
                     results.append({
@@ -240,9 +252,18 @@ def enhance_multiple_codebundles_task(self, codebundle_ids: List[int]):
         }
         
     except Exception as e:
-        logger.error(f"Error in batch enhancement: {e}")
-        self.update_state(state='FAILURE', meta={'error': str(e)})
-        raise
+        error_msg = str(e)
+        logger.error(f"Error in batch enhancement: {error_msg}")
+        
+        # Return error as dict instead of raising (JSON-serializable)
+        return {
+            'status': 'failed',
+            'total_processed': 0,
+            'completed': 0,
+            'failed': 0,
+            'error': error_msg,
+            'error_type': type(e).__name__
+        }
 
 
 @celery_app.task(bind=True)
@@ -253,8 +274,10 @@ def enhance_collection_codebundles_task(self, collection_slug: str):
     try:
         db = next(get_db())
         
-        # Get all codebundles in the collection
-        codebundles = db.query(Codebundle).join(Codebundle.codecollection).filter(
+        # Get all codebundles in the collection with codecollection relationship loaded
+        codebundles = db.query(Codebundle).join(Codebundle.codecollection).options(
+            joinedload(Codebundle.codecollection)
+        ).filter(
             Codebundle.codecollection.has(slug=collection_slug),
             Codebundle.is_active == True
         ).all()
@@ -358,9 +381,19 @@ def enhance_collection_codebundles_task(self, collection_slug: str):
         }
         
     except Exception as e:
-        logger.error(f"Error enhancing collection {collection_slug}: {e}")
-        self.update_state(state='FAILURE', meta={'error': str(e)})
-        raise
+        error_msg = str(e)
+        logger.error(f"Error enhancing collection {collection_slug}: {error_msg}")
+        
+        # Return error as dict instead of raising (JSON-serializable)
+        return {
+            'status': 'failed',
+            'collection_slug': collection_slug,
+            'total_processed': 0,
+            'completed': 0,
+            'failed': 0,
+            'error': error_msg,
+            'error_type': type(e).__name__
+        }
 
 
 @celery_app.task(bind=True)
@@ -371,8 +404,10 @@ def enhance_pending_codebundles_task(self, limit: Optional[int] = None):
     try:
         db = next(get_db())
         
-        # Get pending codebundles (including NULL values)
-        query = db.query(Codebundle).filter(
+        # Get pending codebundles (including NULL values) with codecollection relationship loaded
+        query = db.query(Codebundle).options(
+            joinedload(Codebundle.codecollection)
+        ).filter(
             (Codebundle.enhancement_status == "pending") | (Codebundle.enhancement_status.is_(None)),
             Codebundle.is_active == True
         )
@@ -480,8 +515,17 @@ def enhance_pending_codebundles_task(self, limit: Optional[int] = None):
         }
         
     except Exception as e:
-        logger.error(f"Error enhancing pending CodeBundles: {e}")
-        self.update_state(state='FAILURE', meta={'error': str(e)})
-        raise
+        error_msg = str(e)
+        logger.error(f"Error enhancing pending CodeBundles: {error_msg}")
+        
+        # Return error as dict instead of raising (JSON-serializable)
+        return {
+            'status': 'failed',
+            'total_processed': 0,
+            'completed': 0,
+            'failed': 0,
+            'error': error_msg,
+            'error_type': type(e).__name__
+        }
 
 

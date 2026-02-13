@@ -1,0 +1,295 @@
+# RunWhen Documentation Sources
+# This file centralizes all managed documentation with accurate URLs.
+# The documentation_tools module reads this file to provide accurate links.
+
+documentation:
+  codebundle_development:
+    - name: CodeBundle Development Guide
+      url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development
+      description: Complete guide to developing RunWhen CodeBundles including structure, syntax, and best practices
+      keywords:
+        - development
+        - best-practices
+        - getting-started
+        - structure
+        - codebundle
+
+    - name: Robot Framework Basics
+      url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/robot-framework-basics
+      description: Introduction to Robot Framework syntax for CodeBundle development
+      keywords:
+        - robot
+        - robot-framework
+        - syntax
+        - keywords
+        - tasks
+
+    - name: SLI Development
+      url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/sli-development
+      description: Guide to creating Service Level Indicator (SLI) CodeBundles
+      keywords:
+        - sli
+        - service-level-indicator
+        - metrics
+        - monitoring
+
+    - name: TaskSet Development
+      url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/taskset-development
+      description: Guide to creating TaskSet CodeBundles for automated runbooks
+      keywords:
+        - taskset
+        - runbook
+        - automation
+        - tasks
+
+  libraries:
+    - name: RW.CLI Library
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-cli
+      description: Execute shell commands and CLI tools like kubectl, aws, gcloud, and other CLI tools
+      keywords:
+        - cli
+        - shell
+        - kubectl
+        - aws
+        - gcloud
+        - command
+        - bash
+      examples:
+        - "RW.CLI.Run Cli    cmd=kubectl get pods -n ${NAMESPACE}"
+        - "RW.CLI.Run Cli    cmd=aws eks describe-cluster --name ${CLUSTER_NAME}"
+
+    - name: RW.K8s Library
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-k8s
+      description: Kubernetes-specific operations and helpers
+      keywords:
+        - kubernetes
+        - k8s
+        - pods
+        - deployments
+        - services
+        - namespaces
+
+    - name: RW.Core Library
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-core
+      description: Core utility functions for CodeBundle development
+      keywords:
+        - core
+        - utilities
+        - helpers
+        - common
+
+    - name: RW.AWS Library
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-aws
+      description: AWS-specific operations and helpers
+      keywords:
+        - aws
+        - amazon
+        - ec2
+        - s3
+        - lambda
+        - eks
+
+    - name: RW.Azure Library
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-azure
+      description: Azure-specific operations and helpers
+      keywords:
+        - azure
+        - microsoft
+        - aks
+        - app-service
+        - webapp
+        - functionapp
+
+    - name: RW.GCP Library
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-gcp
+      description: Google Cloud Platform specific operations
+      keywords:
+        - gcp
+        - google
+        - gke
+        - cloud-run
+        - compute
+
+  platform:
+    - name: RunWhen Platform Overview
+      url: https://docs.runwhen.com/public/runwhen-platform
+      description: Overview of the RunWhen Platform and its capabilities
+      keywords:
+        - platform
+        - overview
+        - introduction
+
+    - name: Workspace Configuration
+      url: https://docs.runwhen.com/public/runwhen-platform/workspaces
+      description: Guide to configuring RunWhen workspaces
+      keywords:
+        - workspace
+        - configuration
+        - setup
+
+    - name: Secrets Management
+      url: https://docs.runwhen.com/public/runwhen-platform/secrets
+      description: How to manage secrets in RunWhen
+      keywords:
+        - secrets
+        - credentials
+        - security
+        - kubeconfig
+        - api-keys
+
+    - name: SLX Configuration
+      url: https://docs.runwhen.com/public/runwhen-platform/slx-configuration
+      description: Guide to configuring Service Level Expectations
+      keywords:
+        - slx
+        - service-level
+        - configuration
+        - thresholds
+
+  runwhen_local:
+    - name: RunWhen Local Installation Guide
+      url: https://docs.runwhen.com/public/v/runwhen-local/user-guide/features/getting-started
+      description: |
+        RunWhen Local is a container-based tool that runs on your local machine or inside your Kubernetes cluster.
+        It discovers your cloud and Kubernetes resources, matches them to relevant CodeBundles, and generates
+        troubleshooting commands you can run immediately.
+
+        Installation methods:
+        1. **Kubernetes (Helm)**: Deploy as a pod in your cluster using the Helm chart.
+           - Add the RunWhen contrib Helm repo: `helm repo add runwhen-contrib https://runwhen-contrib.github.io/helm-charts`
+           - Install: `helm install runwhen-local runwhen-contrib/runwhen-local -n runwhen-local --create-namespace`
+           - Port-forward to access the UI: `kubectl port-forward -n runwhen-local svc/runwhen-local 8081:8081`
+        2. **Docker**: Run locally with Docker.
+           - `docker run -p 8081:8081 ghcr.io/runwhen-contrib/runwhen-local:latest`
+        3. **Docker Compose**: Use docker-compose for more advanced configurations with custom kubeconfigs and cloud credentials.
+
+        After installation, access the web UI at http://localhost:8081 to see discovered resources and matching troubleshooting commands.
+      keywords:
+        - install
+        - installation
+        - runwhen-local
+        - local
+        - getting-started
+        - helm
+        - docker
+        - setup
+        - deploy
+        - kubernetes
+
+    - name: RunWhen Local Configuration
+      url: https://docs.runwhen.com/public/v/runwhen-local/user-guide/features/configuration
+      description: |
+        Configure RunWhen Local by editing the workspaceInfo.yaml file. This file tells RunWhen Local
+        which cloud resources and Kubernetes clusters to discover. Key configuration sections:
+        - workspaceName: A unique name for this workspace
+        - defaultLocation: Geographic region (e.g., us-west1)
+        - kubeconfigs: List of Kubernetes cluster kubeconfigs to scan
+        - cloudCredentials: AWS, Azure, or GCP credentials for cloud resource discovery
+        - namespaceLOBs: Map namespaces to Lines of Business for organization
+      keywords:
+        - configuration
+        - config
+        - runwhen-local
+        - workspaceInfo
+        - kubeconfig
+        - cloud-credentials
+        - namespaces
+
+    - name: RunWhen Local Troubleshooting
+      url: https://docs.runwhen.com/public/v/runwhen-local/user-guide/features/troubleshooting
+      description: |
+        Common troubleshooting steps for RunWhen Local:
+        - If the UI shows no resources, check that your kubeconfig is correctly mounted and has access
+        - If discovery is slow, ensure network access to your clusters
+        - Check logs with: kubectl logs -n runwhen-local deployment/runwhen-local
+        - For Docker: docker logs <container-id>
+        - Restart discovery by restarting the container or pod
+      keywords:
+        - troubleshooting
+        - debug
+        - runwhen-local
+        - problems
+        - issues
+        - logs
+
+    - name: RunWhen Local Features Overview
+      url: https://docs.runwhen.com/public/v/runwhen-local/user-guide/features
+      description: |
+        RunWhen Local provides these key features:
+        - **Resource Discovery**: Automatically discovers Kubernetes workloads, cloud resources, and infrastructure
+        - **CodeBundle Matching**: Maps discovered resources to relevant troubleshooting CodeBundles
+        - **Troubleshooting Commands**: Generates ready-to-run commands for common issues
+        - **Map View**: Visual map of your infrastructure and its health
+        - **Custom Workspaces**: Organize resources by team, environment, or project
+      keywords:
+        - features
+        - runwhen-local
+        - discovery
+        - map
+        - troubleshooting
+        - overview
+
+  faq:
+    - name: How do I use kubectl in a CodeBundle?
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-cli
+      description: |
+        Use the RW.CLI.Run Cli keyword with your kubectl command:
+        
+        RW.CLI.Run Cli    cmd=kubectl get pods -n ${NAMESPACE}
+            ...    kubeconfig=${KUBECONFIG}
+        
+        Make sure you have a kubeconfig secret configured in your workspace.
+      keywords:
+        - kubectl
+        - kubernetes
+        - cli
+        - kubeconfig
+
+    - name: How do I access AWS resources?
+      url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-aws
+      description: |
+        Use the RW.AWS library or RW.CLI with AWS CLI commands.
+        Configure AWS credentials as secrets in your workspace.
+      keywords:
+        - aws
+        - credentials
+        - authentication
+
+    - name: How do I debug a CodeBundle?
+      url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/debugging
+      description: |
+        Tips for debugging CodeBundles:
+        1. Use Log statements to output variable values
+        2. Test locally with robot command
+        3. Check the RunSession logs in the platform
+      keywords:
+        - debug
+        - debugging
+        - troubleshooting
+        - logs
+
+    - name: What is the difference between SLI and TaskSet?
+      url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development
+      description: |
+        SLI (Service Level Indicator) CodeBundles measure a metric and return a numeric value.
+        TaskSet CodeBundles run automated runbooks with multiple tasks that can be triggered.
+        Use SLIs for monitoring, TaskSets for remediation and troubleshooting.
+      keywords:
+        - sli
+        - taskset
+        - difference
+        - types
+
+    - name: How do I contribute a CodeBundle?
+      url: https://docs.runwhen.com/public/runwhen-authors/contributing
+      description: |
+        To contribute a CodeBundle:
+        1. Fork the appropriate codecollection repository
+        2. Create your CodeBundle following the development guide
+        3. Submit a pull request
+        4. The community will review and merge
+      keywords:
+        - contribute
+        - contribution
+        - pull-request
+        - community

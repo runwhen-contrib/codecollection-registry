@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cc-registry-worker
+  namespace: codecollection-registry
+  labels:
+    app: cc-registry
+    component: worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cc-registry
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: cc-registry
+        component: worker
+    spec:
+      containers:
+      - name: worker
+        image: ghcr.io/OWNER/REPO/cc-registry-v2-worker:latest  # Replace OWNER/REPO
+        imagePullPolicy: Always
+        command:
+        - celery
+        - -A
+        - app.tasks.celery_app
+        - worker
+        - --loglevel=info
+        - --concurrency=4
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        envFrom:
+        # Load all database and Redis configuration (supports both URL and component-based config)
+        - secretRef:
+            name: cc-registry-secrets
+        # Load Azure OpenAI credentials
+        - secretRef:
+            name: azure-openai-credentials
+        volumeMounts:
+        - name: backend-code
+          mountPath: /app
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+      volumes:
+      - name: backend-code
+        emptyDir: {}
+      imagePullSecrets:
+      - name: ghcr-pull-secret
+      initContainers:
+      - name: copy-backend-code
+        image: ghcr.io/OWNER/REPO/cc-registry-v2-backend:latest  # Replace OWNER/REPO
+        command: ['sh', '-c', 'cp -r /app/* /shared-app/']
+        volumeMounts:
+        - name: backend-code
+          mountPath: /shared-app
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cc-registry-worker
+  namespace: codecollection-registry
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cc-registry-worker
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30

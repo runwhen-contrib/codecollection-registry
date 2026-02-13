@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -23,20 +24,25 @@ import {
   Launch as LaunchIcon,
   Close as CloseIcon,
   Add as AddIcon,
-  Remove as RemoveIcon,
-  GitHub as GitHubIcon
+  Remove as RemoveIcon
 } from '@mui/icons-material';
 import { apiService, Task, TasksResponse } from '../services/api';
 import { useCart } from '../contexts/CartContext';
 
 const AllTasks: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [supportTags, setSupportTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Get initial category from URL params
+  const initialCategory = searchParams.get('category');
+  
   // Filter states
-  const [selectedSupportTags, setSelectedSupportTags] = useState<string[]>([]);
+  const [selectedSupportTags, setSelectedSupportTags] = useState<string[]>(
+    initialCategory ? [initialCategory] : []
+  );
   const [supportTagSearch, setSupportTagSearch] = useState('');
   const [supportTagSearchInput, setSupportTagSearchInput] = useState('');
   const [selectedCollection, setSelectedCollection] = useState('');
@@ -257,7 +263,7 @@ const AllTasks: React.FC = () => {
                       deleteIcon={<CloseIcon />}
                       color="primary"
                       variant="filled"
-                      sx={{ height: 20, fontSize: '0.65rem' }}
+                      sx={{ height: 24, fontSize: '0.75rem' }}
                     />
                   ))}
                 </Box>
@@ -284,7 +290,8 @@ const AllTasks: React.FC = () => {
               <Box sx={{ 
                 flex: 1,
                 overflow: 'auto', 
-                border: '1px solid #ddd', 
+                border: '1px solid', 
+                borderColor: 'divider',
                 borderRadius: 1,
                 bgcolor: 'background.paper'
               }}>
@@ -296,10 +303,11 @@ const AllTasks: React.FC = () => {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       px: 1,
-                      py: 0.25,
+                      py: 0.5,
                       cursor: 'pointer',
                       '&:hover': { bgcolor: 'action.hover' },
-                      borderBottom: index < filteredSupportTags.length - 1 ? '1px solid #eee' : 'none',
+                      borderBottom: index < filteredSupportTags.length - 1 ? '1px solid' : 'none',
+                      borderBottomColor: 'divider',
                       bgcolor: selectedSupportTags.includes(tag) ? 'primary.50' : 'transparent'
                     }}
                     onClick={() => {
@@ -362,7 +370,7 @@ const AllTasks: React.FC = () => {
                     value={selectedCollection}
                     onChange={(e) => handleCollectionChange(e.target.value)}
                     displayEmpty
-                    sx={{ fontSize: '0.8rem' }}
+                    sx={{ fontSize: '0.8125rem' }}
                   >
                     <MenuItem value="">All Collections</MenuItem>
                     {uniqueCollections.map((collection) => (
@@ -373,7 +381,7 @@ const AllTasks: React.FC = () => {
                   </Select>
                 </FormControl>
                 
-                <Button variant="outlined" onClick={clearFilters} fullWidth size="small" sx={{ py: 0.25, fontSize: '0.7rem' }}>
+                <Button variant="outlined" onClick={clearFilters} fullWidth size="small" sx={{ py: 0.5, fontSize: '0.75rem' }}>
                   Clear Filters
                 </Button>
               </Box>
@@ -384,7 +392,7 @@ const AllTasks: React.FC = () => {
         {/* Right Content - Tasks List */}
         <Box sx={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
           {/* Compact Filter Bar */}
-          <Box sx={{ mb: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.200' }}>
+          <Box sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                 {Object.keys(groupedTasks).length} CodeBundle{Object.keys(groupedTasks).length !== 1 ? 's' : ''} • {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
@@ -399,7 +407,7 @@ const AllTasks: React.FC = () => {
                   variant="text"
                   onClick={clearFilters}
                   startIcon={<ClearIcon />}
-                  sx={{ fontSize: '0.7rem', minHeight: 'auto', py: 0.25, px: 0.5 }}
+                  sx={{ fontSize: '0.75rem', minHeight: 'auto', py: 0.25, px: 0.5 }}
                 >
                   Clear
                 </Button>
@@ -427,55 +435,30 @@ const AllTasks: React.FC = () => {
               {Object.keys(groupedTasks).length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   {Object.entries(groupedTasks).map(([key, group]) => (
-                    <Card key={key} sx={{ '&:hover': { boxShadow: 2 } }}>
+                    <Card key={key}>
                       <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                         {/* CodeBundle Header */}
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
                           <Box sx={{ flex: 1 }}>
-                            <Typography variant="h6" component="h2" sx={{ mb: 0.5, fontSize: '1.1rem', fontWeight: 600 }}>
+                            <Typography variant="h6" component="h2" sx={{ mb: 0.5, fontSize: '1rem', fontWeight: 600 }}>
                               {group.codebundle.name}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
                               {group.codebundle.collection_name} • {group.tasks.filter(t => t.type === 'TaskSet').length} tasks • {group.tasks.filter(t => t.type === 'SLI').length} SLIs
                             </Typography>
                           </Box>
                           
-                          <Box sx={{ ml: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              startIcon={<LaunchIcon />}
-                              href={`/collections/${group.codebundle.collection_slug}/codebundles/${group.codebundle.slug}`}
-                              sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
-                            >
-                              View
-                            </Button>
-                            
-                            {group.codebundle.runbook_source_url && (
-                              <Button
-                                variant="text"
-                                size="small"
-                                startIcon={<GitHubIcon />}
-                                href={group.codebundle.runbook_source_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
-                              >
-                                Source
-                              </Button>
-                            )}
-                            
+                          <Box sx={{ ml: 1.5, display: 'flex', flexDirection: 'row', gap: 0.75, alignItems: 'center' }}>
                             <Button
                               variant={isInCart(group.codebundle.id) ? "contained" : "outlined"}
                               size="small"
                               color={isInCart(group.codebundle.id) ? "error" : "primary"}
                               startIcon={isInCart(group.codebundle.id) ? <RemoveIcon /> : <AddIcon />}
-                              sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
+                              sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, whiteSpace: 'nowrap' }}
                               onClick={() => {
                                 if (isInCart(group.codebundle.id)) {
                                   removeFromCart(group.codebundle.id);
                                 } else {
-                                  // Create a proper CodeBundle object for the cart
                                   const codebundleItem = {
                                     id: group.codebundle.id,
                                     name: group.codebundle.name,
@@ -483,6 +466,7 @@ const AllTasks: React.FC = () => {
                                     display_name: group.codebundle.name,
                                     description: group.codebundle.description,
                                     doc: '',
+                                    readme: null,
                                     author: group.codebundle.author,
                                     support_tags: group.codebundle.support_tags,
                                     tasks: group.tasks.filter(t => t.type === 'TaskSet').map(t => ({name: t.name, doc: t.description || '', tags: []})),
@@ -491,8 +475,11 @@ const AllTasks: React.FC = () => {
                                     sli_count: group.tasks.filter(t => t.type === 'SLI').length,
                                     runbook_source_url: group.codebundle.runbook_source_url || '',
                                     created_at: new Date().toISOString(),
-                                    discovery: {
-                                      is_discoverable: false,
+                                    updated_at: new Date().toISOString(),
+                                    git_updated_at: null,
+                                    configuration_type: {
+                                      type: 'Manual' as const,
+                                      has_generation_rules: false,
                                       platform: null,
                                       resource_types: [],
                                       match_patterns: [],
@@ -502,7 +489,7 @@ const AllTasks: React.FC = () => {
                                       runwhen_directory_path: null
                                     },
                                     codecollection: {
-                                      id: 0, // We don't have this info in the current structure
+                                      id: 0,
                                       name: group.codebundle.collection_name,
                                       slug: group.codebundle.collection_slug,
                                       git_url: group.tasks[0]?.git_url || '',
@@ -513,7 +500,16 @@ const AllTasks: React.FC = () => {
                                 }
                               }}
                             >
-                              {isInCart(group.codebundle.id) ? "Remove CodeBundle" : "Select CodeBundle"}
+                              {isInCart(group.codebundle.id) ? "Remove" : "Select CodeBundle"}
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              startIcon={<LaunchIcon />}
+                              href={`/collections/${group.codebundle.collection_slug}/codebundles/${group.codebundle.slug}`}
+                              sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, whiteSpace: 'nowrap' }}
+                            >
+                              View
                             </Button>
                           </Box>
                         </Box>
@@ -523,7 +519,7 @@ const AllTasks: React.FC = () => {
                           {/* TaskSet Tasks */}
                           {group.tasks.filter(task => task.type === 'TaskSet').length > 0 && (
                             <Box sx={{ mb: 1.5 }}>
-                              <Typography variant="subtitle2" sx={{ color: 'primary.main', fontWeight: 600, mb: 0.5, fontSize: '0.85rem' }}>
+                              <Typography variant="subtitle2" sx={{ color: 'primary.main', fontWeight: 600, mb: 0.5, fontSize: '0.875rem' }}>
                                 TaskSet ({group.tasks.filter(task => task.type === 'TaskSet').length})
                               </Typography>
                               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -532,21 +528,18 @@ const AllTasks: React.FC = () => {
                                     key={task.id}
                                     sx={{
                                       px: 1.5,
-                                      py: 0.75,
-                                      bgcolor: 'grey.50',
+                                      py: 1,
+                                      minHeight: 40,
+                                      bgcolor: 'action.hover',
                                       borderRadius: 0.5,
                                       border: '1px solid',
-                                      borderColor: 'grey.200',
+                                      borderColor: 'divider',
                                       display: 'flex',
                                       justifyContent: 'space-between',
                                       alignItems: 'center',
-                                      '&:hover': {
-                                        bgcolor: 'grey.100',
-                                        borderColor: 'primary.main'
-                                      }
                                     }}
                                   >
-                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 500 }}>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8125rem', fontWeight: 500 }}>
                                       {task.name}
                                     </Typography>
                                   </Box>
@@ -558,7 +551,7 @@ const AllTasks: React.FC = () => {
                           {/* SLI Tasks */}
                           {group.tasks.filter(task => task.type === 'SLI').length > 0 && (
                             <Box>
-                              <Typography variant="subtitle2" sx={{ color: 'secondary.main', fontWeight: 600, mb: 0.5, fontSize: '0.85rem' }}>
+                              <Typography variant="subtitle2" sx={{ color: 'secondary.main', fontWeight: 600, mb: 0.5, fontSize: '0.875rem' }}>
                                 SLI ({group.tasks.filter(task => task.type === 'SLI').length})
                               </Typography>
                               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -567,21 +560,18 @@ const AllTasks: React.FC = () => {
                                     key={task.id}
                                     sx={{
                                       px: 1.5,
-                                      py: 0.75,
-                                      bgcolor: 'grey.50',
+                                      py: 1,
+                                      minHeight: 40,
+                                      bgcolor: 'action.hover',
                                       borderRadius: 0.5,
                                       border: '1px solid',
-                                      borderColor: 'grey.200',
+                                      borderColor: 'divider',
                                       display: 'flex',
                                       justifyContent: 'space-between',
                                       alignItems: 'center',
-                                      '&:hover': {
-                                        bgcolor: 'grey.100',
-                                        borderColor: 'secondary.main'
-                                      }
                                     }}
                                   >
-                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 500 }}>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8125rem', fontWeight: 500 }}>
                                       {task.name}
                                     </Typography>
                                   </Box>

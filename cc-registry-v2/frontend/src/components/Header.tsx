@@ -6,30 +6,34 @@ import {
   Button,
   Box,
   IconButton,
-  Badge,
   Menu,
   MenuItem,
-  Avatar,
   Divider,
 } from '@mui/material';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Search as SearchIcon,
   Menu as MenuIcon,
-  DynamicForm as DynamicFormIcon,
-  Login as LoginIcon,
-  Logout as LogoutIcon,
-  Person as PersonIcon,
+  KeyboardArrowDown as ArrowDownIcon,
+  MoreVert as MoreVertIcon,
+  DarkMode as DarkModeIcon,
+  LightMode as LightModeIcon,
 } from '@mui/icons-material';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useThemeMode } from '../contexts/ThemeContext';
 
 const Header: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { itemCount } = useCart();
   const { isAuthenticated, user, logout } = useAuth();
+  const { mode, toggleTheme } = useThemeMode();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [moreMenuAnchor, setMoreMenuAnchor] = React.useState<null | HTMLElement>(null);
+  const [browseMenuAnchor, setBrowseMenuAnchor] = React.useState<null | HTMLElement>(null);
+  const [linksMenuAnchor, setLinksMenuAnchor] = React.useState<null | HTMLElement>(null);
+
+  const isHomePage = location.pathname === '/';
 
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -39,86 +43,179 @@ const Header: React.FC = () => {
     setAnchorEl(null);
   };
 
+  const handleMoreMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setMoreMenuAnchor(event.currentTarget);
+  };
+
+  const handleMoreMenuClose = () => {
+    setMoreMenuAnchor(null);
+  };
+
+  const handleBrowseMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setBrowseMenuAnchor(event.currentTarget);
+  };
+
+  const handleBrowseMenuClose = () => {
+    setBrowseMenuAnchor(null);
+  };
+
+  const handleLinksMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setLinksMenuAnchor(event.currentTarget);
+  };
+
+  const handleLinksMenuClose = () => {
+    setLinksMenuAnchor(null);
+  };
+
   const handleLogout = () => {
     logout();
     handleUserMenuClose();
     navigate('/');
   };
 
+  const handleMenuNavigate = (path: string) => {
+    navigate(path);
+    handleMoreMenuClose();
+    handleBrowseMenuClose();
+  };
+
+  const isBrowseActive = ['/collections', '/codebundles', '/all-tasks'].some(
+    path => location.pathname.startsWith(path)
+  );
+
   return (
-    <AppBar position="static" sx={{ backgroundColor: '#2f80ed' }}>
+    <AppBar
+      position={isHomePage ? 'absolute' : 'static'}
+      elevation={isHomePage ? 0 : undefined}
+      sx={isHomePage ? {
+        backgroundColor: 'transparent',
+        backgroundImage: 'none',
+        boxShadow: 'none',
+        zIndex: 10,
+      } : {}}
+    >
       <Toolbar>
-        <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+        <Box
+          component={Link}
+          to="/"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            textDecoration: 'none',
+            gap: 2,
+          }}
+        >
+          <Box
+            component="img"
+            src="/assets/white_runwhen_logo_transparent_bg.png"
+            alt="RunWhen Logo"
+            sx={{
+              height: 40,
+              width: 'auto',
+            }}
+          />
           <Typography
             variant="h6"
-            component={Link}
-            to="/"
             sx={{
               color: 'white',
-              textDecoration: 'none',
               fontWeight: 'bold',
-              marginRight: 4,
             }}
           >
             CodeCollection Registry
           </Typography>
-          
-          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 2 }}>
+        </Box>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginLeft: 'auto' }}>
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>
+            {/* Browse Dropdown */}
             <Button
-              component={Link}
-              to="/"
               color="inherit"
+              onClick={handleBrowseMenuOpen}
+              endIcon={<ArrowDownIcon />}
               sx={{
                 color: 'white',
-                fontWeight: location.pathname === '/' ? 'bold' : 'normal',
+                fontWeight: isBrowseActive ? 'bold' : 'normal',
               }}
             >
-              Home
+              Browse
             </Button>
+            <Menu
+              anchorEl={browseMenuAnchor}
+              open={Boolean(browseMenuAnchor)}
+              onClose={handleBrowseMenuClose}
+              anchorOrigin={{
+                vertical: 'bottom',
+                horizontal: 'left',
+              }}
+              transformOrigin={{
+                vertical: 'top',
+                horizontal: 'left',
+              }}
+            >
+              <MenuItem onClick={() => handleMenuNavigate('/collections')}>
+                CodeCollections
+              </MenuItem>
+              <MenuItem onClick={() => handleMenuNavigate('/codebundles')}>
+                CodeBundles
+              </MenuItem>
+              <MenuItem onClick={() => handleMenuNavigate('/all-tasks')}>
+                All Tasks
+              </MenuItem>
+            </Menu>
+
+            {/* Links Dropdown */}
             <Button
-              component={Link}
-              to="/collections"
               color="inherit"
+              onClick={handleLinksMenuOpen}
+              endIcon={<ArrowDownIcon />}
               sx={{
                 color: 'white',
-                fontWeight: location.pathname === '/collections' ? 'bold' : 'normal',
               }}
             >
-              Collections
+              Links
             </Button>
-            <Button
-              component={Link}
-              to="/codebundles"
-              color="inherit"
-              sx={{
-                color: 'white',
-                fontWeight: location.pathname === '/codebundles' ? 'bold' : 'normal',
+            <Menu
+              anchorEl={linksMenuAnchor}
+              open={Boolean(linksMenuAnchor)}
+              onClose={handleLinksMenuClose}
+              anchorOrigin={{
+                vertical: 'bottom',
+                horizontal: 'left',
+              }}
+              transformOrigin={{
+                vertical: 'top',
+                horizontal: 'left',
               }}
             >
-              CodeBundles
-            </Button>
-            <Button
-              component={Link}
-              to="/all-tasks"
-              color="inherit"
-              sx={{
-                color: 'white',
-                fontWeight: location.pathname === '/all-tasks' ? 'bold' : 'normal',
-              }}
-            >
-              All Tasks
-            </Button>
-            <Button
-              component={Link}
-              to="/categories"
-              color="inherit"
-              sx={{
-                color: 'white',
-                fontWeight: location.pathname === '/categories' ? 'bold' : 'normal',
-              }}
-            >
-              Categories
-            </Button>
+              <MenuItem
+                component="a"
+                href="https://www.runwhen.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleLinksMenuClose}
+              >
+                Website
+              </MenuItem>
+              <MenuItem
+                component="a"
+                href="https://docs.runwhen.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleLinksMenuClose}
+              >
+                Documentation
+              </MenuItem>
+              <MenuItem
+                component="a"
+                href="https://github.com/runwhen-contrib"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleLinksMenuClose}
+              >
+                GitHub
+              </MenuItem>
+            </Menu>
+
             <Button
               component={Link}
               to="/chat"
@@ -126,93 +223,102 @@ const Header: React.FC = () => {
               sx={{
                 color: 'white',
                 fontWeight: location.pathname === '/chat' ? 'bold' : 'normal',
-                backgroundColor: 'rgba(76, 175, 80, 0.2)',
-                '&:hover': {
-                  backgroundColor: 'rgba(76, 175, 80, 0.3)',
-                }
               }}
             >
-              🤖 Chat
+              Registry Chat
             </Button>
+
+            <Box sx={{ borderLeft: '1px solid rgba(255,255,255,0.3)', height: 20, mx: 1, alignSelf: 'center' }} />
+            
             <Button
-              component={Link}
-              to="/config-builder"
+              component="a"
+              href="https://docs.runwhen.com/public/live-demos"
+              target="_blank"
+              rel="noopener noreferrer"
               color="inherit"
               sx={{
                 color: 'white',
-                fontWeight: location.pathname === '/config-builder' ? 'bold' : 'normal',
+                fontWeight: 'normal',
               }}
             >
-              Config Builder
+              Login
             </Button>
-            {isAuthenticated && (
-              <>
-                <Button
-                  component={Link}
-                  to="/admin"
-                  color="inherit"
-                  sx={{
-                    color: 'white',
-                    fontWeight: location.pathname === '/admin' ? 'bold' : 'normal',
-                    backgroundColor: 'rgba(255,255,255,0.1)',
-                    '&:hover': {
-                      backgroundColor: 'rgba(255,255,255,0.2)',
-                    }
-                  }}
-                >
-                  Admin
-                </Button>
-                <Button
-                  component={Link}
-                  to="/tasks"
-                  color="inherit"
-                  sx={{
-                    color: 'white',
-                    fontWeight: location.pathname === '/tasks' ? 'bold' : 'normal',
-                    backgroundColor: 'rgba(255,255,255,0.1)',
-                    '&:hover': {
-                      backgroundColor: 'rgba(255,255,255,0.2)',
-                    }
-                  }}
-                >
-                  Tasks
-                </Button>
-              </>
-            )}
           </Box>
-        </Box>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <IconButton 
+          {/* More Menu - Hidden features */}
+          <IconButton
             color="inherit"
-            component={Link}
-            to="/config-builder"
+            onClick={handleMoreMenuOpen}
             sx={{
+              opacity: 0.7,
               '&:hover': {
+                opacity: 1,
                 backgroundColor: 'rgba(255,255,255,0.1)',
               }
             }}
           >
-            <Badge badgeContent={itemCount} color="error">
-              <DynamicFormIcon />
-            </Badge>
+            <MoreVertIcon />
           </IconButton>
-          <IconButton color="inherit">
-            <SearchIcon />
-          </IconButton>
+          <Menu
+            anchorEl={moreMenuAnchor}
+            open={Boolean(moreMenuAnchor)}
+            onClose={handleMoreMenuClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            <MenuItem onClick={() => handleMenuNavigate('/config-builder')}>
+              Config Builder
+              {itemCount > 0 && (
+                <Typography variant="caption" sx={{ ml: 1, color: 'primary.main' }}>
+                  ({itemCount})
+                </Typography>
+              )}
+            </MenuItem>
+            <Divider />
+            {!isAuthenticated && (
+              <MenuItem onClick={() => handleMenuNavigate('/login')}>
+                Admin Login
+              </MenuItem>
+            )}
+            {isAuthenticated && (
+              <>
+                <MenuItem onClick={() => handleMenuNavigate('/admin')}>
+                  Admin Panel
+                </MenuItem>
+                <MenuItem onClick={() => handleMenuNavigate('/chat-debug')}>
+                  Chat Debug
+                </MenuItem>
+                <MenuItem onClick={() => handleMenuNavigate('/tasks')}>
+                  Task Manager
+                </MenuItem>
+              </>
+            )}
+            <Divider />
+            <MenuItem onClick={() => { toggleTheme(); handleMoreMenuClose(); }}>
+              {mode === 'dark' ? <LightModeIcon sx={{ fontSize: 18, mr: 1 }} /> : <DarkModeIcon sx={{ fontSize: 18, mr: 1 }} />}
+              {mode === 'dark' ? 'Light Mode' : 'Dark Mode'}
+            </MenuItem>
+          </Menu>
           
-          {/* Authentication Section */}
-          {isAuthenticated ? (
+          {/* User Menu (when authenticated) */}
+          {isAuthenticated && (
             <>
-              <IconButton
+              <Button
                 color="inherit"
                 onClick={handleUserMenuOpen}
-                sx={{ ml: 1 }}
+                endIcon={<ArrowDownIcon />}
+                sx={{
+                  ml: 1,
+                  color: 'white',
+                }}
               >
-                <Avatar sx={{ width: 32, height: 32, bgcolor: 'rgba(255,255,255,0.2)' }}>
-                  <PersonIcon />
-                </Avatar>
-              </IconButton>
+                {user?.name || 'Account'}
+              </Button>
               <Menu
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
@@ -238,27 +344,10 @@ const Header: React.FC = () => {
                 </MenuItem>
                 <Divider />
                 <MenuItem onClick={handleLogout}>
-                  <LogoutIcon sx={{ mr: 1 }} />
                   Logout
                 </MenuItem>
               </Menu>
             </>
-          ) : (
-            <Button
-              component={Link}
-              to="/login"
-              color="inherit"
-              startIcon={<LoginIcon />}
-              sx={{
-                color: 'white',
-                border: '1px solid rgba(255,255,255,0.3)',
-                '&:hover': {
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                }
-              }}
-            >
-              Login
-            </Button>
           )}
           
           <IconButton

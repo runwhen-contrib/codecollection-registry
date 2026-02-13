@@ -112,3 +112,8 @@ celerybeat.pid
 *.backup
 *.old
 
+#Secrets
+*.secret
+hack/mcp/data/**
+hack/mcp/data/**/*
+mcp-server/data/**

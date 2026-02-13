@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
+from dataclasses import dataclass
 
 from openai import OpenAI, AzureOpenAI
 from sqlalchemy.orm import Session
@@ -20,6 +21,19 @@ from app.services.ai_prompts import AIPrompts
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class AIConfig:
+    """Simple configuration object for AI service"""
+    service_provider: str
+    api_key: str
+    model_name: str
+    enhancement_enabled: bool
+    is_active: bool
+    azure_endpoint: Optional[str] = None
+    azure_deployment_name: Optional[str] = None
+    api_version: Optional[str] = None
+
+
 class EnhancedAIService:
     """Enhanced AI service with full logging and manual control"""
     
@@ -27,12 +41,33 @@ class EnhancedAIService:
         self.db = db_session
         self.config = self._get_active_config()
         
-    def _get_active_config(self) -> Optional[AIConfiguration]:
-        """Get the active AI configuration"""
-        return self.db.query(AIConfiguration).filter(
-            AIConfiguration.is_active == True,
-            AIConfiguration.enhancement_enabled == True
-        ).first()
+    def _get_active_config(self) -> Optional[AIConfig]:
+        """Get AI configuration from environment variables"""
+        if settings.AI_SERVICE_PROVIDER == "azure-openai":
+            if not (settings.AZURE_OPENAI_API_KEY and 
+                   settings.AZURE_OPENAI_ENDPOINT and 
+                   settings.AZURE_OPENAI_DEPLOYMENT_NAME):
+                return None
+            return AIConfig(
+                service_provider="azure-openai",
+                api_key=settings.AZURE_OPENAI_API_KEY,
+                model_name=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
+                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                azure_deployment_name=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
+                api_version=settings.AZURE_OPENAI_API_VERSION,
+                enhancement_enabled=settings.AI_ENHANCEMENT_ENABLED,
+                is_active=True
+            )
+        else:
+            if not settings.OPENAI_API_KEY:
+                return None
+            return AIConfig(
+                service_provider="openai",
+                api_key=settings.OPENAI_API_KEY,
+                model_name=settings.AI_MODEL,
+                enhancement_enabled=settings.AI_ENHANCEMENT_ENABLED,
+                is_active=True
+            )
     
     def is_enabled(self) -> bool:
         """Check if AI enhancement is enabled and configured"""
@@ -181,7 +216,7 @@ class EnhancedAIService:
             "support_tags": codebundle.support_tags or [],
             "platform": codebundle.discovery_platform or "Generic",
             "resource_types": codebundle.discovery_resource_types or [],
-            "codecollection_name": codebundle.codecollection.name if codebundle.codecollection else "Unknown",
+            "codecollection_name": getattr(codebundle.codecollection, 'name', 'Unknown') if codebundle.codecollection else "Unknown",
             
             # Actual code content
             "robot_content": robot_content,
@@ -198,9 +233,20 @@ class EnhancedAIService:
     def _get_robot_file_content(self, codebundle: Codebundle) -> Optional[str]:
         """Get the actual robot file content"""
         try:
+            # Check if codecollection is loaded
+            if not codebundle.codecollection:
+                logger.warning(f"CodeBundle {codebundle.slug} has no codecollection relationship loaded")
+                return None
+            
+            # Get collection slug safely
+            collection_slug = getattr(codebundle.codecollection, 'slug', None)
+            if not collection_slug:
+                logger.warning(f"CodeBundle {codebundle.slug} codecollection has no slug attribute")
+                return None
+            
             # Look for robot file by slug
             robot_file = self.db.query(RawRepositoryData).filter(
-                RawRepositoryData.collection_slug == codebundle.codecollection.slug,
+                RawRepositoryData.collection_slug == collection_slug,
                 RawRepositoryData.file_path.like(f'%{codebundle.slug}%'),
                 RawRepositoryData.file_type == 'robot'
             ).first()
@@ -211,7 +257,7 @@ class EnhancedAIService:
             # Fallback: try by runbook path
             if codebundle.runbook_path:
                 robot_file = self.db.query(RawRepositoryData).filter(
-                    RawRepositoryData.collection_slug == codebundle.codecollection.slug,
+                    RawRepositoryData.collection_slug == collection_slug,
                     RawRepositoryData.file_path == codebundle.runbook_path
                 ).first()
                 
@@ -226,18 +272,29 @@ class EnhancedAIService:
     def _get_related_files(self, codebundle: Codebundle) -> List[Dict[str, str]]:
         """Get all files related to this codebundle"""
         try:
+            # Check if codecollection is loaded
+            if not codebundle.codecollection:
+                logger.warning(f"CodeBundle {codebundle.slug} has no codecollection relationship loaded")
+                return []
+            
+            # Get collection slug safely
+            collection_slug = getattr(codebundle.codecollection, 'slug', None)
+            if not collection_slug:
+                logger.warning(f"CodeBundle {codebundle.slug} codecollection has no slug attribute")
+                return []
+            
             files = self.db.query(RawRepositoryData).filter(
-                RawRepositoryData.collection_slug == codebundle.codecollection.slug,
+                RawRepositoryData.collection_slug == collection_slug,
                 RawRepositoryData.file_path.like(f'%{codebundle.slug}%')
             ).all()
             
             return [
                 {
-                    "path": f.file_path,
-                    "type": f.file_type,
+                    "path": f.file_path or "",
+                    "type": f.file_type or "",
                     "content": f.file_content[:500] if f.file_content else ""  # First 500 chars
                 }
-                for f in files
+                for f in files if f  # Filter out any None values
             ]
         except Exception as e:
             logger.warning(f"Could not retrieve related files for {codebundle.slug}: {e}")
@@ -292,7 +349,7 @@ Actual Tasks Found:
 
 Robot Framework Content:
 ```robot
-{context.get('robot_content', 'No robot content available')[:2000]}
+{(context.get('robot_content') or 'No robot content available')[:2000]}
 ```
 
 Related Files:

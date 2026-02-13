@@ -107,12 +107,12 @@ tasks:
   dev:logs:
     desc: Show logs for development services
     cmds:
-      - docker-compose logs -f backend frontend
+      - docker-compose logs -f backend frontend mcp-server
 
   dev:restart:
     desc: Restart development services
     cmds:
-      - docker-compose restart backend frontend
+      - docker-compose restart backend frontend mcp-server
 
   # Database commands
   db:shell:
@@ -135,33 +135,88 @@ tasks:
         echo "Database:" && curl -s http://localhost:5432 > /dev/null && echo "✅ Reachable" || echo "❌ Not reachable"
         echo "Redis:" && docker-compose exec redis redis-cli ping && echo "✅ Redis OK" || echo "❌ Redis down"
         echo "Backend:" && curl -s http://localhost:8001/api/v1/health | jq -r '.status' && echo "✅ Backend OK" || echo "❌ Backend down"
+        echo "MCP Server:" && curl -s http://localhost:8000/health | jq -r '.status' && echo "✅ MCP Server OK" || echo "❌ MCP Server down"
         echo "Frontend:" && curl -s http://localhost:3000 > /dev/null && echo "✅ Frontend OK" || echo "❌ Frontend down"
 
-  # Kubernetes preparation
-  k8s:export:
-    desc: Export Docker Compose to Kubernetes manifests (requires kompose)
+  # Container image commands
+  image:build:
+    desc: Build all container images with tags
     cmds:
-      - |
-        if command -v kompose >/dev/null 2>&1; then
-          echo "📦 Exporting to Kubernetes manifests..."
-          kompose convert -f {{.COMPOSE_FILE}} -o k8s/
-          echo "✅ Kubernetes manifests generated in k8s/ directory"
-        else
-          echo "❌ kompose not installed."
-          echo "Install with: curl -L https://github.com/kubernetes/kompose/releases/latest/download/kompose-linux-amd64 -o kompose && chmod +x kompose && sudo mv kompose /usr/local/bin/"
-        fi
+      - echo "🐳 Building container images..."
+      - docker build -t cc-registry-v2-backend:{{.TAG}} ./backend
+      - docker build -t cc-registry-v2-frontend:{{.TAG}} ./frontend
+      - docker build -t cc-registry-v2-worker:{{.TAG}} ./worker
+      - echo "✅ All images built successfully"
+    vars:
+      TAG: '{{.TAG | default "latest"}}'
 
-  k8s:deploy:
-    desc: Deploy to Kubernetes cluster
+  image:build:backend:
+    desc: Build backend image
     cmds:
-      - echo "🚀 Deploying to Kubernetes..."
-      - kubectl apply -f k8s/
+      - echo "🐳 Building backend image..."
+      - docker build -t cc-registry-v2-backend:{{.TAG}} ./backend
+    vars:
+      TAG: '{{.TAG | default "latest"}}'
 
-  k8s:undeploy:
-    desc: Remove from Kubernetes cluster
+  image:build:frontend:
+    desc: Build frontend image
     cmds:
-      - echo "🗑️  Removing from Kubernetes..."
-      - kubectl delete -f k8s/
+      - echo "🐳 Building frontend image..."
+      - docker build -t cc-registry-v2-frontend:{{.TAG}} ./frontend
+    vars:
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:build:worker:
+    desc: Build worker image
+    cmds:
+      - echo "🐳 Building worker image..."
+      - cp backend/requirements.txt worker/requirements.txt
+      - docker build -t cc-registry-v2-worker:{{.TAG}} ./worker
+    vars:
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:tag:
+    desc: Tag images for registry push (set REGISTRY and TAG vars)
+    cmds:
+      - echo "🏷️  Tagging images for {{.REGISTRY}}..."
+      - docker tag cc-registry-v2-backend:latest {{.REGISTRY}}/cc-registry-v2-backend:{{.TAG}}
+      - docker tag cc-registry-v2-frontend:latest {{.REGISTRY}}/cc-registry-v2-frontend:{{.TAG}}
+      - docker tag cc-registry-v2-worker:latest {{.REGISTRY}}/cc-registry-v2-worker:{{.TAG}}
+      - echo "✅ Images tagged"
+    vars:
+      REGISTRY: '{{.REGISTRY | default "ghcr.io/OWNER/REPO"}}'
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:push:
+    desc: Push images to registry (set REGISTRY and TAG vars)
+    cmds:
+      - echo "📤 Pushing images to {{.REGISTRY}}..."
+      - docker push {{.REGISTRY}}/cc-registry-v2-backend:{{.TAG}}
+      - docker push {{.REGISTRY}}/cc-registry-v2-frontend:{{.TAG}}
+      - docker push {{.REGISTRY}}/cc-registry-v2-worker:{{.TAG}}
+      - echo "✅ Images pushed successfully"
+    vars:
+      REGISTRY: '{{.REGISTRY | default "ghcr.io/OWNER/REPO"}}'
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:publish:
+    desc: Build, tag, and push all images (set REGISTRY and TAG vars)
+    cmds:
+      - task: image:build
+        vars:
+          TAG: "{{.TAG}}"
+      - task: image:tag
+        vars:
+          REGISTRY: "{{.REGISTRY}}"
+          TAG: "{{.TAG}}"
+      - task: image:push
+        vars:
+          REGISTRY: "{{.REGISTRY}}"
+          TAG: "{{.TAG}}"
+      - echo "✅ All images published to {{.REGISTRY}}"
+    vars:
+      REGISTRY: '{{.REGISTRY | default "ghcr.io/OWNER/REPO"}}'
+      TAG: '{{.TAG | default "latest"}}'
 
   # Setup commands
   setup:

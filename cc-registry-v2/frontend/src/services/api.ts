@@ -18,7 +18,8 @@ const getAuthToken = (): string | null => {
 // Add request interceptor for debugging and auth
 api.interceptors.request.use(
   (config) => {
-    console.log('API Request:', config.method?.toUpperCase(), config.url);
+    const timestamp = new Date().toISOString().substring(11, 23);
+    console.log(`[${timestamp}] 🚀 API Request:`, config.method?.toUpperCase(), config.url);
     
     // Add auth token for admin and tasks endpoints
     if (config.url?.includes('/admin') || config.url?.includes('/tasks')) {
@@ -31,7 +32,7 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('API Request Error:', error);
+    console.error('❌ API Request Error:', error);
     return Promise.reject(error);
   }
 );
@@ -39,11 +40,16 @@ api.interceptors.request.use(
 // Add response interceptor for debugging
 api.interceptors.response.use(
   (response) => {
-    console.log('API Response:', response.status, response.config.url);
+    const timestamp = new Date().toISOString().substring(11, 23);
+    const duration = (response.config as any).metadata?.startTime 
+      ? Date.now() - (response.config as any).metadata.startTime 
+      : '?';
+    console.log(`[${timestamp}] ✅ API Response:`, response.status, response.config.url, `(${duration}ms)`);
     return response;
   },
   (error) => {
-    console.error('API Response Error:', error.response?.status, error.response?.data, error.message);
+    const timestamp = new Date().toISOString().substring(11, 23);
+    console.error(`[${timestamp}] ❌ API Error:`, error.response?.status, error.config?.url, error.response?.data || error.message);
     return Promise.reject(error);
   }
 );
@@ -113,8 +119,9 @@ export interface CodeCollectionVersion {
   };
 }
 
-export interface DiscoveryInfo {
-  is_discoverable: boolean;
+export interface ConfigurationType {
+  type: 'Automatically Discovered' | 'Manual';
+  has_generation_rules: boolean;
   platform: string | null;
   resource_types: string[];
   match_patterns: any[];
@@ -124,6 +131,9 @@ export interface DiscoveryInfo {
   runwhen_directory_path: string | null;
 }
 
+// Backwards compatibility alias
+export type DiscoveryInfo = ConfigurationType;
+
 export interface CodeBundle {
   id: number;
   name: string;
@@ -131,6 +141,7 @@ export interface CodeBundle {
   display_name: string;
   description: string;
   doc: string;
+  readme: string | null;
   author: string;
   support_tags: string[];
   tasks: Array<{name: string; doc: string; tags: string[]} | string> | null;
@@ -139,10 +150,16 @@ export interface CodeBundle {
   sli_count: number;
   runbook_source_url: string;
   created_at: string;
-  discovery: DiscoveryInfo;
+  updated_at: string;
+  git_updated_at: string | null;
+  configuration_type: ConfigurationType;
+  discovery_platform?: string;
+  // Backwards compatibility
+  discovery?: DiscoveryInfo;
   // AI Enhancement fields
   ai_enhanced_description?: string;
   access_level?: 'read-only' | 'read-write' | 'unknown';
+  data_classifications?: Record<string, { label: string; count: number }>;
   minimum_iam_requirements?: string[];
   enhancement_status?: 'pending' | 'processing' | 'completed' | 'failed';
   last_enhanced?: string;
@@ -169,6 +186,14 @@ export interface CodeBundle {
     git_url: string;
     git_ref?: string;
   } | null;
+  user_variables?: Array<{
+    name: string;
+    type: string;
+    description: string;
+    pattern?: string;
+    example?: string;
+    default?: string | null;
+  }>;
 }
 
 export interface Task {
@@ -283,6 +308,55 @@ export const apiService = {
     }
   },
 
+  // Registry Stats
+  async getRegistryStats(): Promise<{
+    collections: number;
+    codebundles: number;
+    tasks: number;
+    slis: number;
+    tasks_over_time: Array<{ month: string; tasks: number }>;
+  }> {
+    const response = await api.get('/registry/stats');
+    return response.data;
+  },
+
+  // Recent Codebundles
+  async getRecentCodebundles(): Promise<Array<{
+    id: number;
+    name: string;
+    slug: string;
+    display_name: string;
+    description: string;
+    collection_name: string;
+    collection_slug: string;
+    platform: string;
+    task_count: number;
+    git_updated_at: string | null;
+    updated_at: string | null;
+  }>> {
+    const response = await api.get('/registry/recent-codebundles');
+    return response.data;
+  },
+
+  // Recent Tasks
+  async getRecentTasks(): Promise<Array<{
+    task_name: string;
+    codebundle_name: string;
+    codebundle_slug: string;
+    collection_name: string;
+    collection_slug: string;
+    git_updated_at: string | null;
+  }>> {
+    const response = await api.get('/registry/recent-tasks');
+    return response.data;
+  },
+
+  // Tag Icons (from map-tag-icons.yaml)
+  async getTagIcons(): Promise<{ icons: Record<string, string> }> {
+    const response = await api.get('/registry/tag-icons');
+    return response.data;
+  },
+
   // CodeCollections
   async getCodeCollections(): Promise<CodeCollection[]> {
     console.log('API: Getting collections from', `${API_BASE_URL}/registry/collections`);
@@ -310,6 +384,10 @@ export const apiService = {
     collection_id?: number;
     search?: string;
     tags?: string;
+    platform?: string;
+    access_level?: string;
+    has_auto_discovery?: boolean;
+    sort_by?: string;
   }): Promise<{codebundles: CodeBundle[], total_count: number, pagination: {limit: number, offset: number, has_more: boolean}}> {
     console.log('API: Getting codebundles from', `${API_BASE_URL}/codebundles`, 'with params:', params);
     const response = await api.get('/codebundles', { params });
@@ -356,6 +434,20 @@ export const apiService = {
   // Admin endpoints
   async getPopulationStatus(token: string) {
     const response = await api.get('/admin/population-status', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async getAiEnhancementStatus(token: string) {
+    const response = await api.get('/admin/ai-enhancement/status', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async runAiEnhancement(token: string, limit: number = 10) {
+    const response = await api.post(`/admin/ai-enhancement/run?limit=${limit}`, {}, {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data;
@@ -496,69 +588,8 @@ export const apiService = {
     return response.data;
   },
 
-  // AI Configuration endpoints
-  async getAIConfigurations(token: string) {
-    const response = await api.get('/admin/ai/config', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async getActiveAIConfiguration(token: string) {
-    const response = await api.get('/admin/ai/config/active', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async createAIConfiguration(token: string, configData: any) {
-    const response = await api.post('/admin/ai/config', configData, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async updateAIConfiguration(token: string, configId: number, configData: any) {
-    const response = await api.put(`/admin/ai/config/${configId}`, configData, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async deleteAIConfiguration(token: string, configId: number) {
-    const response = await api.delete(`/admin/ai/config/${configId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerAIEnhancement(token: string, enhancementRequest: any) {
-    const response = await api.post('/admin/ai/enhance', enhancementRequest, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async getEnhancementStatus(token: string, taskId: string) {
-    const response = await api.get(`/admin/ai/enhance/status/${taskId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async getAIStats(token: string) {
-    const response = await api.get('/admin/ai/stats', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async resetAIEnhancements(token: string) {
-    const response = await api.post('/admin/ai/reset', {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
+  // AI Configuration: Now managed via environment variables (az.secret)
+  // See: AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT_NAME
 
   // Admin Inventory endpoints
   async getInventoryStats(token: string) {
@@ -811,18 +842,71 @@ export const apiService = {
     const response = await api.post(`/helm-charts/${chartName}/validate-values?${params.toString()}`, values);
     console.log('API: Helm values validation response:', response.data);
     return response.data;
+  },
+
+  // Schedule Configuration API
+  async getSchedules(token: string): Promise<any> {
+    const response = await api.get('/schedule/schedules', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async getSchedule(scheduleName: string, token: string): Promise<any> {
+    const response = await api.get(`/schedule/schedules/${scheduleName}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async updateSchedule(scheduleName: string, scheduleData: any, token: string): Promise<any> {
+    const response = await api.put(`/schedule/schedules/${scheduleName}`, scheduleData, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async triggerScheduleNow(scheduleName: string, token: string): Promise<any> {
+    const response = await api.post(`/schedule/schedules/${scheduleName}/trigger`, {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  async cleanupOldTasks(days: number, token: string): Promise<any> {
+    const response = await api.post('/task-management/cleanup', null, {
+      params: { days },
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  // Analytics - Get task growth by week
+  async getTasksByWeek(): Promise<any> {
+    console.log('API: Getting tasks by week analytics');
+    const response = await api.get('/analytics/tasks-by-week-cached');
+    console.log('API: Tasks by week response:', response.data);
+    return response.data;
   }
 };
 
 // Chat API interfaces and functions
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface ChatQuery {
   question: string;
   context_limit?: number;
   include_enhanced_descriptions?: boolean;
+  conversation_history?: ConversationMessage[];
 }
 
 export interface ChatResponse {
   answer: string;
+  no_match?: boolean;  // True when no relevant codebundle was found
+  answer_source?: string;  // "documentation", "codebundles", or "mixed"
   relevant_tasks: Array<{
     id: number;
     codebundle_name: string;
@@ -888,7 +972,7 @@ export interface IssueTemplate {
 }
 
 export const chatApi = {
-  // Query the chat system
+  // Query the chat system (MCP-powered semantic search)
   async query(queryData: ChatQuery): Promise<ChatResponse> {
     console.log('API: Sending chat query', queryData);
     const response = await api.post('/chat/query', queryData);
@@ -896,11 +980,37 @@ export const chatApi = {
     return response.data;
   },
 
-  // Simple chat query (fallback)
+  // Simple chat query (now routes to main MCP query)
   async simpleQuery(question: string): Promise<{answer: string, relevant_codebundles: any[]}> {
     console.log('API: Sending simple chat query', question);
-    const response = await api.post('/simple-chat/query', { question });
-    console.log('API: Simple chat query response:', response.data);
+    // Route to main query endpoint - MCP handles all search types
+    const response = await api.post('/chat/query', { 
+      question,
+      context_limit: 5,
+      include_enhanced_descriptions: true
+    });
+    // Convert response format - preserve all fields for proper display
+    return {
+      answer: response.data.answer,
+      relevant_codebundles: response.data.relevant_tasks.map((task: any) => ({
+        name: task.codebundle_name,
+        description: task.description,
+        collection: task.collection_name,
+        support_tags: task.support_tags || [],
+        // Preserve these fields for proper display
+        relevance_score: task.relevance_score,
+        platform: task.platform,
+        runbook_source_url: task.runbook_source_url,
+        access_level: task.access_level
+      }))
+    };
+  },
+
+  // Keyword/library usage help (new MCP endpoint)
+  async keywordHelp(question: string, category: string = 'all'): Promise<{answer: string, query_metadata: any}> {
+    console.log('API: Sending keyword help query', question);
+    const response = await api.post('/chat/keywords', { question, category });
+    console.log('API: Keyword help response:', response.data);
     return response.data;
   },
 

@@ -313,20 +313,42 @@ def parse_all_robot_files(db_session) -> List[Dict[str, Any]]:
         RawRepositoryData.is_processed == False
     ).all()
     
-    logger.info(f"Found {len(robot_files)} Robot files to parse")
+    total_files = len(robot_files)
+    logger.info(f"Found {total_files} Robot files to parse")
     
-    for raw_file in robot_files:
+    for idx, raw_file in enumerate(robot_files, 1):
         try:
+            # Log progress every 50 files or if it's taking a while
+            if idx % 50 == 0 or idx == 1:
+                logger.info(f"Parsing file {idx}/{total_files}: {raw_file.file_path}")
+            
             codebundles = parser.parse_robot_file(raw_file)
+            
+            # Debug logging (only first 3 files)
+            if idx <= 3:
+                logger.info(f"DEBUG: File {idx} returned {len(codebundles)} codebundles")
+            
             all_codebundles.extend(codebundles)
             
             # Mark file as processed
             raw_file.is_processed = True
             
+            # Commit every 50 files to avoid long transactions
+            if idx % 50 == 0:
+                db_session.commit()
+                logger.info(f"Committed batch at file {idx}/{total_files}")
+            
         except Exception as e:
-            logger.error(f"Failed to parse {raw_file.file_path}: {e}")
+            logger.error(f"Failed to parse file {idx}/{total_files} ({raw_file.file_path}): {e}", exc_info=True)
+            # Mark as processed even if failed, so we don't retry endlessly
+            raw_file.is_processed = True
+            # Rollback and continue
+            db_session.rollback()
             continue
     
-    logger.info(f"Parsed {len(all_codebundles)} total codebundles")
+    # Final commit for remaining files
+    db_session.commit()
+    
+    logger.info(f"Parsed {len(all_codebundles)} total codebundles from {total_files} files")
     return all_codebundles
 

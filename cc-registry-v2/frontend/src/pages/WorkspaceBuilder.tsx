@@ -420,7 +420,7 @@ codeCollections:${repositoryConfigs.length > 0 ? repositoryConfigs.map(repo => `
               />
             </Box>
 
-            <Box sx={{ mt: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+            <Box sx={{ mt: 3, p: 2, backgroundColor: 'action.hover', borderRadius: 1 }}>
               <Typography variant="subtitle2" gutterBottom>
                 Next Steps:
               </Typography>

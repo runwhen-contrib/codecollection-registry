@@ -1,5 +1,5 @@
 {
-  "name": "frontend",
+  "name": "runwhen-codecollection-registry-frontend",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -19,8 +19,11 @@
     "axios": "^1.12.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^6.30.1",
     "react-scripts": "5.0.1",
+    "recharts": "^3.7.0",
+    "remark-gfm": "^4.0.1",
     "typescript": "^4.9.5",
     "web-vitals": "^2.1.4"
   },

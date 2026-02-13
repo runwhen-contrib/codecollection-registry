@@ -59,6 +59,7 @@ async def get_task_history(
                 "duration_seconds": task.duration_seconds,
                 "result": task.result,
                 "error_message": task.error_message,
+                "traceback": task.traceback,
                 "triggered_by": task.triggered_by,
                 "parameters": task.parameters,
                 "worker_name": task.worker_name,

@@ -48,16 +48,16 @@ async def trigger_seed_database(
     yaml_file_path: str = "/app/codecollections.yaml",
     _: dict = Depends(verify_admin_token)
 ):
-    """SEED: Load YAML entries into database (one-time operation)"""
+    """SEED: Trigger the canonical sync workflow (sync → parse → enhance)"""
     try:
-        from app.tasks.registry_tasks import seed_database_from_yaml_task
+        from app.tasks.workflow_tasks import sync_parse_enhance_workflow_task
         
-        task = seed_database_from_yaml_task.apply_async(args=[yaml_file_path])
+        task = sync_parse_enhance_workflow_task.apply_async()
         
         return TaskResponse(
             task_id=task.id,
             status="started",
-            message="Database seeding from YAML started"
+            message="Database seeding started (sync → parse → enhance workflow)"
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -68,16 +68,16 @@ async def trigger_validate_yaml(
     yaml_file_path: str = "/app/codecollections.yaml",
     _: dict = Depends(verify_admin_token)
 ):
-    """VALIDATE: Ensure YAML entries exist in database"""
+    """VALIDATE: Ensure YAML entries exist in database by syncing collections"""
     try:
-        from app.tasks.registry_tasks import validate_yaml_seed_task
+        from app.tasks.registry_tasks import sync_all_collections_task
         
-        task = validate_yaml_seed_task.apply_async(args=[yaml_file_path])
+        task = sync_all_collections_task.apply_async()
         
         return TaskResponse(
             task_id=task.id,
             status="started",
-            message="YAML validation against database started"
+            message="YAML validation started (syncing collections from YAML)"
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -93,14 +93,8 @@ async def trigger_sync_collections(
         
         task = sync_all_collections_task.apply_async()
         
-        # Create task record for monitoring
-        task_monitor.create_task_record(
-            task_id=task.id,
-            task_name="Sync All Collections",
-            task_type="sync",
-            parameters={},
-            triggered_by="admin"
-        )
+        # Don't create task record here - the task creates its own record
+        # (Avoids duplicate key constraint violation)
         
         return TaskResponse(
             task_id=task.id,
@@ -122,14 +116,8 @@ async def trigger_sync_single_collection(
         
         task = sync_single_collection_task.apply_async(args=[collection_id])
         
-        # Create task record for monitoring
-        task_monitor.create_task_record(
-            task_id=task.id,
-            task_name=f"Sync Collection {collection_id}",
-            task_type="sync",
-            parameters={"collection_id": collection_id},
-            triggered_by="admin"
-        )
+        # Don't create task record here - the task creates its own record
+        # (Avoids duplicate key constraint violation)
         
         return TaskResponse(
             task_id=task.id,
@@ -150,14 +138,8 @@ async def trigger_parse_codebundles(
         
         task = parse_all_codebundles_task.apply_async()
         
-        # Create task record for monitoring
-        task_monitor.create_task_record(
-            task_id=task.id,
-            task_name="Parse All Codebundles",
-            task_type="parse",
-            parameters={},
-            triggered_by="admin"
-        )
+        # Don't create task record here - the task creates its own record
+        # (Avoids duplicate key constraint violation)
         
         return TaskResponse(
             task_id=task.id,

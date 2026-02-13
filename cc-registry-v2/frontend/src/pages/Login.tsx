@@ -102,7 +102,6 @@ const Login: React.FC = () => {
               required
               disabled={isLoading}
               sx={{ mb: 2 }}
-              placeholder="admin@runwhen.com"
             />
             
             <TextField
@@ -114,7 +113,6 @@ const Login: React.FC = () => {
               required
               disabled={isLoading}
               sx={{ mb: 3 }}
-              placeholder="admin-dev-password"
             />
 
             <Button
@@ -145,14 +143,6 @@ const Login: React.FC = () => {
           >
             Continue with Google
           </Button>
-
-          <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1, width: '100%' }}>
-            <Typography variant="caption" color="text.secondary">
-              <strong>Development Credentials:</strong><br />
-              Email: admin@runwhen.com<br />
-              Password: admin-dev-password
-            </Typography>
-          </Box>
         </Box>
       </Paper>
     </Container>

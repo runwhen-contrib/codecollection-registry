@@ -6,10 +6,11 @@
 
 -- Create extensions if needed
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS vector;  -- pgvector for semantic search
 
 -- Grant permissions to user
 GRANT ALL PRIVILEGES ON DATABASE codecollection_registry TO "user";
 
 -- Log initialization
-SELECT 'CodeCollection Registry database initialized successfully' AS status;
+SELECT 'CodeCollection Registry database initialized successfully (with pgvector)' AS status;
 

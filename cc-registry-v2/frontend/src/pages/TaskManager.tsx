@@ -18,6 +18,12 @@ import {
   Paper,
   Tabs,
   Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Collapse,
 } from '@mui/material';
 import {
   PlayArrow,
@@ -25,6 +31,9 @@ import {
   CheckCircle,
   Error as ErrorIcon,
   Schedule,
+  KeyboardArrowDown,
+  KeyboardArrowUp,
+  BugReport,
 } from '@mui/icons-material';
 import { apiService } from '../services/api';
 import { useAuth, getAuthToken } from '../contexts/AuthContext';
@@ -78,6 +87,13 @@ const TaskManager: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [errorDialogOpen, setErrorDialogOpen] = useState(false);
+  const [selectedTaskError, setSelectedTaskError] = useState<{
+    task_name: string;
+    error_message?: string;
+    traceback?: string;
+  } | null>(null);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -411,46 +427,93 @@ const TaskManager: React.FC = () => {
                 </TableHead>
                 <TableBody>
                   {taskHistory.map((task) => (
-                    <TableRow key={task.task_id}>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" fontWeight="bold">
-                            {task.task_name}
+                    <React.Fragment key={task.task_id}>
+                      <TableRow sx={{ '& > *': { borderBottom: 'unset' } }}>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {task.is_failed && task.error_message && (
+                              <IconButton
+                                size="small"
+                                onClick={() => setExpandedTask(expandedTask === task.task_id ? null : task.task_id)}
+                              >
+                                {expandedTask === task.task_id ? <KeyboardArrowUp /> : <KeyboardArrowDown />}
+                              </IconButton>
+                            )}
+                            <Box>
+                              <Typography variant="body2" fontWeight="bold">
+                                {task.task_name}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {task.task_id}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            icon={getStatusIcon(task.status)} 
+                            label={task.status} 
+                            color={task.is_successful ? 'success' : task.is_failed ? 'error' : 'default'}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {task.started_at ? new Date(task.started_at).toLocaleString() : 'N/A'}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {task.task_id}
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {task.completed_at ? new Date(task.completed_at).toLocaleString() : 'N/A'}
                           </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          icon={getStatusIcon(task.status)} 
-                          label={task.status} 
-                          color={task.is_successful ? 'success' : task.is_failed ? 'error' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {task.started_at ? new Date(task.started_at).toLocaleString() : 'N/A'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {task.completed_at ? new Date(task.completed_at).toLocaleString() : 'N/A'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {task.duration_seconds ? `${Math.round(task.duration_seconds)}s` : 'N/A'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {task.triggered_by || 'system'}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {task.duration_seconds ? `${Math.round(task.duration_seconds)}s` : 'N/A'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {task.triggered_by || 'system'}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                      {task.is_failed && task.error_message && (
+                        <TableRow>
+                          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
+                            <Collapse in={expandedTask === task.task_id} timeout="auto" unmountOnExit>
+                              <Box sx={{ margin: 2, p: 2, bgcolor: 'error.lighter', borderRadius: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                  <ErrorIcon color="error" fontSize="small" />
+                                  <Typography variant="subtitle2" color="error" fontWeight="bold">
+                                    Error Details
+                                  </Typography>
+                                </Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                                  {task.error_message}
+                                </Typography>
+                                {task.traceback && (
+                                  <Button
+                                    size="small"
+                                    startIcon={<BugReport />}
+                                    onClick={() => {
+                                      setSelectedTaskError({
+                                        task_name: task.task_name,
+                                        error_message: task.error_message,
+                                        traceback: task.traceback
+                                      });
+                                      setErrorDialogOpen(true);
+                                    }}
+                                  >
+                                    View Full Traceback
+                                  </Button>
+                                )}
+                              </Box>
+                            </Collapse>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   ))}
                 </TableBody>
               </Table>
@@ -607,6 +670,63 @@ const TaskManager: React.FC = () => {
           </Box>
         </Box>
       </TabPanel>
+
+      {/* Error Details Dialog */}
+      <Dialog 
+        open={errorDialogOpen} 
+        onClose={() => setErrorDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <BugReport color="error" />
+            <Typography variant="h6">Task Error Details</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {selectedTaskError && (
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>
+                Task: {selectedTaskError.task_name}
+              </Typography>
+              
+              <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 2, mb: 1 }}>
+                Error Message:
+              </Typography>
+              <Paper sx={{ p: 2, bgcolor: 'error.lighter', mb: 2 }}>
+                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>
+                  {selectedTaskError.error_message}
+                </Typography>
+              </Paper>
+
+              {selectedTaskError.traceback && (
+                <>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 2, mb: 1 }}>
+                    Traceback:
+                  </Typography>
+                  <Paper sx={{ p: 2, bgcolor: 'grey.100', maxHeight: '400px', overflow: 'auto' }}>
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        fontFamily: 'monospace', 
+                        fontSize: '0.75rem', 
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-all'
+                      }}
+                    >
+                      {selectedTaskError.traceback}
+                    </Typography>
+                  </Paper>
+                </>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setErrorDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

@@ -1927,7 +1927,7 @@ ${yamlString}`;
                   />
                 </Box>
 
-                <Box sx={{ mt: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+                <Box sx={{ mt: 3, p: 2, backgroundColor: 'action.hover', borderRadius: 1 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Next Steps:
                   </Typography>
@@ -2022,9 +2022,9 @@ ${yamlString}`;
                                 {item.codebundle.display_name || item.codebundle.name}
                               </Typography>
                             </Link>
-                            {item.codebundle.discovery?.is_discoverable && (
+                            {item.codebundle.configuration_type?.has_generation_rules && (
                               <Chip 
-                                label={item.codebundle.discovery.platform?.toUpperCase() || 'DISCOVERABLE'} 
+                                label={item.codebundle.configuration_type.platform?.toUpperCase() || 'AUTO'} 
                                 size="small" 
                                 color="success" 
                                 variant="outlined" 
@@ -2110,10 +2110,10 @@ ${yamlString}`;
 
               <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Discoverable CodeBundles
+                  Auto-Discovered CodeBundles
                 </Typography>
                 <Typography variant="body1">
-                  {items.filter(item => item.codebundle.discovery?.is_discoverable).length} of {items.length}
+                  {items.filter(item => item.codebundle.configuration_type?.has_generation_rules).length} of {items.length}
                 </Typography>
               </Box>
 
@@ -2124,8 +2124,8 @@ ${yamlString}`;
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                   {Array.from(new Set(
                     items
-                      .filter(item => item.codebundle.discovery?.platform)
-                      .map(item => item.codebundle.discovery!.platform!)
+                      .filter(item => item.codebundle.configuration_type?.platform)
+                      .map(item => item.codebundle.configuration_type!.platform!)
                   )).map(platform => (
                     <Chip 
                       key={platform} 
@@ -2463,7 +2463,7 @@ ${yamlString}`;
                 variant="outlined" 
                 sx={{ 
                   p: 2, 
-                  backgroundColor: '#f5f5f5',
+                  backgroundColor: 'action.hover',
                   maxHeight: '300px',
                   overflow: 'auto',
                   fontFamily: 'monospace',

@@ -29,6 +29,9 @@ import {
   Task as TaskIcon,
   NewReleases as ReleaseIcon,
   Launch as LaunchIcon,
+  GitHub as GitHubIcon,
+  Schedule as ScheduleIcon,
+  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { apiService, CodeCollection, CodeCollectionVersion } from '../services/api';
@@ -77,253 +80,160 @@ const CodeCollections: React.FC = () => {
     );
   }
 
-  // Calculate total statistics
-  const totalStats = collections.reduce(
-    (acc, collection) => {
-      if (collection.statistics) {
-        acc.totalCodebundles += collection.statistics.codebundle_count;
-        acc.totalTasks += collection.statistics.total_tasks;
-      }
-      return acc;
-    },
-    { totalCodebundles: 0, totalTasks: 0 }
-  );
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h1" sx={{ mb: 2 }}>
-        CodeCollections
-      </Typography>
-
-      {/* Summary Statistics */}
-      <Box sx={{ display: 'flex', gap: 4, mb: 4, p: 2, bgcolor: 'background.paper', borderRadius: 1, boxShadow: 1 }}>
-        <Box sx={{ textAlign: 'center' }}>
-          <Typography variant="h4" color="primary">
-            {collections.length}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Collections
-          </Typography>
-        </Box>
-        <Box sx={{ textAlign: 'center' }}>
-          <Typography variant="h4" color="primary">
-            {totalStats.totalCodebundles}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Total Codebundles
-          </Typography>
-        </Box>
-        <Box sx={{ textAlign: 'center' }}>
-          <Typography variant="h4" color="primary">
-            {totalStats.totalTasks}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Total Tasks
-          </Typography>
-        </Box>
+      {/* Header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
+          CodeCollections
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          Browse and explore automation code collections from the RunWhen community
+        </Typography>
       </Box>
 
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <Box sx={{ 
+        display: 'grid', 
+        gridTemplateColumns: { 
+          xs: '1fr', 
+          sm: 'repeat(2, 1fr)', 
+          lg: 'repeat(3, 1fr)' 
+        },
+        gap: 3 
+      }}>
         {collections.map((collection) => (
           <Card
             key={collection.id}
             sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              transition: 'all 0.3s ease',
               '&:hover': {
-                boxShadow: 4,
+                boxShadow: 6,
+                transform: 'translateY(-2px)',
               },
             }}
           >
             {/* Collection Header */}
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Box
-                  component="img"
-                  src={collection.owner_icon || 'https://assets-global.website-files.com/64f9646ad0f39e9ee5c116c4/659f80c7391d64a0ec2a840e_icon_rw-platform.svg'}
-                  alt="Icon"
-                  sx={{
-                    width: 60,
-                    height: 60,
-                    mr: 2,
-                    borderRadius: 1.5,
-                    padding: 1,
-                  }}
-                />
-                <Box sx={{ flexGrow: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                    <Typography variant="h5" fontWeight="bold">
+            <CardActionArea
+              component={Link}
+              to={`/collections/${collection.slug}`}
+              sx={{ flexGrow: 1 }}
+            >
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <Box
+                    component="img"
+                    src={collection.owner_icon || 'https://assets-global.website-files.com/64f9646ad0f39e9ee5c116c4/659f80c7391d64a0ec2a840e_icon_rw-platform.svg'}
+                    alt="Icon"
+                    sx={{
+                      width: 60,
+                      height: 60,
+                      mr: 2,
+                      borderRadius: 1.5,
+                      padding: 1,
+                      bgcolor: 'action.hover',
+                    }}
+                  />
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }} noWrap>
                       {collection.name}
                     </Typography>
-                    <Button
-                      component={Link}
-                      to={`/collections/${collection.slug}`}
-                      variant="outlined"
-                      size="small"
-                      startIcon={<LaunchIcon />}
-                    >
-                      View Details
-                    </Button>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      by {collection.owner}
+                    </Typography>
                   </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    by {collection.owner}
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip label={collection.git_ref} size="small" variant="outlined" />
+                </Box>
+
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary" 
+                  sx={{ 
+                    mb: 2, 
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    minHeight: '3.6em',
+                  }}
+                >
+                  {collection.description}
+                </Typography>
+
+                {/* Statistics */}
+                {collection.statistics && (
+                  <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <CodeIcon color="primary" fontSize="small" />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {collection.statistics.codebundle_count}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        CodeBundles
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <TaskIcon color="primary" fontSize="small" />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {collection.statistics.total_tasks}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Tasks
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  <Chip 
+                    label={collection.git_ref} 
+                    size="small" 
+                    variant="outlined"
+                  />
+                  {collection.versions && collection.versions.length > 0 && (
                     <Chip 
-                      label={collection.is_active ? 'Active' : 'Inactive'} 
+                      label={`${collection.versions.length} version${collection.versions.length !== 1 ? 's' : ''}`} 
                       size="small" 
-                      color={collection.is_active ? 'success' : 'default'}
+                      color="primary"
+                      variant="outlined"
                     />
-                    {collection.versions && collection.versions.length > 0 && (
-                      <Chip 
-                        label={`${collection.versions.length} versions`} 
-                        size="small" 
-                        color="info"
-                        icon={<ReleaseIcon />}
-                      />
-                    )}
-                  </Box>
+                  )}
                 </Box>
-              </Box>
+              </CardContent>
+            </CardActionArea>
 
-              <Typography variant="body1" sx={{ mb: 2 }}>
-                {collection.description}
-              </Typography>
-
-              {/* Statistics */}
-              {collection.statistics && (
-                <Box sx={{ display: 'flex', gap: 4, mb: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <CodeIcon color="primary" />
-                    <Typography variant="h6" color="primary">
-                      {collection.statistics.codebundle_count}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      codebundles
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <TaskIcon color="primary" />
-                    <Typography variant="h6" color="primary">
-                      {collection.statistics.total_tasks}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      tasks
-                    </Typography>
-                  </Box>
-                </Box>
-              )}
-            </CardContent>
-
-            {/* Versions Section */}
-            {collection.versions && collection.versions.length > 0 && (
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <ReleaseIcon color="primary" />
-                    <Typography variant="h6">
-                      Versions ({collection.versions.length})
-                    </Typography>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <List dense>
-                    {collection.versions.slice(0, 5).map((version, index) => (
-                      <React.Fragment key={version.id}>
-                        <ListItem
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1 }}>
-                            <ListItemIcon sx={{ minWidth: 'auto' }}>
-                              <TagIcon color={version.is_latest ? 'primary' : 'action'} />
-                            </ListItemIcon>
-                            <ListItemText
-                              primary={
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Typography variant="body1" fontWeight={version.is_latest ? 'bold' : 'normal'}>
-                                    {version.version_name}
-                                  </Typography>
-                                  {version.is_latest && (
-                                    <Chip label="Latest" size="small" color="primary" />
-                                  )}
-                                  {version.is_prerelease && (
-                                    <Chip label="Pre-release" size="small" color="warning" />
-                                  )}
-                                  {version.version_type === 'main' && (
-                                    <Chip label="Main" size="small" color="success" />
-                                  )}
-                                </Box>
-                              }
-                              secondary={
-                                <Box>
-                                  {version.display_name && (
-                                    <Typography variant="body2" color="text.secondary">
-                                      {version.display_name}
-                                    </Typography>
-                                  )}
-                                  <Typography variant="caption" color="text.secondary">
-                                    {version.codebundle_count} codebundles
-                                    {version.version_date && (
-                                      <> • {new Date(version.version_date).toLocaleDateString()}</>
-                                    )}
-                                  </Typography>
-                                </Box>
-                              }
-                            />
-                          </Box>
-                          <Tooltip title={`View ${version.version_name} version`}>
-                            <IconButton
-                              component={Link}
-                              to={`/collections/${collection.slug}/versions/${version.version_name}`}
-                              size="small"
-                            >
-                              <LaunchIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </ListItem>
-                        {index < Math.min((collection.versions?.length || 0) - 1, 4) && <Divider />}
-                      </React.Fragment>
-                    ))}
-                    {(collection.versions?.length || 0) > 5 && (
-                      <ListItem>
-                        <ListItemText
-                          primary={
-                            <Typography variant="body2" color="text.secondary" align="center">
-                              ... and {(collection.versions?.length || 0) - 5} more versions
-                            </Typography>
-                          }
-                        />
-                      </ListItem>
-                    )}
-                  </List>
-                </AccordionDetails>
-              </Accordion>
-            )}
-
-            {/* Collection Info Footer */}
-            <CardContent sx={{ pt: 0 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body2" color="text.secondary">
-                  {collection.git_url}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Last synced: {collection.last_synced ? new Date(collection.last_synced).toLocaleDateString() : 'Never'}
-                </Typography>
-              </Box>
+            {/* Bottom Actions */}
+            <CardContent sx={{ pt: 0, mt: 'auto' }}>
+              <Button
+                component="a"
+                href={collection.git_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                variant="outlined"
+                size="small"
+                startIcon={<GitHubIcon />}
+                fullWidth
+                onClick={(e) => e.stopPropagation()}
+              >
+                View on GitHub
+              </Button>
             </CardContent>
           </Card>
         ))}
       </Box>
 
       {collections.length === 0 && !loading && (
-        <Box sx={{ textAlign: 'center', mt: 4 }}>
-          <Typography variant="h6" color="text.secondary">
-            No collections found
+        <Card sx={{ p: 6, textAlign: 'center' }}>
+          <CodeIcon sx={{ fontSize: '4rem', color: 'text.secondary', mb: 2 }} />
+          <Typography variant="h5" sx={{ mb: 1, fontWeight: 600 }}>
+            No CodeCollections Found
           </Typography>
-        </Box>
+          <Typography variant="body1" color="text.secondary">
+            There are currently no CodeCollections available in the registry
+          </Typography>
+        </Card>
       )}
     </Container>
   );

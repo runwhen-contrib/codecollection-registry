@@ -14,6 +14,7 @@ class Codebundle(Base):
     display_name = Column(String(255))
     description = Column(Text)
     doc = Column(Text)  # Robot file documentation
+    readme = Column(Text)  # README.md content
     
     # Robot file metadata
     author = Column(String(255))
@@ -32,6 +33,9 @@ class Codebundle(Base):
     task_count = Column(Integer, default=0)
     sli_count = Column(Integer, default=0)
     
+    # User variables parsed from RW.Core.Import User Variable
+    user_variables = Column(JSON, default=list)  # List of {name, type, description, pattern, example, default}
+    
     # Enhanced task indexing and AI metadata
     task_index = Column(JSON, default=dict)  # {"task_name": "unique_index", ...}
     ai_enhanced_metadata = Column(JSON, default=dict)  # AI-generated enhancements
@@ -42,6 +46,10 @@ class Codebundle(Base):
     ai_enhanced_description = Column(Text)  # AI-generated improved description
     access_level = Column(String(20), default="unknown")  # read-only, read-write, unknown
     minimum_iam_requirements = Column(JSON, default=list)  # List of required IAM permissions/roles
+    
+    # Data classification — summarizes what types of data each task produces
+    # e.g. {"data:config": {"label": "Configuration data", "count": 5}, ...}
+    data_classifications = Column(JSON, default=dict)
     
     # Generation metadata
     has_genrules = Column(Boolean, default=False)
@@ -63,6 +71,7 @@ class Codebundle(Base):
     last_synced = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    git_updated_at = Column(DateTime)  # Last commit date from git for the codebundle folder
     
     # Relationships
     codecollection = relationship("CodeCollection", back_populates="codebundles")

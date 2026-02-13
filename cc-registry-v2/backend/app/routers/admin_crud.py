@@ -337,15 +337,15 @@ async def seed_database_from_yaml(
     db: Session = Depends(get_db),
     _: dict = Depends(verify_admin_token)
 ):
-    """Seed database from YAML file (one-time operation)"""
+    """Seed database from YAML file - triggers the canonical sync workflow"""
     
-    # Import and trigger seed task
-    from app.tasks.data_population_tasks import seed_database_from_yaml_task
+    # Use the canonical workflow task (sync → parse → enhance)
+    from app.tasks.workflow_tasks import sync_parse_enhance_workflow_task
     
-    task = seed_database_from_yaml_task.apply_async(args=[yaml_file_path])
+    task = sync_parse_enhance_workflow_task.apply_async()
     
     return {
-        "message": "Database seeding from YAML triggered",
+        "message": "Database seeding triggered (sync → parse → enhance workflow)",
         "task_id": task.id,
         "yaml_file": yaml_file_path
     }
@@ -357,15 +357,15 @@ async def validate_yaml_seed(
     db: Session = Depends(get_db),
     _: dict = Depends(verify_admin_token)
 ):
-    """Validate that all YAML entries exist in database"""
+    """Validate that all YAML entries exist in database by running sync"""
     
-    # Import and trigger validation task
-    from app.tasks.data_population_tasks import validate_yaml_seed_task
+    # Use the canonical sync task to ensure YAML entries are in DB
+    from app.tasks.registry_tasks import sync_all_collections_task
     
-    task = validate_yaml_seed_task.apply_async(args=[yaml_file_path])
+    task = sync_all_collections_task.apply_async()
     
     return {
-        "message": "YAML seed validation triggered",
+        "message": "YAML seed validation triggered (sync collections)",
         "task_id": task.id,
         "yaml_file": yaml_file_path
     }

@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cc-registry-backend
+  namespace: registry-test
+  labels:
+    app: cc-registry
+    component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cc-registry
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: cc-registry
+        component: backend
+    spec:
+      containers:
+      - name: backend
+        image: us-docker.pkg.dev/runwhen-nonprod-shared/public-images/cc-registry-v2-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8001
+          name: http
+          protocol: TCP
+        env:
+        - name: DB_HOST
+          value: "registry-db"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: registry-user.registry-db.credentials.postgresql.acid.zalan.do
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: registry-user.registry-db.credentials.postgresql.acid.zalan.do
+              key: password
+        - name: DB_NAME
+          value: "registry"
+        - name: REDIS_SENTINEL_HOSTS
+          value: "redis-sentinel:26379"
+        - name: REDIS_SENTINEL_MASTER
+          value: "mymaster"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-sentinel
+              key: redis-password
+        - name: REDIS_DB
+          value: "0"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: MCP_SERVER_URL
+          value: "http://mcp-server:8000"
+        - name: AI_SERVICE_PROVIDER
+          value: "azure-openai"
+        - name: AI_ENHANCEMENT_ENABLED
+          value: "true"
+        envFrom:
+        - secretRef:
+            name: azure-openai-credentials
+        volumeMounts:
+        - name: schedules-config
+          mountPath: /app/schedules.yaml
+          subPath: schedules.yaml
+          readOnly: true
+        # - name: tag-icons
+        #   mountPath: /app/map-tag-icons.yaml
+        #   subPath: map-tag-icons.yaml
+        #   readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 8001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+      volumes:
+      - name: schedules-config
+        configMap:
+          name: cc-registry-schedules
+      # - name: tag-icons
+      #   configMap:
+      #     name: tag-icon-mappings
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cc-registry-backend
+  namespace: registry-test
+  labels:
+    app: cc-registry
+    component: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8001
+    targetPort: 8001
+    protocol: TCP
+    name: http
+  selector:
+    app: cc-registry
+    component: backend

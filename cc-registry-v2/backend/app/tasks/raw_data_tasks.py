@@ -245,7 +245,11 @@ def parse_stored_data_task(self):
                             logger.warning(f"Collection not found for slug: {raw_file.collection_slug}")
                             continue
                         
-                        # Create or update codebundle
+                        # Determine if this is a runbook or sli file
+                        is_sli_file = raw_file.file_path.endswith('sli.robot')
+                        parsed_tasks = codebundle_data.get('tasks', [])
+                        
+                        # Create or update codebundle (using slug + collection_id for consistency)
                         codebundle = db.query(Codebundle).filter(
                             Codebundle.slug == codebundle_data['slug'],
                             Codebundle.codecollection_id == collection.id
@@ -260,25 +264,32 @@ def parse_stored_data_task(self):
                                 doc=codebundle_data.get('doc', ''),
                                 author=codebundle_data.get('author', ''),
                                 support_tags=codebundle_data.get('support_tags', []),
-                                tasks=codebundle_data.get('tasks', []),
-                                slis=codebundle_data.get('slis', []),
-                                task_count=codebundle_data.get('task_count', 0),
+                                tasks=[] if is_sli_file else parsed_tasks,
+                                data_classifications=codebundle_data.get('data_classifications', {}),
+                                slis=parsed_tasks if is_sli_file else [],
+                                task_count=0 if is_sli_file else len(parsed_tasks),
+                                sli_count=len(parsed_tasks) if is_sli_file else 0,
                                 runbook_path=codebundle_data.get('runbook_path', ''),
                                 codecollection_id=collection.id
                             )
                             db.add(codebundle)
                             codebundles_created += 1
                         else:
-                            # Update existing codebundle with new data
+                            # Update metadata
                             codebundle.display_name = codebundle_data.get('display_name', codebundle_data['name'])
                             codebundle.description = codebundle_data.get('description', '')
                             codebundle.doc = codebundle_data.get('doc', '')
                             codebundle.author = codebundle_data.get('author', '')
                             codebundle.support_tags = codebundle_data.get('support_tags', [])
-                            codebundle.tasks = codebundle_data.get('tasks', [])
-                            codebundle.slis = codebundle_data.get('slis', [])
-                            codebundle.task_count = codebundle_data.get('task_count', 0)
                             codebundle.runbook_path = codebundle_data.get('runbook_path', '')
+                            # Only update the appropriate task field based on file type
+                            if is_sli_file:
+                                codebundle.slis = parsed_tasks
+                                codebundle.sli_count = len(parsed_tasks)
+                            else:
+                                codebundle.tasks = parsed_tasks
+                                codebundle.task_count = len(parsed_tasks)
+                            codebundle.data_classifications = codebundle_data.get('data_classifications', {})
                     
                     # Mark file as processed
                     raw_file.is_processed = True
