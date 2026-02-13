@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>API Connection Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        async function testAPI() {
+            const results = document.getElementById('results');
+            
+            try {
+                // Test 1: Health endpoint
+                results.innerHTML += '<h3>Testing Health Endpoint...</h3>';
+                const healthResponse = await fetch('http://localhost:8001/api/v1/health');
+                const healthData = await healthResponse.json();
+                results.innerHTML += `<p>Health: ${JSON.stringify(healthData)}</p>`;
+                
+                // Test 2: Collections endpoint
+                results.innerHTML += '<h3>Testing Collections Endpoint...</h3>';
+                const collectionsResponse = await fetch('http://localhost:8001/api/v1/registry/collections');
+                const collectionsData = await collectionsResponse.json();
+                results.innerHTML += `<p>Collections (${collectionsData.length}): ${JSON.stringify(collectionsData, null, 2)}</p>`;
+                
+                // Test 3: Codebundles endpoint
+                results.innerHTML += '<h3>Testing Codebundles Endpoint...</h3>';
+                const codebundlesResponse = await fetch('http://localhost:8001/api/v1/codebundles');
+                const codebundlesData = await codebundlesResponse.json();
+                results.innerHTML += `<p>Codebundles (${codebundlesData.length}): ${JSON.stringify(codebundlesData, null, 2)}</p>`;
+                
+                results.innerHTML += '<h3 style="color: green;">✅ All API calls successful!</h3>';
+                
+            } catch (error) {
+                results.innerHTML += `<h3 style="color: red;">❌ API Test Failed:</h3>`;
+                results.innerHTML += `<p>Error: ${error.message}</p>`;
+                results.innerHTML += `<p>Stack: ${error.stack}</p>`;
+            }
+        }
+        
+        // Run test when page loads
+        window.onload = testAPI;
+    </script>
+</body>
+</html>

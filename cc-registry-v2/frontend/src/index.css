@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&family=Damion&family=Nunito:wght@400;600;700&display=swap');
+
+body {
+  margin: 0;
+  font-family: 'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Typography Hierarchy */
+h1 { 
+  font-size: 32px; 
+  font-weight: 600; 
+  line-height: 1.2;
+}
+
+h2 { 
+  font-size: 24px; 
+  font-weight: 600; 
+  line-height: 1.3;
+  margin-top: 32px;
+  margin-bottom: 16px;
+}
+
+h3 { 
+  font-size: 18px; 
+  font-weight: 600; 
+  line-height: 1.4;
+}
+
+
+/* CodeBundle-specific styles */
+.codebundle-name {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-weight: 600;
+  color: #5282f1;
+}
+
+
+/* Remove visited link color changes */
+a:visited {
+  color: inherit !important;
+}
+
+/* Ensure React Router Links maintain their color */
+a[href]:visited {
+  color: inherit !important;
+}

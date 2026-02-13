@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeCollection Registry - AI Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #7f8c8d;
+            font-size: 16px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border-left: 4px solid #3498db;
+        }
+        
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        
+        .btn:hover {
+            background: #2980b9;
+        }
+        
+        .btn-success {
+            background: #27ae60;
+        }
+        
+        .btn-success:hover {
+            background: #219a52;
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+        }
+        
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #ecf0f1;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            transition: width 0.3s ease;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            border-bottom-color: #3498db;
+            color: #3498db;
+            font-weight: 500;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI CodeBundle Enhancement</h1>
+            <p>Intelligent enhancement of CodeBundles with better descriptions and access classifications</p>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('stats')">Statistics</div>
+            <div class="tab" onclick="showTab('config')">AI Configuration</div>
+            <div class="tab" onclick="showTab('enhance')">Enhancement</div>
+        </div>
+
+        <!-- Statistics Tab -->
+        <div id="stats-tab" class="tab-content active">
+            <div class="card">
+                <h2>📊 Enhancement Statistics</h2>
+                <div id="stats-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading statistics...</p>
+                </div>
+                <div id="stats-content" class="hidden">
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-number" id="total-bundles">0</div>
+                            <div class="stat-label">Total CodeBundles</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="completion-rate">0%</div>
+                            <div class="stat-label">Completion Rate</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="pending-count">0</div>
+                            <div class="stat-label">Pending</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="completed-count">0</div>
+                            <div class="stat-label">Completed</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="read-only-count">0</div>
+                            <div class="stat-label">Read-Only</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="read-write-count">0</div>
+                            <div class="stat-label">Read-Write</div>
+                        </div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Configuration Tab -->
+        <div id="config-tab" class="tab-content">
+            <div class="card">
+                <h2>⚙️ AI Service Configuration</h2>
+                <div id="config-alerts"></div>
+                
+                <form id="ai-config-form">
+                    <div class="form-group">
+                        <label for="api-key">OpenAI API Key:</label>
+                        <input type="password" id="api-key" placeholder="sk-..." required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="model-name">Model:</label>
+                        <select id="model-name">
+                            <option value="gpt-4">GPT-4</option>
+                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="max-requests">Max Requests per Hour:</label>
+                        <input type="number" id="max-requests" value="100" min="1" max="1000">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="concurrent-requests">Max Concurrent Requests:</label>
+                        <input type="number" id="concurrent-requests" value="5" min="1" max="20">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success">Save Configuration</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Enhancement Tab -->
+        <div id="enhance-tab" class="tab-content">
+            <div class="card">
+                <h2>🚀 Start AI Enhancement</h2>
+                <div id="enhance-alerts"></div>
+                
+                <div class="form-group">
+                    <label for="enhance-limit">Number of CodeBundles to enhance (0 = all pending):</label>
+                    <input type="number" id="enhance-limit" value="10" min="0" max="100">
+                </div>
+                
+                <button id="start-enhancement" class="btn btn-success">Start Enhancement</button>
+                
+                <div id="enhancement-progress" class="hidden">
+                    <h3>Enhancement Progress</h3>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="enhancement-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <p id="enhancement-status">Starting enhancement...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1';
+        const ADMIN_TOKEN = 'admin-dev-token';
+        
+        // Tab management
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName + '-tab').classList.add('active');
+            event.target.classList.add('active');
+            
+            // Load data for the tab
+            if (tabName === 'stats') {
+                loadStats();
+            }
+        }
+        
+        // API helper
+        async function apiCall(endpoint, options = {}) {
+            const response = await fetch(API_BASE + endpoint, {
+                headers: {
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                ...options
+            });
+            
+            if (!response.ok) {
+                throw new Error(`API call failed: ${response.statusText}`);
+            }
+            
+            return response.json();
+        }
+        
+        // Show alert
+        function showAlert(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+        
+        // Load statistics
+        async function loadStats() {
+            try {
+                const stats = await apiCall('/admin/ai/stats');
+                
+                document.getElementById('total-bundles').textContent = stats.total_codebundles;
+                document.getElementById('completion-rate').textContent = stats.completion_rate + '%';
+                document.getElementById('pending-count').textContent = stats.enhancement_status.pending;
+                document.getElementById('completed-count').textContent = stats.enhancement_status.completed;
+                document.getElementById('read-only-count').textContent = stats.access_levels.read_only;
+                document.getElementById('read-write-count').textContent = stats.access_levels.read_write;
+                
+                document.getElementById('progress-fill').style.width = stats.completion_rate + '%';
+                
+                document.getElementById('stats-loading').classList.add('hidden');
+                document.getElementById('stats-content').classList.remove('hidden');
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+                document.getElementById('stats-loading').innerHTML = 
+                    '<div class="alert alert-error">Failed to load statistics. Please check if the backend is running.</div>';
+            }
+        }
+        
+        // Save AI configuration
+        document.getElementById('ai-config-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                service_provider: 'openai',
+                api_key: document.getElementById('api-key').value,
+                model_name: document.getElementById('model-name').value,
+                enhancement_enabled: true,
+                auto_enhance_new_bundles: false,
+                max_requests_per_hour: parseInt(document.getElementById('max-requests').value),
+                max_concurrent_requests: parseInt(document.getElementById('concurrent-requests').value)
+            };
+            
+            try {
+                await apiCall('/admin/ai/config', {
+                    method: 'POST',
+                    body: JSON.stringify(formData)
+                });
+                
+                showAlert('config-alerts', 'AI configuration saved successfully!', 'success');
+            } catch (error) {
+                console.error('Failed to save config:', error);
+                showAlert('config-alerts', 'Failed to save configuration: ' + error.message, 'error');
+            }
+        });
+        
+        // Start enhancement
+        document.getElementById('start-enhancement').addEventListener('click', async () => {
+            const limit = parseInt(document.getElementById('enhance-limit').value) || undefined;
+            
+            try {
+                const response = await apiCall('/admin/ai/enhance', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        enhance_pending: true,
+                        limit: limit
+                    })
+                });
+                
+                showAlert('enhance-alerts', 'Enhancement started! Task ID: ' + response.task_id, 'success');
+                
+                // Show progress tracking
+                document.getElementById('enhancement-progress').classList.remove('hidden');
+                trackEnhancementProgress(response.task_id);
+                
+            } catch (error) {
+                console.error('Failed to start enhancement:', error);
+                showAlert('enhance-alerts', 'Failed to start enhancement: ' + error.message, 'error');
+            }
+        });
+        
+        // Track enhancement progress
+        async function trackEnhancementProgress(taskId) {
+            const checkProgress = async () => {
+                try {
+                    const status = await apiCall(`/admin/ai/enhance/status/${taskId}`);
+                    
+                    if (status.state === 'PROGRESS') {
+                        const progress = ((status.current || 0) / (status.total || 1)) * 100;
+                        document.getElementById('enhancement-progress-fill').style.width = progress + '%';
+                        document.getElementById('enhancement-status').textContent = 
+                            `Processing ${status.current || 0} of ${status.total || 0}: ${status.status || ''}`;
+                        
+                        setTimeout(checkProgress, 2000);
+                    } else if (status.state === 'SUCCESS') {
+                        document.getElementById('enhancement-progress-fill').style.width = '100%';
+                        document.getElementById('enhancement-status').textContent = 'Enhancement completed successfully!';
+                        loadStats(); // Refresh stats
+                    } else if (status.state === 'FAILURE') {
+                        document.getElementById('enhancement-status').textContent = 'Enhancement failed: ' + (status.error || 'Unknown error');
+                    }
+                } catch (error) {
+                    console.error('Failed to check progress:', error);
+                }
+            };
+            
+            checkProgress();
+        }
+        
+        // Load initial stats
+        loadStats();
+    </script>
+</body>
+</html>
+

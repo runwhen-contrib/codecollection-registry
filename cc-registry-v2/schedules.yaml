@@ -1,0 +1,201 @@
+# Celery Beat Schedule Configuration
+# Edit this file to change when scheduled tasks run
+# After making changes, restart the scheduler: docker-compose restart scheduler
+
+schedules:
+  # YAML Validation - Sync collections from YAML to ensure all entries exist in database
+  - name: validate-yaml-seed-daily
+    task: app.tasks.registry_tasks.sync_all_collections_task
+    description: Sync YAML entries into database (validates all collections exist)
+    schedule_type: crontab
+    crontab:
+      hour: 1
+      minute: 0
+      day_of_week: null  # null = every day, 0-6 = Monday-Sunday, 1 = Monday
+      day_of_month: null  # null = every day, 1-31 = specific day
+      month_of_year: null  # null = every month, 1-12 = specific month
+    enabled: true
+
+  # =============================================================================
+  # REGISTRY SYNC WORKFLOW
+  # =============================================================================
+  # This is the primary sync process. It runs the canonical workflow:
+  #   1. Sync codecollections from their git repos
+  #   2. Parse codebundles (extracts tasks, SLIs, metadata)
+  #   3. AI enhance ONLY NEW codebundles (pending/NULL status)
+  #
+  # All three steps run in sequence automatically. Uses the canonical code path
+  # in registry_tasks.py which correctly:
+  #   - Looks up codebundles by (slug + collection_id) to avoid duplicates
+  #   - Sets both task_count and sli_count integer fields
+  #   - Separates runbook tasks from SLI tasks
+  #
+  # Adjust the crontab hours below to change sync frequency.
+  # Examples: "0,6,12,18" = every 6h, "0,4,8,12,16,20" = every 4h, "0,12" = twice daily
+
+  - name: scheduled-sync
+    task: app.tasks.workflow_tasks.sync_parse_enhance_workflow_task
+    description: "Complete sync: clone repos → parse codebundles → AI enhance new"
+    schedule_type: crontab
+    crontab:
+      hour: "0,6,12,18"  # Every 6 hours (midnight, 6 AM, noon, 6 PM)
+      minute: 0
+    enabled: true
+
+  # =============================================================================
+  # INDIVIDUAL TASKS (Disabled - available for manual trigger from Admin UI)
+  # =============================================================================
+
+  - name: sync-collections-manual
+    task: app.tasks.registry_tasks.sync_all_collections_task
+    description: "[MANUAL] Sync all collections from repos"
+    schedule_type: crontab
+    crontab:
+      hour: 0
+      minute: 0
+    enabled: false
+
+  - name: parse-codebundles-manual
+    task: app.tasks.registry_tasks.parse_all_codebundles_task
+    description: "[MANUAL] Parse all codebundles from repos"
+    schedule_type: crontab
+    crontab:
+      hour: 0
+      minute: 0
+    enabled: false
+
+  - name: enhance-new-codebundles-manual
+    task: app.tasks.ai_enhancement_tasks.enhance_pending_codebundles_task
+    description: "[MANUAL] AI enhance ONLY new codebundles"
+    schedule_type: crontab
+    crontab:
+      hour: 0
+      minute: 0
+    enabled: false
+
+  # =============================================================================
+  # METRICS & STATISTICS
+  # =============================================================================
+
+  # Metrics Generation - Generate daily metrics and statistics
+  # NOTE: No implementation exists yet. Enable when generate_metrics_task is implemented.
+  - name: generate-metrics-daily
+    task: app.tasks.registry_tasks.generate_metrics_task
+    description: Generate daily metrics and statistics
+    schedule_type: crontab
+    crontab:
+      hour: 5
+      minute: 0
+    enabled: false
+
+  # Statistics Update - Update collection statistics every hour
+  - name: update-statistics-hourly
+    task: app.tasks.data_population_tasks.update_collection_statistics_task
+    description: Update collection statistics
+    schedule_type: crontab
+    crontab:
+      hour: null  # null = every hour
+      minute: 0
+    enabled: true
+
+  # =============================================================================
+  # HEALTH CHECKS & CLEANUP
+  # =============================================================================
+
+  # Health Check - System health check every 5 minutes
+  - name: health-check
+    task: app.tasks.sync_tasks.health_check_task
+    description: System health check
+    schedule_type: interval
+    interval:
+      minutes: 5
+    enabled: true
+
+  # Task Cleanup - Clean up old completed tasks daily
+  - name: cleanup-old-tasks
+    task: app.tasks.task_monitoring.cleanup_old_tasks_task
+    description: Clean up old completed tasks
+    schedule_type: crontab
+    crontab:
+      hour: 0
+      minute: 30
+    enabled: true
+
+  # Task Health Check - Health check for task queues and workers
+  - name: health-check-tasks
+    task: app.tasks.task_monitoring.health_check_tasks_task
+    description: Health check for task queues and workers
+    schedule_type: interval
+    interval:
+      minutes: 10
+    enabled: true
+
+  # =============================================================================
+  # MCP SERVER INDEXING
+  # =============================================================================
+
+  # Documentation Indexing - Re-index documentation sources daily
+  - name: index-documentation-daily
+    task: app.tasks.mcp_tasks.index_documentation_task
+    description: Re-index documentation sources and update embeddings
+    schedule_type: crontab
+    crontab:
+      hour: 3
+      minute: 0
+    enabled: true
+
+  # Full MCP Re-index - Complete rebuild of vector database (weekly)
+  - name: reindex-mcp-weekly
+    task: app.tasks.mcp_tasks.reindex_all_task
+    description: Full re-index of all MCP data (codebundles + documentation)
+    schedule_type: crontab
+    crontab:
+      hour: 2
+      minute: 0
+      day_of_week: 0  # Sunday at 2 AM
+    enabled: false  # Disabled by default - enable if needed
+
+  # =============================================================================
+  # ANALYTICS COMPUTATION
+  # =============================================================================
+
+  # Task Growth Analytics - Compute monthly task growth from git history
+  - name: compute-task-growth-analytics
+    task: app.tasks.analytics_tasks.compute_task_growth_analytics
+    description: Analyze git history and compute task growth metrics for dashboard
+    schedule_type: crontab
+    crontab:
+      hour: 2
+      minute: 30
+    enabled: true
+
+# Schedule Type Reference:
+#
+# crontab - Run at specific times
+#   hour: 0-23 or null for every hour
+#   minute: 0-59 or null for every minute
+#   day_of_week: 0-6 (0=Sunday, 1=Monday, etc.) or null for every day
+#   day_of_month: 1-31 or null for every day
+#   month_of_year: 1-12 or null for every month
+#
+# interval - Run at regular intervals
+#   seconds: Run every N seconds
+#   minutes: Run every N minutes
+#   hours: Run every N hours
+#   days: Run every N days
+#
+# Examples:
+#   Daily at 2 AM:
+#     crontab: { hour: 2, minute: 0 }
+#
+#   Every Monday at 4 AM:
+#     crontab: { hour: 4, minute: 0, day_of_week: 1 }
+#
+#   Every hour:
+#     crontab: { hour: null, minute: 0 }
+#
+#   Every 15 minutes:
+#     interval: { minutes: 15 }
+#
+#   First day of every month at midnight:
+#     crontab: { hour: 0, minute: 0, day_of_month: 1 }

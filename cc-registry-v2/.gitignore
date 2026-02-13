@@ -1,24 +1,3 @@
-cloned_repos/*
-cc-registry/site/*
-cc-registry/docs/Categories/*
-cc-registry/docs/CodeCollection/*
-cc-registry/docs/all_codecollections.md
-cc-registry/docs/overrides/home.html
-cc-registry/docs/overrides/partials/build_date.html
-cc-registry/docs/index.md
-
-
-# Ignore Python bytecode files
-*.pyc
-*.pyo
-*.pyd
-__pycache__/
-*.py[cod]
-*$py.class
-cc-registry/docs/overrides/partials/build_date.html
-cc-registry/docs/index.md
-cc-registry/docs/all-tasks.md
-
 # Environment variables
 .env
 .env.local
@@ -80,16 +59,16 @@ logs/
 .dockerignore
 
 # Node.js (Frontend)
-**/node_modules/
-**/npm-debug.log*
-**/yarn-debug.log*
-**/yarn-error.log*
-**/.pnpm-debug.log*
-**/build/
-**/.env.local
-**/.env.development.local
-**/.env.test.local
-**/.env.production.local
+frontend/node_modules/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+frontend/build/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
 
 # Testing
 .coverage
@@ -112,8 +91,3 @@ celerybeat.pid
 *.backup
 *.old
 
-#Secrets
-*.secret
-hack/mcp/data/**
-hack/mcp/data/**/*
-mcp-server/data/**

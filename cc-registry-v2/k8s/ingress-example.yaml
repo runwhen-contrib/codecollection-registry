@@ -1,0 +1,78 @@
+# Example Ingress configuration for CC-Registry-V2
+# This routes external traffic through nginx-ingress to the frontend and backend services
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cc-registry
+  namespace: codecollection-registry  # Change to your namespace
+  annotations:
+    # SSL certificate management via cert-manager
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    
+    # Nginx-specific settings
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    
+    # Optional: Enable CORS if needed
+    # nginx.ingress.kubernetes.io/enable-cors: "true"
+    # nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    
+    # Optional: Rate limiting
+    # nginx.ingress.kubernetes.io/limit-rps: "100"
+spec:
+  ingressClassName: "nginx"  # or "ingress-nginx" depending on your cluster
+  
+  tls:
+  - hosts:
+    - registry.example.com  # CHANGE THIS to your actual domain
+    secretName: cc-registry-tls  # cert-manager will create this secret
+  
+  rules:
+  - host: registry.example.com  # CHANGE THIS to your actual domain
+    http:
+      paths:
+      # Backend API routes
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: cc-registry-backend
+            port:
+              number: 8001
+      
+      # Frontend application (must be last - catch-all)
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cc-registry-frontend
+            port:
+              number: 3000
+
+---
+# Optional: Redirect HTTP to HTTPS
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cc-registry-redirect
+  namespace: codecollection-registry
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: "nginx"
+  rules:
+  - host: registry.example.com  # CHANGE THIS to your actual domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cc-registry-frontend
+            port:
+              number: 3000

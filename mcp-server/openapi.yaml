@@ -1,0 +1,700 @@
+openapi: 3.1.0
+info:
+  title: RunWhen Registry MCP Server
+  description: |
+    Thin, stateless MCP (Model Context Protocol) server that provides tool-based
+    access to the RunWhen CodeCollection Registry.
+
+    All data is fetched from the backend Registry API via `REGISTRY_API_URL`.
+    The MCP server itself stores no data — it is a protocol adapter that exposes
+    registry capabilities as MCP tools for LLM clients, IDE plugins, CLIs, and
+    other integrations.
+
+    ## Architecture
+
+    ```
+    LLM Clients (IDE, chatbot, CLI)
+        │
+        ▼
+    MCP Server (this service — stateless, no DB)
+        │  REGISTRY_API_URL
+        ▼
+    Registry Backend API (owns all data)
+        │
+        ▼
+    PostgreSQL
+    ```
+
+    ## Usage Patterns
+
+    **MCP Tool Calling (primary)**
+    - `GET /tools` — discover available tools
+    - `POST /tools/call` — invoke any tool by name with arguments
+
+    **REST API (alternative)**
+    - Direct REST endpoints under `/api/` for simple HTTP integration
+
+    ## Configuration
+
+    | Variable | Description | Default |
+    |----------|-------------|---------|
+    | `REGISTRY_API_URL` | Backend API base URL | `http://localhost:8001` |
+    | `MCP_LOG_LEVEL` | Log level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
+    | `GITHUB_TOKEN` | GitHub token for issue creation (optional) | — |
+
+  version: 2.0.0
+  contact:
+    name: RunWhen
+    url: https://runwhen.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: http://mcp-server:8000
+    description: In-cluster (Kubernetes)
+
+tags:
+  - name: Health
+    description: Service health and metadata
+  - name: MCP Tools
+    description: MCP tool discovery and execution
+  - name: CodeBundles
+    description: REST endpoints for CodeBundle operations
+  - name: Collections
+    description: REST endpoints for CodeCollection operations
+  - name: Libraries
+    description: REST endpoints for library search
+  - name: Documentation
+    description: REST endpoints for documentation search
+
+paths:
+  /:
+    get:
+      tags: [Health]
+      summary: API root
+      description: Returns basic API information and navigation links.
+      operationId: root
+      responses:
+        "200":
+          description: API information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    example: RunWhen Registry MCP Server
+                  version:
+                    type: string
+                    example: "2.0.0"
+                  docs:
+                    type: string
+                    example: /docs
+                  health:
+                    type: string
+                    example: /health
+                  tools:
+                    type: string
+                    example: /tools
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: |
+        Returns service health, version, backend API connectivity status,
+        and data statistics from the registry.
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+
+  /tools:
+    get:
+      tags: [MCP Tools]
+      summary: List all tools
+      description: |
+        Returns all registered MCP tools with their definitions, parameters,
+        and categories. Use this to discover what capabilities are available.
+      operationId: listTools
+      responses:
+        "200":
+          description: List of available tools
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolListResponse"
+
+  /tools/by-category/{category}:
+    get:
+      tags: [MCP Tools]
+      summary: List tools by category
+      description: Filter tools by category — `search`, `info`, or `action`.
+      operationId: listToolsByCategory
+      parameters:
+        - name: category
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [search, info, action]
+          description: Tool category to filter by
+      responses:
+        "200":
+          description: Filtered list of tools
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolListResponse"
+
+  /tools/call:
+    post:
+      tags: [MCP Tools]
+      summary: Call a tool
+      description: |
+        Execute an MCP tool by name with the given arguments.
+
+        This is the primary integration endpoint. Clients discover tools via
+        `GET /tools`, then invoke them here.
+
+        ## Available Tools
+
+        | Tool | Category | Description |
+        |------|----------|-------------|
+        | `find_codebundle` | search | Semantic search for codebundles by natural language query |
+        | `search_codebundles` | search | Keyword search for codebundles with tag/platform filters |
+        | `list_codebundles` | info | List all codebundles, optionally filtered by collection |
+        | `get_codebundle_details` | info | Get full details for a specific codebundle |
+        | `find_codecollection` | search | Search for codecollections by query |
+        | `list_codecollections` | info | List all codecollections |
+        | `keyword_usage_help` | search | Get help on Robot Framework keywords |
+        | `find_library_info` | search | Search for library information |
+        | `find_documentation` | search | Search documentation, guides, and FAQs |
+        | `get_development_requirements` | info | Get dev requirements for a feature |
+        | `request_codebundle` | action | Create a GitHub issue requesting a new codebundle |
+        | `check_existing_requests` | search | Check if a similar codebundle request exists |
+
+      operationId: callTool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ToolCallRequest"
+            examples:
+              find_codebundle:
+                summary: Search for codebundles
+                value:
+                  tool_name: find_codebundle
+                  arguments:
+                    query: "troubleshoot Kubernetes pods"
+                    platform: "Kubernetes"
+                    max_results: 5
+              list_codebundles:
+                summary: List codebundles in a collection
+                value:
+                  tool_name: list_codebundles
+                  arguments:
+                    format: summary
+                    collection_slug: aws-c7n-codecollection
+              get_codebundle_details:
+                summary: Get codebundle details
+                value:
+                  tool_name: get_codebundle_details
+                  arguments:
+                    slug: aws-c7n-ebs-health
+                    collection_slug: aws-c7n-codecollection
+              find_documentation:
+                summary: Search documentation
+                value:
+                  tool_name: find_documentation
+                  arguments:
+                    query: "how to configure credentials"
+                    category: platform
+              request_codebundle:
+                summary: Request a new codebundle
+                value:
+                  tool_name: request_codebundle
+                  arguments:
+                    platform: AWS
+                    tasks:
+                      - Check S3 bucket permissions
+                      - Validate bucket encryption settings
+                    original_query: "s3 bucket security audit"
+                    contact_ok: true
+      responses:
+        "200":
+          description: Tool execution result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolCallResponse"
+        "400":
+          description: Unknown tool name
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+
+  # -----------------------------------------------------------------------
+  # REST API Endpoints
+  # -----------------------------------------------------------------------
+
+  /api/codebundles:
+    get:
+      tags: [CodeBundles]
+      summary: List codebundles
+      description: Get all codebundles with optional collection filter and output format.
+      operationId: getCodebundles
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [markdown, json, summary]
+            default: json
+          description: Output format
+        - name: collection_slug
+          in: query
+          schema:
+            type: string
+          description: Filter by collection slug
+      responses:
+        "200":
+          description: Codebundle list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codebundles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CodeBundle"
+                  count:
+                    type: integer
+
+  /api/codebundles/search:
+    get:
+      tags: [CodeBundles]
+      summary: Search codebundles
+      description: Search codebundles by keyword query with optional tag and platform filters.
+      operationId: searchCodebundles
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query
+        - name: tags
+          in: query
+          schema:
+            type: string
+          description: Comma-separated tags to filter by
+        - name: platform
+          in: query
+          schema:
+            type: string
+          description: Platform filter (e.g. AWS, Kubernetes, Azure)
+        - name: max_results
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Maximum number of results
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    description: Markdown-formatted search results
+                  query:
+                    type: string
+
+  /api/codebundles/{slug}:
+    get:
+      tags: [CodeBundles]
+      summary: Get codebundle by slug
+      description: Get detailed information about a specific codebundle.
+      operationId: getCodebundleBySlug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: CodeBundle slug
+        - name: collection_slug
+          in: query
+          schema:
+            type: string
+          description: Collection slug (helps disambiguate)
+      responses:
+        "200":
+          description: Codebundle details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    description: Markdown-formatted codebundle details
+                  slug:
+                    type: string
+
+  /api/collections:
+    get:
+      tags: [Collections]
+      summary: List collections
+      description: Get all codecollections with codebundle counts.
+      operationId: getCollections
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [markdown, json, summary]
+            default: json
+          description: Output format
+      responses:
+        "200":
+          description: Collection list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  collections:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CodeCollection"
+
+  /api/libraries/search:
+    get:
+      tags: [Libraries]
+      summary: Search libraries
+      description: Search Robot Framework libraries by keyword.
+      operationId: searchLibraries
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [cli, python, shell, all]
+            default: all
+          description: Library category filter
+      responses:
+        "200":
+          description: Library search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                  query:
+                    type: string
+
+  /api/docs/list:
+    get:
+      tags: [Documentation]
+      summary: List documentation
+      description: List all managed documentation resources from docs.yaml, grouped by category.
+      operationId: listDocs
+      responses:
+        "200":
+          description: Documentation listing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  categories:
+                    type: array
+                    items:
+                      type: string
+                  docs_by_category:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          url:
+                            type: string
+                          description:
+                            type: string
+
+  /api/docs/search:
+    get:
+      tags: [Documentation]
+      summary: Search documentation
+      description: Search managed documentation by keyword.
+      operationId: searchDocs
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 5
+          description: Maximum results
+      responses:
+        "200":
+          description: Documentation search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                  query:
+                    type: string
+
+  /api/docs/requirements:
+    get:
+      tags: [Documentation]
+      summary: Get development requirements
+      description: Get development requirements and best practices for a specific feature.
+      operationId: getDevRequirements
+      parameters:
+        - name: feature
+          in: query
+          required: true
+          schema:
+            type: string
+          description: "Feature name (e.g. secrets, tasks, slis)"
+      responses:
+        "200":
+          description: Development requirements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                  feature:
+                    type: string
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, version, timestamp, data_stats]
+      properties:
+        status:
+          type: string
+          example: healthy
+        version:
+          type: string
+          example: "2.0.0"
+        timestamp:
+          type: string
+          format: date-time
+        data_stats:
+          type: object
+          properties:
+            codebundles:
+              type: integer
+            collections:
+              type: integer
+            libraries:
+              type: integer
+            documentation:
+              type: integer
+        semantic_search:
+          type: object
+          nullable: true
+          properties:
+            backend_api:
+              type: string
+              example: http://cc-registry-backend:8001
+            status:
+              type: string
+              enum: [ok, unreachable]
+
+    ToolListResponse:
+      type: object
+      required: [tools, count]
+      properties:
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolDefinition"
+        count:
+          type: integer
+
+    ToolDefinition:
+      type: object
+      properties:
+        name:
+          type: string
+          example: find_codebundle
+        description:
+          type: string
+        category:
+          type: string
+          enum: [search, info, action]
+        parameters:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              type:
+                type: string
+              description:
+                type: string
+              required:
+                type: boolean
+              default: {}
+              enum:
+                type: array
+                items:
+                  type: string
+
+    ToolCallRequest:
+      type: object
+      required: [tool_name]
+      properties:
+        tool_name:
+          type: string
+          description: Name of the tool to invoke
+          example: find_codebundle
+        arguments:
+          type: object
+          description: Key-value arguments for the tool
+          default: {}
+          example:
+            query: "Kubernetes pod health"
+            platform: Kubernetes
+            max_results: 5
+
+    ToolCallResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        result:
+          type: string
+          nullable: true
+          description: Markdown-formatted tool output
+        error:
+          type: string
+          nullable: true
+          description: Error message if tool execution failed
+        metadata:
+          type: object
+          nullable: true
+          properties:
+            tool:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+
+    CodeBundle:
+      type: object
+      properties:
+        slug:
+          type: string
+          example: aws-c7n-ebs-health
+        display_name:
+          type: string
+          example: AWS EBS Health
+        description:
+          type: string
+        collection_slug:
+          type: string
+          example: aws-c7n-codecollection
+        platform:
+          type: string
+          example: AWS
+        author:
+          type: string
+        support_tags:
+          type: array
+          items:
+            type: string
+        tasks:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              doc:
+                type: string
+        access_level:
+          type: string
+          enum: [read-only, read-write, unknown]
+        task_count:
+          type: integer
+        sli_count:
+          type: integer
+
+    CodeCollection:
+      type: object
+      properties:
+        slug:
+          type: string
+          example: aws-c7n-codecollection
+        name:
+          type: string
+          example: AWS Cloud/Custodian CodeCollection
+        description:
+          type: string
+        git_url:
+          type: string
+          format: uri
+        owner:
+          type: string
+        codebundle_count:
+          type: integer

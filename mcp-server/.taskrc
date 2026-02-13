@@ -1,0 +1,7 @@
+# Task configuration for runwhen-mcp-server
+# This file can override task settings if needed
+
+# Example overrides:
+# PYTHON=/usr/bin/python3.11
+# VENV_DIR=venv
+

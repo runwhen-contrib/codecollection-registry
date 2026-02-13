@@ -1,0 +1,180 @@
+services:
+  # Database Service (pgvector/pgvector image includes the vector extension)
+  database:
+    image: pgvector/pgvector:pg15
+    container_name: registry-database
+    environment:
+      POSTGRES_DB: codecollection_registry
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./database/data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d codecollection_registry"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Service (Message Broker)
+  redis:
+    image: redis:7-alpine
+    container_name: registry-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # MCP Server — thin, stateless API client for semantic search tools
+  mcp-server:
+    build: ../mcp-server
+    container_name: registry-mcp-server
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REGISTRY_API_URL=http://backend:8001
+      - MCP_LOG_LEVEL=INFO
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Backend API Service
+  backend:
+    build: ./backend
+    container_name: registry-backend
+    ports:
+      - "8001:8001"
+    env_file:
+      - az.secret  # Azure OpenAI credentials (same as mcp-server/az.secret)
+    environment:
+      - DATABASE_URL=postgresql://user:password@database:5432/codecollection_registry
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      # MCP Server for semantic search (in-compose service)
+      - MCP_SERVER_URL=http://mcp-server:8000
+      # AI Configuration (override in .env)
+      - AI_SERVICE_PROVIDER=azure-openai
+      - AI_ENHANCEMENT_ENABLED=true
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+      - ../mcp-server/data/repos:/mcp-repos:ro  # MCP cloned repos for genrules parsing
+      - ../map-tag-icons.yaml:/app/map-tag-icons.yaml:ro  # Tag icon mappings
+      - ./schedules.yaml:/app/schedules.yaml:ro  # Schedule configuration
+    command: sh -c "python run_migrations.py && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload"
+    # Note: Migrations run on startup, then uvicorn starts in reload mode for development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery Worker Service
+  worker:
+    build: ./worker
+    container_name: registry-worker
+    env_file:
+      - az.secret  # Azure OpenAI credentials for AI enhancement
+    environment:
+      - DATABASE_URL=postgresql://user:password@database:5432/codecollection_registry
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app  # Share backend code
+      - ./schedules.yaml:/app/schedules.yaml:ro  # Schedule configuration
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+    restart: unless-stopped
+
+  # Celery Beat Service (Scheduler)
+  scheduler:
+    build: ./worker
+    container_name: registry-scheduler
+    env_file:
+      - az.secret  # Azure OpenAI credentials for AI enhancement
+    environment:
+      - DATABASE_URL=postgresql://user:password@database:5432/codecollection_registry
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app  # Share backend code
+      - ./schedules.yaml:/app/schedules.yaml:ro  # Schedule configuration
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    restart: unless-stopped
+
+  # Celery Flower (Monitoring)
+  flower:
+    image: mher/flower:2.0
+    container_name: registry-flower
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - FLOWER_PORT=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    command: celery flower --broker=redis://redis:6379/0
+
+  # Frontend Service
+  frontend:
+    build: ./frontend
+    container_name: registry-frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - az.secret  # Admin credentials
+    environment:
+      - REACT_APP_API_URL=http://localhost:8001/api/v1
+      - CHOKIDAR_USEPOLLING=true
+      - GENERATE_SOURCEMAP=false
+      - FAST_REFRESH=false
+      - SKIP_PREFLIGHT_CHECK=true
+      - DISABLE_ESLINT_PLUGIN=true
+      - NODE_OPTIONS=--max-old-space-size=4096
+      - WDS_SOCKET_HOST=localhost
+      - WDS_SOCKET_PORT=3000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: npm start
+    restart: unless-stopped
+    mem_limit: 4g
+    cpus: 2.0
+
+networks:
+  default:
+    name: registry-network
+

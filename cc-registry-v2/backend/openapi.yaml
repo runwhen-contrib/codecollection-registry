@@ -1,0 +1,1843 @@
+openapi: 3.1.0
+info:
+  title: RunWhen CodeCollection Registry API
+  description: |
+    Backend API for the RunWhen CodeCollection Registry. Manages codecollections,
+    codebundles, tasks, documentation, AI enhancement, Helm charts, and chat.
+
+    ## Architecture
+
+    This API is the single source of truth for all registry data. It is consumed by:
+    - **Frontend** — React UI at the same origin
+    - **MCP Server** — stateless tool server for LLM clients (via `REGISTRY_API_URL`)
+    - **Celery Workers** — background task processing (sync, parse, enhance, index)
+
+    ## Authentication
+
+    Admin endpoints require a Bearer token in the `Authorization` header.
+    Public endpoints (registry, chat, analytics) require no authentication.
+
+    ## Data Flow
+
+    ```
+    codecollections.yaml → Seed → Sync (git clone) → Parse (codebundles) → Enhance (AI) → Serve
+    ```
+
+  version: 2.0.0
+  contact:
+    name: RunWhen
+    url: https://runwhen.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: http://localhost:8001
+    description: Local development
+  - url: http://cc-registry-backend:8001
+    description: In-cluster (Kubernetes)
+
+tags:
+  - name: Health
+    description: Health checks and root info
+  - name: Registry
+    description: Public endpoints for browsing collections, codebundles, and tasks
+  - name: Chat
+    description: MCP-powered semantic search and conversational chat
+  - name: Analytics
+    description: Task growth metrics and analytics
+  - name: Versions
+    description: Collection version management
+  - name: Helm Charts
+    description: Helm chart versions, schemas, and validation
+  - name: GitHub
+    description: GitHub issue creation for codebundle requests
+  - name: Admin - Collections
+    description: CRUD operations for codecollections (requires auth)
+  - name: Admin - Inventory
+    description: Detailed inventory views (requires auth)
+  - name: Admin - Operations
+    description: Data population, AI enhancement, sync operations (requires auth)
+  - name: Admin - Tasks
+    description: Background task management and execution (requires auth)
+  - name: Admin - Schedules
+    description: Celery Beat schedule management (requires auth)
+  - name: Raw Data
+    description: Low-level YAML and repository data operations
+
+paths:
+  # =========================================================================
+  # Health
+  # =========================================================================
+  /:
+    get:
+      tags: [Health]
+      summary: API root
+      operationId: root
+      responses:
+        "200":
+          description: API info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  version: { type: string }
+                  docs: { type: string }
+                  health: { type: string }
+
+  /api/v1/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service health
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: healthy }
+                  database: { type: string, example: connected }
+                  environment: { type: string }
+                  version: { type: string }
+
+  # =========================================================================
+  # Registry (public)
+  # =========================================================================
+  /api/v1/registry/collections:
+    get:
+      tags: [Registry]
+      summary: List all collections
+      description: Returns all codecollections with codebundle counts and statistics.
+      operationId: listCollections
+      responses:
+        "200":
+          description: Collection list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CollectionWithStats"
+
+  /api/v1/registry/collections/{collection_slug}:
+    get:
+      tags: [Registry]
+      summary: Get collection by slug
+      operationId: getCollection
+      parameters:
+        - $ref: "#/components/parameters/CollectionSlug"
+      responses:
+        "200":
+          description: Collection details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionWithStats"
+        "404":
+          description: Collection not found
+
+  /api/v1/codebundles:
+    get:
+      tags: [Registry]
+      summary: List/search codebundles
+      description: |
+        List codebundles with full-text search, filtering, and pagination.
+        The `search` parameter searches across name, display_name, description, and doc fields.
+      operationId: listCodebundles
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Full-text search across name, display_name, description, doc
+        - name: collection_id
+          in: query
+          schema: { type: integer }
+        - name: tags
+          in: query
+          schema: { type: string }
+          description: Comma-separated support tags
+        - name: platform
+          in: query
+          schema: { type: string }
+          description: Platform filter (e.g. AWS, Kubernetes, Azure)
+        - name: access_level
+          in: query
+          schema: { type: string, enum: [read-only, read-write, unknown] }
+        - name: has_auto_discovery
+          in: query
+          schema: { type: boolean }
+        - name: sort_by
+          in: query
+          schema: { type: string, enum: [name, updated, tasks], default: name }
+      responses:
+        "200":
+          description: Paginated codebundle list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codebundles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CodeBundle"
+                  total_count: { type: integer }
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+
+  /api/v1/collections/{collection_slug}/codebundles/{codebundle_slug}:
+    get:
+      tags: [Registry]
+      summary: Get codebundle by slug
+      operationId: getCodebundle
+      parameters:
+        - $ref: "#/components/parameters/CollectionSlug"
+        - name: codebundle_slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Full codebundle details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CodeBundleFull"
+        "404":
+          description: Codebundle not found
+
+  /api/v1/registry/tasks:
+    get:
+      tags: [Registry]
+      summary: Search tasks
+      description: Search tasks across all codebundles with tag and text filtering.
+      operationId: searchTasks
+      parameters:
+        - name: support_tags
+          in: query
+          schema: { type: string }
+          description: Comma-separated tags
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: collection_slug
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Task search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks: { type: array, items: { type: object } }
+                  total_count: { type: integer }
+                  codebundles_count: { type: integer }
+                  support_tags: { type: array, items: { type: string } }
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+
+  /api/v1/registry/recent-codebundles:
+    get:
+      tags: [Registry]
+      summary: Recent codebundles
+      description: Get the 20 most recently updated codebundles.
+      operationId: recentCodebundles
+      responses:
+        "200":
+          description: Recent codebundles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CodeBundle"
+
+  /api/v1/registry/recent-tasks:
+    get:
+      tags: [Registry]
+      summary: Recent tasks
+      operationId: recentTasks
+      responses:
+        "200":
+          description: Recent tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+
+  /api/v1/registry/tag-icons:
+    get:
+      tags: [Registry]
+      summary: Tag icon mappings
+      operationId: tagIcons
+      responses:
+        "200":
+          description: Tag-to-icon URL map
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  icons:
+                    type: object
+                    additionalProperties: { type: string }
+
+  /api/v1/registry/stats:
+    get:
+      tags: [Registry]
+      summary: Registry statistics
+      operationId: registryStats
+      responses:
+        "200":
+          description: Aggregate statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  collections: { type: integer }
+                  codebundles: { type: integer }
+                  tasks: { type: integer }
+                  slis: { type: integer }
+                  tasks_over_time:
+                    type: array
+                    items: { type: object }
+
+  # =========================================================================
+  # Chat
+  # =========================================================================
+  /api/v1/chat/query:
+    post:
+      tags: [Chat]
+      summary: Chat query
+      description: |
+        Semantic search + LLM synthesis. Finds relevant codebundles and
+        documentation, then generates a conversational response.
+      operationId: chatQuery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string }
+                context_limit: { type: integer, default: 10 }
+                include_enhanced_descriptions: { type: boolean, default: true }
+                conversation_history:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role: { type: string, enum: [user, assistant] }
+                      content: { type: string }
+      responses:
+        "200":
+          description: Chat response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+
+  /api/v1/chat/keywords:
+    post:
+      tags: [Chat]
+      summary: Keyword/library help
+      description: Search for Robot Framework keyword and library usage help.
+      operationId: keywordHelp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string }
+                category: { type: string, default: all }
+      responses:
+        "200":
+          description: Keyword help response
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/chat/health:
+    get:
+      tags: [Chat]
+      summary: Chat health
+      operationId: chatHealth
+      responses:
+        "200":
+          description: Chat service status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  ai_enabled: { type: boolean }
+                  mcp_connected: { type: boolean }
+
+  /api/v1/chat/examples:
+    get:
+      tags: [Chat]
+      summary: Example queries
+      operationId: chatExamples
+      responses:
+        "200":
+          description: Example chat queries by category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  examples: { type: array, items: { type: object } }
+
+  /api/v1/chat/check-existing-requests:
+    get:
+      tags: [Chat]
+      summary: Check existing codebundle requests
+      operationId: checkExistingRequests
+      parameters:
+        - name: search_term
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Matching open issues
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/chat/request-codebundle:
+    post:
+      tags: [Chat]
+      summary: Request a new codebundle
+      description: Creates a GitHub issue requesting a new codebundle.
+      operationId: requestCodebundle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform, tasks]
+              properties:
+                platform: { type: string }
+                tasks: { type: array, items: { type: string } }
+                original_query: { type: string }
+                context: { type: string }
+                contact_ok: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Created issue
+          content:
+            application/json:
+              schema: { type: object }
+
+  # =========================================================================
+  # Chat Debug
+  # =========================================================================
+  /api/v1/chat/debug/recent-chats:
+    get:
+      tags: [Chat]
+      summary: Recent chat interactions (debug)
+      operationId: recentChats
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 100 }
+        - name: include_prompts
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Recent chats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  chats: { type: array, items: { type: object } }
+
+  /api/v1/chat/debug/analyze-quality:
+    get:
+      tags: [Chat]
+      summary: Chat quality analysis (debug)
+      operationId: analyzeQuality
+      parameters:
+        - name: window_hours
+          in: query
+          schema: { type: integer, default: 24 }
+      responses:
+        "200":
+          description: Quality metrics
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/chat/debug/test-query:
+    post:
+      tags: [Chat]
+      summary: Test query with debug info
+      operationId: testQuery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string }
+                context_limit: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Debug response
+          content:
+            application/json:
+              schema: { type: object }
+
+  # =========================================================================
+  # Simple Chat (legacy)
+  # =========================================================================
+  /api/v1/simple-chat/query:
+    post:
+      tags: [Chat]
+      summary: Simple keyword search chat (legacy)
+      operationId: simpleChatQuery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string }
+      responses:
+        "200":
+          description: Simple chat response
+          content:
+            application/json:
+              schema: { type: object }
+
+  # =========================================================================
+  # Analytics
+  # =========================================================================
+  /api/v1/analytics/tasks-by-week:
+    get:
+      tags: [Analytics]
+      summary: Tasks by week (live)
+      description: Compute task counts by week from git history. Expensive — use cached version for dashboards.
+      operationId: tasksByWeek
+      responses:
+        "200":
+          description: Weekly task growth data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  weeks: { type: array, items: { type: object } }
+                  cumulative: { type: array, items: { type: object } }
+                  total_tasks: { type: integer }
+
+  /api/v1/analytics/tasks-by-week-cached:
+    get:
+      tags: [Analytics]
+      summary: Tasks by week (cached)
+      operationId: tasksByWeekCached
+      responses:
+        "200":
+          description: Cached task growth data
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/analytics/compute-task-growth:
+    post:
+      tags: [Analytics]
+      summary: Trigger task growth computation
+      operationId: computeTaskGrowth
+      responses:
+        "200":
+          description: Task submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  task_id: { type: string }
+                  message: { type: string }
+
+  # =========================================================================
+  # Versions
+  # =========================================================================
+  /api/v1/registry/collections-with-versions:
+    get:
+      tags: [Versions]
+      summary: Collections with versions
+      operationId: collectionsWithVersions
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Collections with version info
+          content:
+            application/json:
+              schema: { type: array, items: { type: object } }
+
+  /api/v1/registry/collections/{collection_slug}/versions:
+    get:
+      tags: [Versions]
+      summary: List collection versions
+      operationId: listVersions
+      parameters:
+        - $ref: "#/components/parameters/CollectionSlug"
+        - name: include_inactive
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Version list
+          content:
+            application/json:
+              schema: { type: array, items: { type: object } }
+
+  /api/v1/registry/collections/{collection_slug}/versions/{version_name}:
+    get:
+      tags: [Versions]
+      summary: Get specific version
+      operationId: getVersion
+      parameters:
+        - $ref: "#/components/parameters/CollectionSlug"
+        - name: version_name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Version details
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/registry/collections/{collection_slug}/latest-version:
+    get:
+      tags: [Versions]
+      summary: Get latest version
+      operationId: latestVersion
+      parameters:
+        - $ref: "#/components/parameters/CollectionSlug"
+        - name: version_type
+          in: query
+          schema: { type: string, enum: [tag, branch, main] }
+      responses:
+        "200":
+          description: Latest version
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/registry/collections/{collection_slug}/versions/{version_name}/codebundles:
+    get:
+      tags: [Versions]
+      summary: Codebundles in version
+      operationId: versionCodebundles
+      parameters:
+        - $ref: "#/components/parameters/CollectionSlug"
+        - name: version_name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Codebundles in this version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: object }
+                  codebundles: { type: array, items: { type: object } }
+
+  # =========================================================================
+  # Helm Charts
+  # =========================================================================
+  /api/v1/helm-charts:
+    get:
+      tags: [Helm Charts]
+      summary: List Helm charts
+      operationId: listHelmCharts
+      parameters:
+        - name: include_inactive
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Chart list
+          content:
+            application/json:
+              schema: { type: array, items: { type: object } }
+
+  /api/v1/helm-charts/{chart_name}:
+    get:
+      tags: [Helm Charts]
+      summary: Get chart with versions
+      operationId: getHelmChart
+      parameters:
+        - name: chart_name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Chart with versions
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/helm-charts/{chart_name}/versions/{version}:
+    get:
+      tags: [Helm Charts]
+      summary: Get chart version
+      operationId: getHelmChartVersion
+      parameters:
+        - name: chart_name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string }
+        - name: include_schema
+          in: query
+          schema: { type: boolean, default: true }
+        - name: include_defaults
+          in: query
+          schema: { type: boolean, default: true }
+      responses:
+        "200":
+          description: Chart version details
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/helm-charts/{chart_name}/versions/{version}/templates:
+    get:
+      tags: [Helm Charts]
+      summary: Get chart templates
+      operationId: getHelmChartTemplates
+      parameters:
+        - name: chart_name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string }
+        - name: category
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Chart templates
+          content:
+            application/json:
+              schema: { type: array, items: { type: object } }
+
+  /api/v1/helm-charts/{chart_name}/latest:
+    get:
+      tags: [Helm Charts]
+      summary: Get latest chart version
+      operationId: latestHelmChartVersion
+      parameters:
+        - name: chart_name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: include_prerelease
+          in: query
+          schema: { type: boolean, default: false }
+        - name: include_schema
+          in: query
+          schema: { type: boolean, default: true }
+        - name: include_defaults
+          in: query
+          schema: { type: boolean, default: true }
+      responses:
+        "200":
+          description: Latest version
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/helm-charts/{chart_name}/validate-values:
+    post:
+      tags: [Helm Charts]
+      summary: Validate Helm values
+      operationId: validateHelmValues
+      parameters:
+        - name: chart_name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: query
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: Validation result
+          content:
+            application/json:
+              schema: { type: object }
+
+  # =========================================================================
+  # GitHub Issues
+  # =========================================================================
+  /github/create-task-request:
+    post:
+      tags: [GitHub]
+      summary: Create codebundle request issue
+      operationId: createTaskRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_query, task_description, use_case]
+              properties:
+                user_query: { type: string }
+                task_description: { type: string }
+                use_case: { type: string }
+                platform: { type: string, default: Generic }
+                priority: { type: string, default: medium }
+                user_email: { type: string }
+      responses:
+        "200":
+          description: Created issue
+          content:
+            application/json:
+              schema: { type: object }
+
+  /github/issue-template:
+    get:
+      tags: [GitHub]
+      summary: Get issue template
+      operationId: issueTemplate
+      parameters:
+        - name: user_query
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Pre-filled template
+          content:
+            application/json:
+              schema: { type: object }
+
+  # =========================================================================
+  # Admin - Collections CRUD
+  # =========================================================================
+  /api/v1/admin/collections:
+    get:
+      tags: [Admin - Collections]
+      summary: List collections (admin)
+      operationId: adminListCollections
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: skip
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+        - name: include_inactive
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Collection list
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CollectionWithStats" } }
+    post:
+      tags: [Admin - Collections]
+      summary: Create collection
+      operationId: createCollection
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectionCreate"
+      responses:
+        "200":
+          description: Created collection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionWithStats" }
+
+  /api/v1/admin/collections/{collection_id}:
+    get:
+      tags: [Admin - Collections]
+      summary: Get collection by ID (admin)
+      operationId: adminGetCollection
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: collection_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Collection details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionWithStats" }
+    put:
+      tags: [Admin - Collections]
+      summary: Update collection
+      operationId: updateCollection
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: collection_id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectionUpdate"
+      responses:
+        "200":
+          description: Updated collection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionWithStats" }
+    delete:
+      tags: [Admin - Collections]
+      summary: Delete collection
+      operationId: deleteCollection
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: collection_id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: hard_delete
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  collection_slug: { type: string }
+
+  /api/v1/admin/collections/{collection_id}/sync:
+    post:
+      tags: [Admin - Collections]
+      summary: Sync collection from git
+      operationId: syncCollection
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: collection_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Sync task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  /api/v1/admin/collections/{collection_id}/parse:
+    post:
+      tags: [Admin - Collections]
+      summary: Parse collection codebundles
+      operationId: parseCollection
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: collection_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Parse task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  /api/v1/admin/metrics:
+    get:
+      tags: [Admin - Operations]
+      summary: System metrics
+      operationId: adminMetrics
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, default: 7 }
+      responses:
+        "200":
+          description: Metrics
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/admin/seed-from-yaml:
+    post:
+      tags: [Admin - Operations]
+      summary: Seed database from YAML
+      operationId: seedFromYaml
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Seed task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  /api/v1/admin/validate-yaml-seed:
+    post:
+      tags: [Admin - Operations]
+      summary: Validate YAML entries
+      operationId: validateYamlSeed
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Validation task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  # =========================================================================
+  # Admin - Inventory
+  # =========================================================================
+  /api/v1/admin/inventory/codebundles:
+    get:
+      tags: [Admin - Inventory]
+      summary: Codebundle inventory
+      operationId: inventoryCodebundles
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: collection_slug
+          in: query
+          schema: { type: string }
+        - name: enhancement_status
+          in: query
+          schema: { type: string }
+        - name: access_level
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Codebundle inventory
+          content:
+            application/json:
+              schema: { type: array, items: { type: object } }
+
+  /api/v1/admin/inventory/collections:
+    get:
+      tags: [Admin - Inventory]
+      summary: Collection inventory
+      operationId: inventoryCollections
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Collection inventory
+          content:
+            application/json:
+              schema: { type: array, items: { type: object } }
+
+  /api/v1/admin/inventory/codebundles/{codebundle_id}:
+    get:
+      tags: [Admin - Inventory]
+      summary: Codebundle inventory detail
+      operationId: inventoryCodebundleDetail
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: codebundle_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Codebundle detail
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/admin/inventory/stats:
+    get:
+      tags: [Admin - Inventory]
+      summary: Inventory statistics
+      operationId: inventoryStats
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Inventory stats
+          content:
+            application/json:
+              schema: { type: object }
+
+  # =========================================================================
+  # Admin - Operations
+  # =========================================================================
+  /api/v1/admin/populate-data:
+    post:
+      tags: [Admin - Operations]
+      summary: Full data population
+      operationId: populateData
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Population started
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/admin/population-status:
+    get:
+      tags: [Admin - Operations]
+      summary: Population status
+      operationId: populationStatus
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Current population status
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/admin/clear-data:
+    post:
+      tags: [Admin - Operations]
+      summary: Clear all data
+      operationId: clearData
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Data cleared
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/admin/sync-helm-charts:
+    post:
+      tags: [Admin - Operations]
+      summary: Sync Helm charts
+      operationId: syncHelmCharts
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/admin/releases/status:
+    get:
+      tags: [Admin - Operations]
+      summary: Release/version status
+      operationId: releasesStatus
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Release status
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/admin/ai-enhancement/status:
+    get:
+      tags: [Admin - Operations]
+      summary: AI enhancement status
+      operationId: aiEnhancementStatus
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: AI status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ai_enabled: { type: boolean }
+                  ai_provider: { type: string }
+
+  /api/v1/admin/ai-enhancement/run:
+    post:
+      tags: [Admin - Operations]
+      summary: Run AI enhancement
+      operationId: runAiEnhancement
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+        - name: collection_slug
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Enhancement queued
+          content:
+            application/json:
+              schema: { type: object }
+
+  # =========================================================================
+  # Admin - Tasks
+  # =========================================================================
+  /api/v1/tasks/seed-database:
+    post:
+      tags: [Admin - Tasks]
+      summary: Seed database (sync + parse + enhance)
+      operationId: seedDatabase
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: yaml_file_path
+          in: query
+          schema: { type: string, default: /app/codecollections.yaml }
+      responses:
+        "200":
+          description: Task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  /api/v1/tasks/sync-collections:
+    post:
+      tags: [Admin - Tasks]
+      summary: Sync all collections
+      operationId: syncAllCollections
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  /api/v1/tasks/sync-collection/{collection_id}:
+    post:
+      tags: [Admin - Tasks]
+      summary: Sync single collection
+      operationId: syncSingleCollection
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: collection_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  /api/v1/tasks/parse-codebundles:
+    post:
+      tags: [Admin - Tasks]
+      summary: Parse all codebundles
+      operationId: parseAllCodebundles
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  /api/v1/tasks/parse-collection/{collection_id}:
+    post:
+      tags: [Admin - Tasks]
+      summary: Parse collection codebundles
+      operationId: parseCollectionCodebundles
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: collection_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  /api/v1/tasks/enhance-codebundles:
+    post:
+      tags: [Admin - Tasks]
+      summary: AI enhance all codebundles
+      operationId: enhanceAllCodebundles
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  /api/v1/tasks/enhance-codebundle/{codebundle_id}:
+    post:
+      tags: [Admin - Tasks]
+      summary: AI enhance single codebundle
+      operationId: enhanceSingleCodebundle
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: codebundle_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  /api/v1/tasks/generate-metrics:
+    post:
+      tags: [Admin - Tasks]
+      summary: Generate system metrics
+      operationId: generateMetrics
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  /api/v1/tasks/validate-yaml:
+    post:
+      tags: [Admin - Tasks]
+      summary: Validate YAML entries
+      operationId: validateYaml
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Task submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  /api/v1/tasks/status/{task_id}:
+    get:
+      tags: [Admin - Tasks]
+      summary: Get task status
+      operationId: taskStatus
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Task status
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/tasks/health:
+    get:
+      tags: [Admin - Tasks]
+      summary: Task system health
+      operationId: taskHealth
+      responses:
+        "200":
+          description: Task system status
+          content:
+            application/json:
+              schema: { type: object }
+
+  # =========================================================================
+  # Task Management
+  # =========================================================================
+  /api/v1/task-management/tasks:
+    get:
+      tags: [Admin - Tasks]
+      summary: Task history
+      operationId: taskHistory
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: task_type
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Task history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks: { type: array, items: { type: object } }
+                  total_count: { type: integer }
+
+  /api/v1/task-management/tasks/running:
+    get:
+      tags: [Admin - Tasks]
+      summary: Running tasks
+      operationId: runningTasks
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Currently running tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  running_tasks: { type: array, items: { type: object } }
+                  count: { type: integer }
+
+  /api/v1/task-management/tasks/{task_id}:
+    get:
+      tags: [Admin - Tasks]
+      summary: Get task by ID
+      operationId: getTask
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Task details
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/task-management/stats:
+    get:
+      tags: [Admin - Tasks]
+      summary: Task execution stats
+      operationId: taskManagementStats
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, default: 7 }
+      responses:
+        "200":
+          description: Task statistics
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/task-management/cleanup:
+    post:
+      tags: [Admin - Tasks]
+      summary: Cleanup old tasks
+      operationId: cleanupTasks
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, default: 30 }
+      responses:
+        "200":
+          description: Cleanup result
+          content:
+            application/json:
+              schema: { type: object }
+
+  # =========================================================================
+  # Admin - Schedules
+  # =========================================================================
+  /api/v1/schedule/schedules:
+    get:
+      tags: [Admin - Schedules]
+      summary: List schedules
+      operationId: listSchedules
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: All Celery Beat schedules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schedules: { type: array, items: { type: object } }
+                  total: { type: integer }
+
+  /api/v1/schedule/schedules/{schedule_name}:
+    get:
+      tags: [Admin - Schedules]
+      summary: Get schedule
+      operationId: getSchedule
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: schedule_name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Schedule details
+          content:
+            application/json:
+              schema: { type: object }
+    put:
+      tags: [Admin - Schedules]
+      summary: Update schedule
+      operationId: updateSchedule
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: schedule_name
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: Update instructions
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/schedule/schedules/{schedule_name}/trigger:
+    post:
+      tags: [Admin - Schedules]
+      summary: Trigger schedule manually
+      operationId: triggerSchedule
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: schedule_name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Task triggered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskSubmitted" }
+
+  # =========================================================================
+  # Raw Data
+  # =========================================================================
+  /api/v1/store-yaml-data:
+    post:
+      tags: [Raw Data]
+      summary: Store YAML data
+      operationId: storeYamlData
+      responses:
+        "200":
+          description: YAML stored
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/clone-repositories:
+    post:
+      tags: [Raw Data]
+      summary: Clone repositories
+      operationId: cloneRepositories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                collection_slugs:
+                  type: array
+                  items: { type: string }
+      responses:
+        "200":
+          description: Clone result
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/parse-stored-data:
+    post:
+      tags: [Raw Data]
+      summary: Parse stored data
+      operationId: parseStoredData
+      responses:
+        "200":
+          description: Parse result
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/v1/raw-data-status:
+    get:
+      tags: [Raw Data]
+      summary: Raw data status
+      operationId: rawDataStatus
+      responses:
+        "200":
+          description: Storage status
+          content:
+            application/json:
+              schema: { type: object }
+
+# ==========================================================================
+# Components
+# ==========================================================================
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Admin token (must start with `admin-`)
+
+  parameters:
+    CollectionSlug:
+      name: collection_slug
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Collection slug identifier
+
+  schemas:
+    Pagination:
+      type: object
+      properties:
+        limit: { type: integer }
+        offset: { type: integer }
+        total: { type: integer }
+        has_more: { type: boolean }
+
+    TaskSubmitted:
+      type: object
+      properties:
+        message: { type: string }
+        task_id: { type: string, format: uuid }
+        status: { type: string, example: submitted }
+
+    CollectionCreate:
+      type: object
+      required: [name, slug, git_url]
+      properties:
+        name: { type: string }
+        slug: { type: string }
+        git_url: { type: string, format: uri }
+        description: { type: string }
+        owner: { type: string }
+        owner_email: { type: string, format: email }
+        owner_icon: { type: string, format: uri }
+        git_ref: { type: string, default: main }
+        is_active: { type: boolean, default: true }
+
+    CollectionUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        git_url: { type: string, format: uri }
+        git_ref: { type: string }
+        owner: { type: string }
+        owner_email: { type: string }
+        owner_icon: { type: string }
+        is_active: { type: boolean }
+
+    CollectionWithStats:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string, example: AWS Cloud/Custodian CodeCollection }
+        slug: { type: string, example: aws-c7n-codecollection }
+        description: { type: string }
+        git_url: { type: string, format: uri }
+        git_ref: { type: string }
+        owner: { type: string }
+        owner_email: { type: string }
+        owner_icon: { type: string }
+        is_active: { type: boolean }
+        codebundle_count: { type: integer }
+        task_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CodeBundle:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string, example: aws-c7n-ebs-health }
+        name: { type: string }
+        display_name: { type: string, example: AWS EBS Health }
+        description: { type: string }
+        doc: { type: string }
+        author: { type: string }
+        support_tags:
+          type: array
+          items: { type: string }
+        discovery_platform: { type: string }
+        access_level: { type: string, enum: [read-only, read-write, unknown] }
+        task_count: { type: integer }
+        sli_count: { type: integer }
+        codecollection:
+          type: object
+          properties:
+            id: { type: integer }
+            slug: { type: string }
+            name: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CodeBundleFull:
+      allOf:
+        - $ref: "#/components/schemas/CodeBundle"
+        - type: object
+          properties:
+            tasks:
+              type: array
+              items:
+                type: object
+                properties:
+                  name: { type: string }
+                  doc: { type: string }
+            slis:
+              type: array
+              items:
+                type: object
+                properties:
+                  name: { type: string }
+                  doc: { type: string }
+            user_variables:
+              type: array
+              items:
+                type: object
+                properties:
+                  name: { type: string }
+                  description: { type: string }
+                  default: { type: string }
+                  example: { type: string }
+            minimum_iam_requirements:
+              type: array
+              items: { type: string }
+            configuration_type:
+              type: object
+              properties:
+                platform: { type: string }
+                has_generation_rules: { type: boolean }
+                resource_types:
+                  type: array
+                  items: { type: string }
+                level_of_detail: { type: string }
+            ai_enhanced_description: { type: string }
+            ai_enhanced_metadata: { type: object }
+            readme: { type: string }
+
+    ChatResponse:
+      type: object
+      properties:
+        answer: { type: string }
+        relevant_tasks:
+          type: array
+          items:
+            type: object
+            properties:
+              codebundle_name: { type: string }
+              codebundle_slug: { type: string }
+              collection_slug: { type: string }
+              description: { type: string }
+              relevance_score: { type: number }
+              platform: { type: string }
+              tasks: { type: array, items: { type: string } }
+        documentation:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              url: { type: string }
+              description: { type: string }
+        source: { type: string, enum: [mcp, simple, fallback] }
+        query: { type: string }

@@ -1,0 +1,249 @@
+version: '3'
+
+vars:
+  PROJECT_NAME: cc-registry-v2
+  COMPOSE_FILE: docker-compose.yml
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # Main lifecycle commands
+  start:
+    desc: Start all services
+    cmds:
+      - echo "🚀 Starting all services..."
+      - docker-compose up -d --build
+
+  stop:
+    desc: Stop all services
+    cmds:
+      - echo "🛑 Stopping all services..."
+      - docker-compose down
+
+  restart:
+    desc: Restart all services
+    cmds:
+      - echo "🔄 Restarting all services..."
+      - docker-compose restart
+
+  # Monitoring commands
+  logs:
+    desc: Show logs for all services
+    cmds:
+      - docker-compose logs -f
+
+  logs:service:
+    desc: Show logs for a specific service
+    cmds:
+      - docker-compose logs -f {{.SERVICE}}
+    vars:
+      SERVICE: '{{.SERVICE | default "backend"}}'
+
+  status:
+    desc: Show service status
+    cmds:
+      - echo "📊 Service Status:"
+      - docker-compose ps
+
+  # Build commands
+  build:
+    desc: Build all services
+    cmds:
+      - echo "🏗️  Building all services..."
+      - docker-compose build
+
+  build:service:
+    desc: Build a specific service
+    cmds:
+      - echo "🏗️  Building {{.SERVICE}}..."
+      - docker-compose build {{.SERVICE}}
+    vars:
+      SERVICE: '{{.SERVICE | default "backend"}}'
+
+  # Cleanup commands
+  clean:
+    desc: Clean up Docker resources
+    cmds:
+      - echo "🧹 Cleaning up Docker resources..."
+      - docker-compose down -v
+      - docker system prune -f
+
+  clean:all:
+    desc: Clean up everything (including images)
+    cmds:
+      - echo "🧹 Cleaning up everything..."
+      - docker-compose down -v --rmi all
+      - docker system prune -af
+
+  # Individual service groups
+  backend:
+    desc: Start only backend services (db, redis, backend)
+    cmds:
+      - echo "🔧 Starting backend services..."
+      - docker-compose up -d database redis backend
+
+  frontend:
+    desc: Start only frontend (requires backend)
+    cmds:
+      - echo "🎨 Starting frontend..."
+      - docker-compose up -d frontend
+
+  workers:
+    desc: Start worker services
+    cmds:
+      - echo "🔄 Starting worker services..."
+      - docker-compose up -d worker scheduler flower
+
+  # Development commands
+  dev:
+    desc: Start development environment (backend + frontend)
+    cmds:
+      - echo "💻 Starting development environment..."
+      - docker-compose up -d database redis backend frontend
+
+  dev:logs:
+    desc: Show logs for development services
+    cmds:
+      - docker-compose logs -f backend frontend mcp-server
+
+  dev:restart:
+    desc: Restart development services
+    cmds:
+      - docker-compose restart backend frontend mcp-server
+
+  # Database commands
+  db:shell:
+    desc: Connect to database shell
+    cmds:
+      - docker-compose exec database psql -U user -d codecollection_registry
+
+  db:backup:
+    desc: Backup database
+    cmds:
+      - echo "💾 Creating database backup..."
+      - docker-compose exec database pg_dump -U user codecollection_registry > backup_$(date +%Y%m%d_%H%M%S).sql
+
+  # Health checks
+  health:
+    desc: Check health of all services
+    cmds:
+      - echo "🏥 Checking service health..."
+      - |
+        echo "Database:" && curl -s http://localhost:5432 > /dev/null && echo "✅ Reachable" || echo "❌ Not reachable"
+        echo "Redis:" && docker-compose exec redis redis-cli ping && echo "✅ Redis OK" || echo "❌ Redis down"
+        echo "Backend:" && curl -s http://localhost:8001/api/v1/health | jq -r '.status' && echo "✅ Backend OK" || echo "❌ Backend down"
+        echo "MCP Server:" && curl -s http://localhost:8000/health | jq -r '.status' && echo "✅ MCP Server OK" || echo "❌ MCP Server down"
+        echo "Frontend:" && curl -s http://localhost:3000 > /dev/null && echo "✅ Frontend OK" || echo "❌ Frontend down"
+
+  # Container image commands
+  image:build:
+    desc: Build all container images with tags
+    cmds:
+      - echo "🐳 Building container images..."
+      - docker build -t cc-registry-v2-backend:{{.TAG}} ./backend
+      - docker build -t cc-registry-v2-frontend:{{.TAG}} ./frontend
+      - docker build -t cc-registry-v2-worker:{{.TAG}} ./worker
+      - echo "✅ All images built successfully"
+    vars:
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:build:backend:
+    desc: Build backend image
+    cmds:
+      - echo "🐳 Building backend image..."
+      - docker build -t cc-registry-v2-backend:{{.TAG}} ./backend
+    vars:
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:build:frontend:
+    desc: Build frontend image
+    cmds:
+      - echo "🐳 Building frontend image..."
+      - docker build -t cc-registry-v2-frontend:{{.TAG}} ./frontend
+    vars:
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:build:worker:
+    desc: Build worker image
+    cmds:
+      - echo "🐳 Building worker image..."
+      - cp backend/requirements.txt worker/requirements.txt
+      - docker build -t cc-registry-v2-worker:{{.TAG}} ./worker
+    vars:
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:tag:
+    desc: Tag images for registry push (set REGISTRY and TAG vars)
+    cmds:
+      - echo "🏷️  Tagging images for {{.REGISTRY}}..."
+      - docker tag cc-registry-v2-backend:latest {{.REGISTRY}}/cc-registry-v2-backend:{{.TAG}}
+      - docker tag cc-registry-v2-frontend:latest {{.REGISTRY}}/cc-registry-v2-frontend:{{.TAG}}
+      - docker tag cc-registry-v2-worker:latest {{.REGISTRY}}/cc-registry-v2-worker:{{.TAG}}
+      - echo "✅ Images tagged"
+    vars:
+      REGISTRY: '{{.REGISTRY | default "ghcr.io/OWNER/REPO"}}'
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:push:
+    desc: Push images to registry (set REGISTRY and TAG vars)
+    cmds:
+      - echo "📤 Pushing images to {{.REGISTRY}}..."
+      - docker push {{.REGISTRY}}/cc-registry-v2-backend:{{.TAG}}
+      - docker push {{.REGISTRY}}/cc-registry-v2-frontend:{{.TAG}}
+      - docker push {{.REGISTRY}}/cc-registry-v2-worker:{{.TAG}}
+      - echo "✅ Images pushed successfully"
+    vars:
+      REGISTRY: '{{.REGISTRY | default "ghcr.io/OWNER/REPO"}}'
+      TAG: '{{.TAG | default "latest"}}'
+
+  image:publish:
+    desc: Build, tag, and push all images (set REGISTRY and TAG vars)
+    cmds:
+      - task: image:build
+        vars:
+          TAG: "{{.TAG}}"
+      - task: image:tag
+        vars:
+          REGISTRY: "{{.REGISTRY}}"
+          TAG: "{{.TAG}}"
+      - task: image:push
+        vars:
+          REGISTRY: "{{.REGISTRY}}"
+          TAG: "{{.TAG}}"
+      - echo "✅ All images published to {{.REGISTRY}}"
+    vars:
+      REGISTRY: '{{.REGISTRY | default "ghcr.io/OWNER/REPO"}}'
+      TAG: '{{.TAG | default "latest"}}'
+
+  # Setup commands
+  setup:
+    desc: Initial setup (create .env, install dependencies)
+    cmds:
+      - |
+        if [ ! -f .env ]; then
+          echo "📝 Creating .env file from example..."
+          cp env.example .env
+          echo "⚠️  Please update .env file with your actual configuration values"
+        else
+          echo "✅ .env file already exists"
+        fi
+      - echo "🔧 Setup complete!"
+
+  # Quick commands
+  up:
+    desc: Alias for start
+    cmds:
+      - task start
+
+  down:
+    desc: Alias for stop
+    cmds:
+      - task stop
+
+  ps:
+    desc: Alias for status
+    cmds:
+      - task status
