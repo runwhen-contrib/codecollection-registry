@@ -99,12 +99,12 @@ jobs:
             GITHUB_SHA=${{ github.sha }}
             GITHUB_REF=${{ github.ref }}
 
-  deploy-to-test:
-    name: Deploy Release to Test
+  deploy-to-prod:
+    name: Deploy Release to Prod
     runs-on: ubuntu-latest
     needs: [create-release, build-mcp-server]
     steps:
-      - name: Trigger registry-test image update
+      - name: Trigger registry-prod image update
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.PAT }}
@@ -113,18 +113,18 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               owner: 'runwhen',
               repo: 'infra-flux-nonprod-shared',
-              workflow_id: 'update-registry-test-images.yaml',
+              workflow_id: 'update-registry-prod-images.yaml',
               ref: 'main',
               inputs: {
                 mcp_server_tag: tag
               }
             });
-            console.log(`Triggered test deploy for MCP server with release tag: ${tag}`);
+            console.log(`Triggered prod deploy for MCP server with release tag: ${tag}`);
 
   summary:
     name: Release Summary
     runs-on: ubuntu-latest
-    needs: [create-release, build-mcp-server, deploy-to-test]
+    needs: [create-release, build-mcp-server, deploy-to-prod]
     if: always()
     steps:
       - name: Build summary
@@ -136,7 +136,7 @@ jobs:
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Release Tag | \`${TAG}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| MCP Server | ${{ needs.build-mcp-server.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Test Deploy | ${{ needs.deploy-to-test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Prod Deploy | ${{ needs.deploy-to-prod.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ needs.build-mcp-server.result }}" = "success" ]; then
