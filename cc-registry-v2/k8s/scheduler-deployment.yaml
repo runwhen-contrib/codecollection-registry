@@ -1,8 +1,161 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cc-registry-schedules
+  namespace: registry-test
+  labels:
+    app: cc-registry
+    component: scheduler
+data:
+  schedules.yaml: |
+    # Celery Beat Schedule Configuration
+    # Edit this ConfigMap to change when scheduled tasks run
+    # After changes, restart the scheduler pod to pick up new values
+
+    schedules:
+      # YAML Validation - Sync collections from YAML to ensure all entries exist in database
+      - name: validate-yaml-seed-daily
+        task: app.tasks.registry_tasks.sync_all_collections_task
+        description: Sync YAML entries into database (validates all collections exist)
+        schedule_type: crontab
+        crontab:
+          hour: 1
+          minute: 0
+          day_of_week: null
+          day_of_month: null
+          month_of_year: null
+        enabled: true
+
+      # =============================================================================
+      # REGISTRY SYNC WORKFLOW
+      # =============================================================================
+      - name: scheduled-sync
+        task: app.tasks.workflow_tasks.sync_parse_enhance_workflow_task
+        description: "Complete sync: clone repos → parse codebundles → AI enhance new"
+        schedule_type: crontab
+        crontab:
+          hour: "0,6,12,18"
+          minute: 0
+        enabled: true
+
+      # =============================================================================
+      # INDIVIDUAL TASKS (Disabled - available for manual trigger from Admin UI)
+      # =============================================================================
+      - name: sync-collections-manual
+        task: app.tasks.registry_tasks.sync_all_collections_task
+        description: "[MANUAL] Sync all collections from repos"
+        schedule_type: crontab
+        crontab:
+          hour: 0
+          minute: 0
+        enabled: false
+
+      - name: parse-codebundles-manual
+        task: app.tasks.registry_tasks.parse_all_codebundles_task
+        description: "[MANUAL] Parse all codebundles from repos"
+        schedule_type: crontab
+        crontab:
+          hour: 0
+          minute: 0
+        enabled: false
+
+      - name: enhance-new-codebundles-manual
+        task: app.tasks.ai_enhancement_tasks.enhance_pending_codebundles_task
+        description: "[MANUAL] AI enhance ONLY new codebundles"
+        schedule_type: crontab
+        crontab:
+          hour: 0
+          minute: 0
+        enabled: false
+
+      # =============================================================================
+      # METRICS & STATISTICS
+      # =============================================================================
+      - name: generate-metrics-daily
+        task: app.tasks.registry_tasks.generate_metrics_task
+        description: Generate daily metrics and statistics
+        schedule_type: crontab
+        crontab:
+          hour: 5
+          minute: 0
+        enabled: false
+
+      - name: update-statistics-hourly
+        task: app.tasks.data_population_tasks.update_collection_statistics_task
+        description: Update collection statistics
+        schedule_type: crontab
+        crontab:
+          hour: null
+          minute: 0
+        enabled: true
+
+      # =============================================================================
+      # HEALTH CHECKS & CLEANUP
+      # =============================================================================
+      - name: health-check
+        task: app.tasks.sync_tasks.health_check_task
+        description: System health check
+        schedule_type: interval
+        interval:
+          minutes: 5
+        enabled: true
+
+      - name: cleanup-old-tasks
+        task: app.tasks.task_monitoring.cleanup_old_tasks_task
+        description: Clean up old completed tasks
+        schedule_type: crontab
+        crontab:
+          hour: 0
+          minute: 30
+        enabled: true
+
+      - name: health-check-tasks
+        task: app.tasks.task_monitoring.health_check_tasks_task
+        description: Health check for task queues and workers
+        schedule_type: interval
+        interval:
+          minutes: 10
+        enabled: true
+
+      # =============================================================================
+      # MCP SERVER INDEXING
+      # =============================================================================
+      - name: index-documentation-daily
+        task: app.tasks.mcp_tasks.index_documentation_task
+        description: Re-index documentation sources and update embeddings
+        schedule_type: crontab
+        crontab:
+          hour: 3
+          minute: 0
+        enabled: true
+
+      - name: reindex-mcp-weekly
+        task: app.tasks.mcp_tasks.reindex_all_task
+        description: Full re-index of all MCP data (codebundles + documentation)
+        schedule_type: crontab
+        crontab:
+          hour: 2
+          minute: 0
+          day_of_week: 0
+        enabled: false
+
+      # =============================================================================
+      # ANALYTICS COMPUTATION
+      # =============================================================================
+      - name: compute-task-growth-analytics
+        task: app.tasks.analytics_tasks.compute_task_growth_analytics
+        description: Analyze git history and compute task growth metrics for dashboard
+        schedule_type: crontab
+        crontab:
+          hour: 2
+          minute: 30
+        enabled: true
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cc-registry-scheduler
-  namespace: codecollection-registry
+  namespace: registry-test
   labels:
     app: cc-registry
     component: scheduler
@@ -20,7 +173,7 @@ spec:
     spec:
       containers:
       - name: scheduler
-        image: ghcr.io/OWNER/REPO/cc-registry-v2-worker:latest  # Replace OWNER/REPO
+        image: us-docker.pkg.dev/runwhen-nonprod-shared/public-images/cc-registry-v2-backend:latest
         imagePullPolicy: Always
         command:
         - celery
@@ -30,18 +183,48 @@ spec:
         - --loglevel=info
         - --schedule=/tmp/celerybeat-schedule
         env:
+        - name: DB_HOST
+          value: "registry-db"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: registry-user.registry-db.credentials.postgresql.acid.zalan.do
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: registry-user.registry-db.credentials.postgresql.acid.zalan.do
+              key: password
+        - name: DB_NAME
+          value: "registry"
+        - name: REDIS_SENTINEL_HOSTS
+          value: "redis-sentinel:26379"
+        - name: REDIS_SENTINEL_MASTER
+          value: "mymaster"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-sentinel
+              key: redis-password
+        - name: REDIS_DB
+          value: "0"
         - name: ENVIRONMENT
           value: "production"
+        - name: MCP_SERVER_URL
+          value: "http://mcp-server:8000"
+        - name: AI_SERVICE_PROVIDER
+          value: "azure-openai"
+        - name: AI_ENHANCEMENT_ENABLED
+          value: "true"
         envFrom:
-        # Load all database and Redis configuration (supports both URL and component-based config)
-        - secretRef:
-            name: cc-registry-secrets
-        # Load Azure OpenAI credentials
         - secretRef:
             name: azure-openai-credentials
         volumeMounts:
-        - name: backend-code
-          mountPath: /app
+        - name: schedules-config
+          mountPath: /app/schedules.yaml
+          subPath: schedules.yaml
           readOnly: true
         - name: celerybeat-schedule
           mountPath: /tmp
@@ -55,31 +238,23 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
           runAsNonRoot: true
-          runAsUser: 1001
+          runAsUser: 1000
           capabilities:
             drop:
             - ALL
           readOnlyRootFilesystem: false
       volumes:
-      - name: backend-code
-        emptyDir: {}
+      - name: schedules-config
+        configMap:
+          name: cc-registry-schedules
       - name: celerybeat-schedule
         emptyDir: {}
-      imagePullSecrets:
-      - name: ghcr-pull-secret
-      initContainers:
-      - name: copy-backend-code
-        image: ghcr.io/OWNER/REPO/cc-registry-v2-backend:latest  # Replace OWNER/REPO
-        command: ['sh', '-c', 'cp -r /app/* /shared-app/']
-        volumeMounts:
-        - name: backend-code
-          mountPath: /shared-app
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: cc-registry-flower
-  namespace: codecollection-registry
+  namespace: registry-test
   labels:
     app: cc-registry
     component: flower
@@ -98,7 +273,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cc-registry-flower
-  namespace: codecollection-registry
+  namespace: registry-test
   labels:
     app: cc-registry
     component: flower

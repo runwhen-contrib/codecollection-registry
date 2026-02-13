@@ -23,6 +23,9 @@ import {
   IntegrationInstructionsOutlined as BundleIcon,
   TerminalOutlined as TaskIcon,
   MenuBookOutlined as DocsIcon,
+  ChatBubbleOutline as ChatIcon,
+  SettingsSuggestOutlined as RunnerIcon,
+  CheckCircleOutline as ResolveIcon,
 } from '@mui/icons-material';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
@@ -82,6 +85,9 @@ const Home: React.FC = () => {
   // Flipboard state - track which 5 items to display
   const [codebundleOffset, setCodebundleOffset] = useState(0);
   const [taskOffset, setTaskOffset] = useState(0);
+  
+  // Category carousel state
+  const [activeCatPage, setActiveCatPage] = useState(0);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,8 +152,15 @@ const Home: React.FC = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       setPlaceholderIndex((prev) => (prev + 1) % EXAMPLE_SEARCHES.length);
-    }, 3500); // Change every 3.5 seconds
+    }, 3500);
+    return () => clearInterval(interval);
 
+  // Category carousel — 4 pages of 4, cycle every 5s
+  }, []);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveCatPage((prev) => (prev + 1) % 4);
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -391,307 +404,185 @@ const Home: React.FC = () => {
         </Container>
       </Box>
 
-      {/* How It Works — Vertical Flow */}
-      <Box sx={{ py: { xs: 4, md: 5 }, bgcolor: 'white', overflow: 'hidden' }}>
+      {/* How It Works — Compact pipeline + Category Carousel */}
+      <Box sx={{ py: { xs: 3, md: 4 }, bgcolor: 'white', overflow: 'hidden' }}>
         <Container maxWidth="lg">
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
 
-            {/* ─── ROW 1: Workspace Chat ─── */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%', justifyContent: 'center' }}>
-              <Box
-                sx={{
-                  width: { xs: 160, md: 180 },
-                  borderRadius: 3,
-                  border: '2px solid #e0e4ec',
-                  bgcolor: 'white',
-                  boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-                  overflow: 'hidden',
-                  flexShrink: 0,
-                }}
-              >
-                <Box sx={{ bgcolor: '#5282f1', px: 1.5, py: 0.75, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.5)' }} />
-                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.5)' }} />
-                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.5)' }} />
-                  <Typography sx={{ fontSize: 10, color: 'white', ml: 0.5, fontWeight: 600 }}>Workspace Chat</Typography>
-                </Box>
-                <Box sx={{ p: 1.25, display: 'flex', flexDirection: 'column', gap: 0.6 }}>
-                  <Box sx={{ bgcolor: '#f0f2f5', borderRadius: 1.5, px: 1, py: 0.4, alignSelf: 'flex-start', maxWidth: '85%' }}>
-                    <Typography sx={{ fontSize: 9.5, color: '#444' }}>My pods keep crashing...</Typography>
-                  </Box>
-                  <Box sx={{ bgcolor: '#5282f1', borderRadius: 1.5, px: 1, py: 0.4, alignSelf: 'flex-end', maxWidth: '85%' }}>
-                    <Typography sx={{ fontSize: 9.5, color: 'white' }}>Found 3 matching tools!</Typography>
-                  </Box>
-                  <Box sx={{ bgcolor: '#f0f2f5', borderRadius: 1.5, px: 1, py: 0.4, alignSelf: 'flex-start', maxWidth: '85%' }}>
-                    <Typography sx={{ fontSize: 9.5, color: '#444' }}>Check my database...</Typography>
-                  </Box>
-                  <Box sx={{ bgcolor: '#5282f1', borderRadius: 1.5, px: 1, py: 0.4, alignSelf: 'flex-end', maxWidth: '85%' }}>
-                    <Typography sx={{ fontSize: 9.5, color: 'white' }}>Running health check...</Typography>
-                  </Box>
-                </Box>
-              </Box>
-              <Box sx={{ maxWidth: 300 }}>
-                <Typography sx={{ fontSize: 16, fontWeight: 700, color: '#1a1a2e', mb: 0.5 }}>
-                  Chat With Your Environment
-                </Typography>
-                <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.5 }}>
-                  Ask questions in natural language — AI interprets real-time data from your applications, infrastructure, and services.
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* ─── Vertical connector ─── */}
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.5 }}>
-              <Box sx={{
-                width: 3, height: 36,
-                background: 'linear-gradient(180deg, #b8caf7 0%, #5282f1 100%)',
-                borderRadius: 2,
-                position: 'relative',
-                '&::after': {
-                  content: '""',
-                  position: 'absolute',
-                  bottom: -5,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: 0, height: 0,
-                  borderTop: '7px solid #5282f1',
-                  borderLeft: '4px solid transparent',
-                  borderRight: '4px solid transparent',
-                },
-              }} />
-            </Box>
-
-            {/* ─── ROW 2: RunWhen Platform ─── */}
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2,
-                px: 3,
-                py: 2,
-                borderRadius: 3,
-                bgcolor: '#ffffff',
-                boxShadow: '0 4px 24px rgba(82,130,241,0.2)',
-                border: '2px solid #e0e8f5',
-                animation: 'corePulse 3s ease-in-out infinite',
-                '@keyframes corePulse': {
-                  '0%, 100%': { boxShadow: '0 4px 24px rgba(82,130,241,0.2)' },
-                  '50%': { boxShadow: '0 4px 36px rgba(82,130,241,0.35)' },
-                },
-              }}
-            >
-              <Box
-                component="img"
-                src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png"
-                alt="RunWhen AI Assistant"
-                sx={{ width: 48, height: 48, borderRadius: '50%', border: '2px solid #e0e8f5', flexShrink: 0 }}
-              />
-              <Box>
-                <Typography sx={{ fontSize: 17, fontWeight: 700, color: '#3a5cb8', lineHeight: 1.1 }}>
-                  RunWhen Platform
-                </Typography>
-                <Typography sx={{ fontSize: 13, color: '#5282f1', mt: 0.25 }}>
-                  Builds context from your systems and decides what to run, and when
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* ─── Vertical connector ─── */}
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.5 }}>
-              <Box sx={{
-                width: 3, height: 36,
-                background: 'linear-gradient(180deg, #5282f1 0%, #2E7D32 100%)',
-                borderRadius: 2,
-                position: 'relative',
-                '&::after': {
-                  content: '""',
-                  position: 'absolute',
-                  bottom: -5,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: 0, height: 0,
-                  borderTop: '7px solid #2E7D32',
-                  borderLeft: '4px solid transparent',
-                  borderRight: '4px solid transparent',
-                },
-              }} />
-            </Box>
-
-            {/* ─── ROW 3: Private Runners (Your VPC) ─── */}
-            <Box
-              sx={{
-                border: '2px dashed #43a047',
-                borderRadius: 3,
-                px: 3,
-                py: 2,
-                bgcolor: 'rgba(46,125,50,0.03)',
-                position: 'relative',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2.5,
-              }}
-            >
-              <Typography sx={{
-                position: 'absolute',
-                top: -10,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                bgcolor: 'white',
-                px: 1.5,
-                fontSize: 10,
-                fontWeight: 600,
-                color: '#2E7D32',
-                letterSpacing: '0.5px',
-                textTransform: 'uppercase',
-                whiteSpace: 'nowrap',
-              }}>
-                Your VPC
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                {[1, 2].map((n) => (
-                  <Box
-                    key={n}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 0.75,
-                      bgcolor: 'white',
-                      border: '1px solid #c8e6c9',
-                      borderRadius: 2,
-                      px: 1.5,
-                      py: 0.75,
-                    }}
-                  >
-                    <Box sx={{
-                      width: 8, height: 8, borderRadius: '50%', bgcolor: '#4caf50', flexShrink: 0,
-                      boxShadow: '0 0 0 2px rgba(76,175,80,0.25)',
-                      animation: 'runnerPulse 2s ease-in-out infinite',
-                      animationDelay: `${n * 0.5}s`,
-                      '@keyframes runnerPulse': { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.5 } },
-                    }} />
-                    <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#2E7D32', whiteSpace: 'nowrap' }}>
-                      Runner {n}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-              <Box>
-                <Typography sx={{ fontSize: 15, fontWeight: 700, color: '#2E7D32' }}>
-                  Private Runners
-                </Typography>
-                <Typography sx={{ fontSize: 13, color: '#558b2f', lineHeight: 1.4 }}>
-                  Tasks run securely inside your environment
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* ─── Vertical connector ─── */}
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.5 }}>
-              <Box sx={{
-                width: 3, height: 36,
-                background: 'linear-gradient(180deg, #2E7D32 0%, #b8caf7 100%)',
-                borderRadius: 2,
-                position: 'relative',
-                '&::after': {
-                  content: '""',
-                  position: 'absolute',
-                  bottom: -5,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: 0, height: 0,
-                  borderTop: '7px solid #b8caf7',
-                  borderLeft: '4px solid transparent',
-                  borderRight: '4px solid transparent',
-                },
-              }} />
-            </Box>
-
-            {/* ─── ROW 4: Category grid fan-out ─── */}
+          {/* ─── Flow timeline ─── */}
+          <Box sx={{ position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', mb: { xs: 3, md: 4 }, px: 2 }}>
+            {/* Connecting line */}
             <Box sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-              gap: 1.5,
-              width: '100%',
-            }}>
+              position: 'absolute',
+              top: 20,
+              left: '12%',
+              right: '12%',
+              height: 2,
+              background: 'linear-gradient(90deg, #5282f1 0%, #3a5cb8 35%, #2E7D32 70%, #1a1a2e 100%)',
+              borderRadius: 1,
+              zIndex: 0,
+            }} />
+            {/* Steps */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: 700, position: 'relative', zIndex: 1 }}>
               {[
-                { name: 'Kubernetes', tag: 'KUBERNETES', color: '#326CE5', tasks: ['Deployment Health', 'CrashLoopBackOff Triage'] },
-                { name: 'AWS', tag: 'AWS', color: '#FF9900', tasks: ['IAM Audit', 'CloudWatch Alerts'] },
-                { name: 'Azure', tag: 'AZURE', color: '#0078D4', tasks: ['App Service Health', 'AKS Monitoring'] },
-                { name: 'Database', tag: 'POSTGRES', color: '#336791', tasks: ['Connection Health', 'Replication Lag'] },
-                { name: 'Applications', tag: 'APPLICATION', color: '#7B1FA2', tasks: ['Python Troubleshoot', 'Go Services'],
-                  langIcons: [
-                    'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg',
-                    'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/go/go-original-wordmark.svg',
-                  ],
-                },
-                { name: 'Cost', tag: 'COST', color: '#2E7D32', tasks: ['Find Savings', 'Idle Resources'] },
-                { name: 'Observability', tag: 'PROMETHEUS', color: '#E6522C', tasks: ['Prometheus Health', 'Log Pipelines'] },
-                { name: 'GCP', tag: 'GCP', color: '#4285F4', tasks: ['GKE Health', 'Cloud SQL'] },
-              ].map((cat, idx) => (
-                <Box
-                  key={cat.name}
-                  onClick={() => handleTagClick(cat.tag)}
-                  sx={{
-                    cursor: 'pointer',
-                    p: 1.5,
-                    borderRadius: 2,
-                    bgcolor: 'white',
-                    border: '1px solid #e8ecf2',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      borderColor: cat.color,
-                      boxShadow: `0 2px 12px ${cat.color}22`,
-                      transform: 'translateY(-2px)',
-                    },
-                    animation: 'fadeSlideUp 0.4s ease-out both',
-                    animationDelay: `${idx * 0.06}s`,
-                    '@keyframes fadeSlideUp': {
-                      from: { opacity: 0, transform: 'translateY(12px)' },
-                      to: { opacity: 1, transform: 'translateY(0)' },
-                    },
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
-                    <Box sx={{
-                      width: 12, height: 12, borderRadius: '50%', bgcolor: cat.color, flexShrink: 0,
-                      boxShadow: `0 0 0 3px ${cat.color}22`,
-                    }} />
-                    {(cat as any).langIcons ? (
-                      <Box sx={{ display: 'flex', gap: 0.25 }}>
-                        {(cat as any).langIcons.map((src: string, i: number) => (
-                          <Box key={i} component="img" src={src} alt="" sx={{ width: 20, height: 20, flexShrink: 0 }} />
-                        ))}
-                      </Box>
-                    ) : tagIcons[cat.tag] ? (
-                      <Box component="img" src={tagIcons[cat.tag]} alt={cat.name} sx={{ width: 22, height: 22, flexShrink: 0 }} />
+                { label: 'Ask', color: '#5282f1', muiIcon: ChatIcon },
+                { label: 'Run Tools', color: '#3a5cb8', muiIcon: RunnerIcon },
+                { label: 'Collect Insights', color: '#2E7D32', img: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png' },
+                { label: 'Resolve', color: '#1a1a2e', muiIcon: ResolveIcon },
+              ].map((step) => (
+                <Box key={step.label} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.75 }}>
+                  <Box sx={{
+                    width: 40, height: 40, borderRadius: '50%', bgcolor: 'white',
+                    border: `2.5px solid ${step.color}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: `0 0 0 4px white, 0 2px 8px ${step.color}20`,
+                  }}>
+                    {step.img ? (
+                      <Box component="img" src={step.img} alt="" sx={{ width: 24, height: 24, borderRadius: '50%' }} />
+                    ) : step.muiIcon ? (
+                      <step.muiIcon sx={{ fontSize: 20, color: step.color }} />
                     ) : null}
-                    <Typography sx={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e', lineHeight: 1 }}>
-                      {cat.name}
-                    </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
-                    {cat.tasks.map((task) => (
-                      <Chip
-                        key={task}
-                        label={task}
-                        size="small"
-                        sx={{
-                          fontSize: '12px',
-                          height: 26,
-                          bgcolor: `${cat.color}0D`,
-                          color: cat.color,
-                          fontWeight: 500,
-                          border: `1px solid ${cat.color}33`,
-                          '& .MuiChip-label': { px: 0.75 },
-                        }}
-                      />
-                    ))}
-                  </Box>
+                  <Typography sx={{ fontSize: 12, fontWeight: 600, color: step.color, textAlign: 'center', lineHeight: 1.2, whiteSpace: 'nowrap' }}>
+                    {step.label}
+                  </Typography>
                 </Box>
               ))}
             </Box>
-
           </Box>
+
+          {/* ─── Category Carousel ─── */}
+          {(() => {
+            const allCategories = [
+              // Page 1 — Core platforms
+              { name: 'Kubernetes', tag: 'KUBERNETES', color: '#326CE5', tasks: ['Inspect Deployment Health', 'Triage CrashLoopBackOff Pods', 'Check Namespace Resources', 'Audit RBAC Policies'] },
+              { name: 'AWS', tag: 'AWS', color: '#FF9900', tasks: ['Audit IAM Policies', 'Check CloudWatch Alerts', 'Monitor EC2 Health', 'Inspect S3 Buckets'] },
+              { name: 'Azure', tag: 'AZURE', color: '#0078D4', tasks: ['Check App Service Health', 'Monitor AKS Clusters', 'Audit Key Vault', 'Inspect Azure SQL'] },
+              { name: 'GCP', tag: 'GCP', color: '#4285F4', tasks: ['GKE Cluster Health', 'Cloud SQL Monitoring', 'IAM Audit', 'Load Balancer Check'] },
+              // Page 2 — Operations
+              { name: 'Database', tag: 'POSTGRES', color: '#336791', tasks: ['Check Connection Health', 'Monitor Replication Lag', 'Query Connection Pool', 'Inspect Slow Queries'] },
+              { name: 'Cost Optimization', tag: 'COST', color: '#2E7D32', tasks: ['Find Cost Savings', 'Identify Idle Resources', 'Right-Size Instances', 'Budget Alerts'] },
+              { name: 'Observability', tag: 'PROMETHEUS', color: '#E6522C', tasks: ['Verify Prometheus Health', 'Check Log Pipelines', 'Alert Rule Audit', 'Dashboard Health'] },
+              { name: 'Applications', tag: 'APPLICATION', color: '#7B1FA2', tasks: ['Troubleshoot Python Apps', 'Inspect Go Services', 'Check Runtime Health', 'Debug API Latency'],
+                langIcons: [
+                  'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg',
+                  'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/go/go-original-wordmark.svg',
+                ],
+              },
+              // Page 3 — DevOps & Engineering
+              { name: 'CI/CD Pipelines', tag: 'GITHUB', color: '#24292f', tasks: ['GitHub Actions Health', 'Build Failure Triage', 'GitLab Pipeline Status', 'Artifact Registry Audit'] },
+              { name: 'GitOps', tag: 'ARGOCD', color: '#EF7B4D', tasks: ['ArgoCD Sync Health', 'FluxCD Drift Detection', 'Deployment Reconciliation', 'Helm Release Status'] },
+              { name: 'OpenShift', tag: 'OPENSHIFT', color: '#EE0000', tasks: ['Cluster Health', 'Route Monitoring', 'Build Config Audit', 'Operator Status'] },
+              { name: 'Cloud Governance', tag: 'CLOUDCUSTODIAN', color: '#1B9AAA', tasks: ['Policy Compliance', 'Tag Enforcement', 'Resource Rules Audit', 'Cost Policy Check'] },
+              // Page 4 — Security, Networking & Managed K8s
+              { name: 'Security & Certs', tag: 'CERT-MANAGER', color: '#D4A017', tasks: ['Certificate Expiry Check', 'Vault Secrets Audit', 'TLS Configuration', 'Issuer Health'] },
+              { name: 'Networking', tag: 'HTTP', color: '#0097A7', tasks: ['Ingress Health Check', 'DNS Resolution Audit', 'API Gateway Status', 'Endpoint Latency'] },
+              { name: 'Managed Kubernetes', tag: 'EKS', color: '#FF9900', tasks: ['EKS Node Health', 'AKS Upgrade Status', 'GKE Autopilot Check', 'Cluster Add-ons Audit'] },
+              { name: 'Monitoring Platforms', tag: 'DATADOG', color: '#632CA6', tasks: ['Datadog Agent Health', 'Sysdig Monitor Status', 'Grafana Dashboard Check', 'Alert Channel Audit'] },
+            ];
+            const pageSize = 4;
+            const totalPages = Math.ceil(allCategories.length / pageSize);
+            const visibleCats = allCategories.slice(activeCatPage * pageSize, activeCatPage * pageSize + pageSize);
+
+            return (
+              <Box>
+                <Box sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+                  gap: 2,
+                }}>
+                  {visibleCats.map((cat) => (
+                    <Box
+                      key={cat.name}
+                      onClick={() => handleTagClick(cat.tag)}
+                      sx={{
+                        cursor: 'pointer',
+                        p: 2.5,
+                        borderRadius: 3,
+                        bgcolor: 'white',
+                        border: '1px solid #e8ecf2',
+                        transition: 'all 0.4s ease',
+                        animation: 'catFadeIn 0.5s ease-out both',
+                        '@keyframes catFadeIn': {
+                          from: { opacity: 0, transform: 'scale(0.96)' },
+                          to: { opacity: 1, transform: 'scale(1)' },
+                        },
+                        '&:hover': {
+                          borderColor: cat.color,
+                          boxShadow: `0 4px 20px ${cat.color}20`,
+                          transform: 'translateY(-3px)',
+                        },
+                      }}
+                    >
+                      {/* Header: icon + name */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                        <Box sx={{
+                          width: 36, height: 36, borderRadius: 2, bgcolor: `${cat.color}12`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                          {(cat as any).langIcons ? (
+                            <Box sx={{ display: 'flex', gap: 0.25 }}>
+                              {(cat as any).langIcons.map((src: string, i: number) => (
+                                <Box key={i} component="img" src={src} alt="" sx={{ width: 18, height: 18 }} />
+                              ))}
+                            </Box>
+                          ) : tagIcons[cat.tag] ? (
+                            <Box component="img" src={tagIcons[cat.tag]} alt={cat.name} sx={{ width: 22, height: 22 }} />
+                          ) : (
+                            <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: cat.color }} />
+                          )}
+                        </Box>
+                        <Typography sx={{ fontSize: 17, fontWeight: 700, color: '#1a1a2e' }}>
+                          {cat.name}
+                        </Typography>
+                      </Box>
+                      {/* Task chips */}
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                        {cat.tasks.map((task) => (
+                          <Chip
+                            key={task}
+                            label={task}
+                            size="small"
+                            sx={{
+                              fontSize: '12px',
+                              height: 28,
+                              bgcolor: `${cat.color}0A`,
+                              color: cat.color,
+                              fontWeight: 500,
+                              border: `1px solid ${cat.color}25`,
+                              '& .MuiChip-label': { px: 1 },
+                            }}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+                {/* Page dots + label */}
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.75, mt: 2 }}>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    {Array.from({ length: totalPages }, (_, page) => (
+                      <Box
+                        key={page}
+                        onClick={() => setActiveCatPage(page)}
+                        sx={{
+                          width: page === activeCatPage ? 24 : 8,
+                          height: 8,
+                          borderRadius: 4,
+                          bgcolor: page === activeCatPage ? '#5282f1' : '#d0d8e8',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s',
+                        }}
+                    />
+                  ))}
+                  </Box>
+                  <Typography sx={{ fontSize: 15, fontWeight: 600, color: 'text.secondary', mt: 0.25 }}>
+                    {['Platforms', 'Operations', 'DevOps & Engineering', 'Security & Networking'][activeCatPage]}
+                  </Typography>
+                </Box>
+              </Box>
+            );
+          })()}
+
         </Container>
       </Box>
 

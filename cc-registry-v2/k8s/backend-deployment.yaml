@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cc-registry-backend
-  namespace: codecollection-registry
+  namespace: registry-test
   labels:
     app: cc-registry
     component: backend
@@ -20,23 +20,40 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ghcr.io/OWNER/REPO/cc-registry-v2-backend:latest  # Replace OWNER/REPO
+        image: us-docker.pkg.dev/runwhen-nonprod-shared/public-images/cc-registry-v2-backend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8001
           name: http
           protocol: TCP
         env:
-        - name: DATABASE_URL
+        - name: DB_HOST
+          value: "registry-db"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
           valueFrom:
             secretKeyRef:
-              name: cc-registry-secrets
-              key: database-url
-        - name: REDIS_URL
+              name: registry-user.registry-db.credentials.postgresql.acid.zalan.do
+              key: username
+        - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: cc-registry-secrets
-              key: redis-url
+              name: registry-user.registry-db.credentials.postgresql.acid.zalan.do
+              key: password
+        - name: DB_NAME
+          value: "registry"
+        - name: REDIS_SENTINEL_HOSTS
+          value: "redis-sentinel:26379"
+        - name: REDIS_SENTINEL_MASTER
+          value: "mymaster"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-sentinel
+              key: redis-password
+        - name: REDIS_DB
+          value: "0"
         - name: ENVIRONMENT
           value: "production"
         - name: MCP_SERVER_URL
@@ -49,17 +66,21 @@ spec:
         - secretRef:
             name: azure-openai-credentials
         volumeMounts:
-        - name: tag-icons
-          mountPath: /app/map-tag-icons.yaml
-          subPath: map-tag-icons.yaml
+        - name: schedules-config
+          mountPath: /app/schedules.yaml
+          subPath: schedules.yaml
           readOnly: true
+        # - name: tag-icons
+        #   mountPath: /app/map-tag-icons.yaml
+        #   subPath: map-tag-icons.yaml
+        #   readOnly: true
         resources:
           requests:
-            memory: "256Mi"
+            memory: "512Mi"
             cpu: "250m"
           limits:
-            memory: "1Gi"
-            cpu: "1000m"
+            memory: "4Gi"
+            cpu: "2"
         livenessProbe:
           httpGet:
             path: /api/v1/health
@@ -85,17 +106,18 @@ spec:
             - ALL
           readOnlyRootFilesystem: false
       volumes:
-      - name: tag-icons
+      - name: schedules-config
         configMap:
-          name: tag-icon-mappings
-      imagePullSecrets:
-      - name: ghcr-pull-secret
+          name: cc-registry-schedules
+      # - name: tag-icons
+      #   configMap:
+      #     name: tag-icon-mappings
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: cc-registry-backend
-  namespace: codecollection-registry
+  namespace: registry-test
   labels:
     app: cc-registry
     component: backend
