@@ -118,10 +118,8 @@ jobs:
               workflow_id: 'update-registry-test-images.yaml',
               ref: 'main',
               inputs: {
-                environment: 'test',
                 mcp_server_tag: tag,
-                pr_number: String(context.issue?.number || ''),
-                branch_prefix: 'chore/registry-image-update'
+                pr_number: String(context.issue?.number || '')
               }
             });
             console.log(`Triggered test deploy for MCP server with tag: ${tag}`);
