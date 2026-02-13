@@ -10,6 +10,11 @@ Welcome to the CodeCollection Registry v2 documentation. This directory contains
 - **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Quick commands and common operations
 - **[CONFIGURATION.md](CONFIGURATION.md)** - Configuration options and environment variables
 
+### Chat & AI
+
+- **[CHAT.md](CHAT.md)** - Chat system architecture, dual search pipeline, LLM synthesis, follow-up detection
+- **[CHAT_DEBUG.md](CHAT_DEBUG.md)** - Debug console features, quality analysis, API endpoints, testing workflows
+
 ### Core Features
 
 - **[MCP_WORKFLOW.md](MCP_WORKFLOW.md)** - **Complete guide** to App → MCP → Indexing workflow
@@ -97,4 +102,4 @@ Old or deprecated docs should be moved to `docs/archive/`.
 
 ---
 
-**Last Updated:** 2026-01-24
+**Last Updated:** 2026-02-09

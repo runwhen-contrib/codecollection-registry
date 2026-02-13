@@ -70,10 +70,7 @@ codecollection-registry/
 
 ```
 codecollection-registry/
-├── docs/             # Feature documentation (one file per feature)
-│   ├── chat.md       # Chat system architecture & troubleshooting
-│   ├── chat-debug.md # Chat debugging tools & procedures
-│   └── ...
+├── docs/             # Redirects to project-level docs
 ├── cc-registry-v2/
 │   ├── backend/      # FastAPI backend
 │   │   ├── app/
@@ -168,7 +165,7 @@ Refer to these docs for:
 ### Chat Quality Debugging
 - **UI:** http://localhost:3000/chat-debug (requires admin login)
 - **Features:** Filtering, sorting, test queries, quality analysis
-- **📖 Full guide:** See [docs/chat-debug.md](docs/chat-debug.md)
+- **📖 Full guide:** See [cc-registry-v2/docs/CHAT_DEBUG.md](cc-registry-v2/docs/CHAT_DEBUG.md)
 
 ### Quick Test
 ```bash
@@ -224,7 +221,7 @@ POST /api/v1/chat/query
 - **Chat UI:** http://localhost:3000/chat (public)
 - **Debug Console:** http://localhost:3000/chat-debug (admin only)
 
-**📖 Full documentation:** See [docs/chat.md](docs/chat.md) and [docs/chat-debug.md](docs/chat-debug.md)
+**📖 Full documentation:** See [cc-registry-v2/docs/CHAT.md](cc-registry-v2/docs/CHAT.md) and [cc-registry-v2/docs/CHAT_DEBUG.md](cc-registry-v2/docs/CHAT_DEBUG.md)
 
 ---
 
@@ -292,8 +289,8 @@ POST /api/v1/chat/query
 1. Update `backend/app/routers/mcp_chat.py` for backend logic
 2. Test with `curl` or Chat Debug "Test Query" tab
 3. Update `frontend/src/pages/Chat.tsx` for UI changes
-4. Add debug logging to `chat_debug_service.py`
-5. **Document in `docs/chat.md`** - Add section for new feature/fix
+4. Add debug logging to `chat_debug.py`
+5. **Document in `cc-registry-v2/docs/CHAT.md`** - Add section for new feature/fix
 
 ### Adding a New API Endpoint
 1. Create/update router in `backend/app/routers/`
@@ -302,12 +299,12 @@ POST /api/v1/chat/query
 4. Create/update React component to call the service
 
 ### Fixing Chat Quality Issues
-1. Reproduce issue in Chat Debug UI ([docs/chat-debug.md](docs/chat-debug.md))
+1. Reproduce issue in Chat Debug UI ([cc-registry-v2/docs/CHAT_DEBUG.md](cc-registry-v2/docs/CHAT_DEBUG.md))
 2. Check "Recent Chats" tab for problematic queries
 3. Look at follow-up detection (`is_followup` flag in metadata)
 4. Verify relevance scores and search results
 5. Adjust prompts, detection logic, or search parameters
-6. **Document fix in `docs/chat.md`** - Update "Known Issues" section
+6. **Document fix in `cc-registry-v2/docs/CHAT.md`** - Update "Known Issues" section
 
 ---
 

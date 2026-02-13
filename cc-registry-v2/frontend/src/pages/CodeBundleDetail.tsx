@@ -176,7 +176,7 @@ const CodeBundleDetail: React.FC = () => {
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                 <VerifiedIcon sx={{ fontSize: '1.1rem', mr: 1, color: 'primary.main' }} />
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                   Support
                 </Typography>
               </Box>
@@ -204,7 +204,7 @@ const CodeBundleDetail: React.FC = () => {
               <CardContent sx={{ p: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                   <LanguageIcon sx={{ fontSize: '1.1rem', mr: 1, color: 'primary.main' }} />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                     Tags
                   </Typography>
                 </Box>
@@ -214,7 +214,7 @@ const CodeBundleDetail: React.FC = () => {
                       key={index}
                       label={tag}
                       size="small"
-                      sx={{ fontSize: '0.7rem', height: 20 }}
+                      sx={{ fontSize: '0.75rem', height: 24 }}
                     />
                   ))}
                 </Box>
@@ -227,7 +227,7 @@ const CodeBundleDetail: React.FC = () => {
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                 <CodeIcon sx={{ fontSize: '1.1rem', mr: 1, color: 'primary.main' }} />
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                   Configuration
                 </Typography>
               </Box>
@@ -282,7 +282,7 @@ const CodeBundleDetail: React.FC = () => {
                         label={type} 
                         size="small" 
                         variant="outlined"
-                        sx={{ fontSize: '0.7rem', height: 20 }}
+                        sx={{ fontSize: '0.75rem', height: 24 }}
                       />
                     ))}
                   </Box>
@@ -309,7 +309,7 @@ const CodeBundleDetail: React.FC = () => {
               <CardContent sx={{ p: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                   <ShieldIcon sx={{ fontSize: '1.1rem', mr: 1, color: 'primary.main' }} />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                     Security & Access
                   </Typography>
                 </Box>
@@ -343,7 +343,7 @@ const CodeBundleDetail: React.FC = () => {
                           label={req} 
                           size="small"
                           variant="outlined"
-                          sx={{ fontSize: '0.7rem', height: 20 }}
+                          sx={{ fontSize: '0.75rem', height: 24 }}
                         />
                       ))}
                     </Box>
@@ -359,7 +359,7 @@ const CodeBundleDetail: React.FC = () => {
               <CardContent sx={{ p: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                   <StorageIcon sx={{ fontSize: '1.1rem', mr: 1, color: 'primary.main' }} />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                     Data Classification
                   </Typography>
                 </Box>
@@ -391,7 +391,7 @@ const CodeBundleDetail: React.FC = () => {
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                 <CodeIcon sx={{ fontSize: '1.1rem', mr: 1, color: 'primary.main' }} />
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                   Details
                 </Typography>
               </Box>
@@ -454,7 +454,7 @@ const CodeBundleDetail: React.FC = () => {
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                 <GitHubIcon sx={{ fontSize: '1.1rem', mr: 1, color: 'primary.main' }} />
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                   Source Code
                 </Typography>
               </Box>
@@ -484,7 +484,7 @@ const CodeBundleDetail: React.FC = () => {
                   rel="noopener noreferrer"
                   fullWidth
                   size="small"
-                  sx={{ textTransform: 'none', fontSize: '0.8rem' }}
+                  sx={{ textTransform: 'none', fontSize: '0.8125rem' }}
                 >
                   View on GitHub
                 </Button>
@@ -499,7 +499,7 @@ const CodeBundleDetail: React.FC = () => {
           {/* Overview - Above Tabs */}
           {codebundle.doc && (
             <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                 Overview
               </Typography>
               <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
@@ -626,7 +626,7 @@ const CodeBundleDetail: React.FC = () => {
                                             size="small"
                                             color={dt === 'data:config' ? 'info' : 'warning'}
                                             variant="outlined"
-                                            sx={{ fontSize: '0.65rem', height: 18, fontWeight: 600 }}
+                                            sx={{ fontSize: '0.75rem', height: 24, fontWeight: 600 }}
                                           />
                                         ))}
                                       </Box>
@@ -675,7 +675,7 @@ const CodeBundleDetail: React.FC = () => {
                 {/* User Variables */}
                 {codebundle.user_variables && codebundle.user_variables.length > 0 ? (
                   <Box>
-                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                       Configuration Variables
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -743,7 +743,7 @@ const CodeBundleDetail: React.FC = () => {
             {/* Security Tab */}
             {mainTab === 3 && (
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold' }}>
+                <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
                   Security & Access Requirements
                 </Typography>
                 
@@ -752,7 +752,7 @@ const CodeBundleDetail: React.FC = () => {
                   <Box sx={{ mb: 4 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                       <SecurityIcon sx={{ fontSize: '1.2rem', color: 'primary.main' }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         Access Level
                       </Typography>
                     </Box>
@@ -782,7 +782,7 @@ const CodeBundleDetail: React.FC = () => {
                   <Box sx={{ mb: 4 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                       <ShieldIcon sx={{ fontSize: '1.2rem', color: 'primary.main' }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         IAM Requirements
                       </Typography>
                       <Chip 
@@ -857,7 +857,7 @@ const CodeBundleDetail: React.FC = () => {
             {/* Updates Tab */}
             {mainTab === 4 && (
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                   Version History
                 </Typography>
                 
@@ -894,7 +894,7 @@ const CodeBundleDetail: React.FC = () => {
                     {/* Git Information */}
                   {codebundle.codecollection?.git_url && (
                     <Box>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         Source Repository
                       </Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -925,7 +925,7 @@ const CodeBundleDetail: React.FC = () => {
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                   <AutoAwesomeIcon sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
                     Enhanced Task Details ({codebundle.ai_enhanced_metadata.enhanced_tasks.length})
                   </Typography>
                 </Box>
@@ -933,7 +933,7 @@ const CodeBundleDetail: React.FC = () => {
                   {codebundle.ai_enhanced_metadata.enhanced_tasks.map((task, index) => (
                     <Card key={index} variant="outlined">
                       <CardContent sx={{ p: 2 }}>
-                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                           {task.name}
                         </Typography>
                         

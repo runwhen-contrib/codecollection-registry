@@ -33,6 +33,8 @@ const Header: React.FC = () => {
   const [browseMenuAnchor, setBrowseMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [linksMenuAnchor, setLinksMenuAnchor] = React.useState<null | HTMLElement>(null);
 
+  const isHomePage = location.pathname === '/';
+
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
   };
@@ -82,7 +84,16 @@ const Header: React.FC = () => {
   );
 
   return (
-    <AppBar position="static">
+    <AppBar
+      position={isHomePage ? 'absolute' : 'static'}
+      elevation={isHomePage ? 0 : undefined}
+      sx={isHomePage ? {
+        backgroundColor: 'transparent',
+        backgroundImage: 'none',
+        boxShadow: 'none',
+        zIndex: 10,
+      } : {}}
+    >
       <Toolbar>
         <Box
           component={Link}

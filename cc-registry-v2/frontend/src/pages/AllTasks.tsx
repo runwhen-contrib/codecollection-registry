@@ -263,7 +263,7 @@ const AllTasks: React.FC = () => {
                       deleteIcon={<CloseIcon />}
                       color="primary"
                       variant="filled"
-                      sx={{ height: 20, fontSize: '0.65rem' }}
+                      sx={{ height: 24, fontSize: '0.75rem' }}
                     />
                   ))}
                 </Box>
@@ -303,7 +303,7 @@ const AllTasks: React.FC = () => {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       px: 1,
-                      py: 0.25,
+                      py: 0.5,
                       cursor: 'pointer',
                       '&:hover': { bgcolor: 'action.hover' },
                       borderBottom: index < filteredSupportTags.length - 1 ? '1px solid' : 'none',
@@ -370,7 +370,7 @@ const AllTasks: React.FC = () => {
                     value={selectedCollection}
                     onChange={(e) => handleCollectionChange(e.target.value)}
                     displayEmpty
-                    sx={{ fontSize: '0.8rem' }}
+                    sx={{ fontSize: '0.8125rem' }}
                   >
                     <MenuItem value="">All Collections</MenuItem>
                     {uniqueCollections.map((collection) => (
@@ -381,7 +381,7 @@ const AllTasks: React.FC = () => {
                   </Select>
                 </FormControl>
                 
-                <Button variant="outlined" onClick={clearFilters} fullWidth size="small" sx={{ py: 0.25, fontSize: '0.7rem' }}>
+                <Button variant="outlined" onClick={clearFilters} fullWidth size="small" sx={{ py: 0.5, fontSize: '0.75rem' }}>
                   Clear Filters
                 </Button>
               </Box>
@@ -407,7 +407,7 @@ const AllTasks: React.FC = () => {
                   variant="text"
                   onClick={clearFilters}
                   startIcon={<ClearIcon />}
-                  sx={{ fontSize: '0.7rem', minHeight: 'auto', py: 0.25, px: 0.5 }}
+                  sx={{ fontSize: '0.75rem', minHeight: 'auto', py: 0.25, px: 0.5 }}
                 >
                   Clear
                 </Button>
@@ -440,10 +440,10 @@ const AllTasks: React.FC = () => {
                         {/* CodeBundle Header */}
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
                           <Box sx={{ flex: 1 }}>
-                            <Typography variant="h6" component="h2" sx={{ mb: 0.5, fontSize: '1.1rem', fontWeight: 600 }}>
+                            <Typography variant="h6" component="h2" sx={{ mb: 0.5, fontSize: '1rem', fontWeight: 600 }}>
                               {group.codebundle.name}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
                               {group.codebundle.collection_name} • {group.tasks.filter(t => t.type === 'TaskSet').length} tasks • {group.tasks.filter(t => t.type === 'SLI').length} SLIs
                             </Typography>
                           </Box>
@@ -519,7 +519,7 @@ const AllTasks: React.FC = () => {
                           {/* TaskSet Tasks */}
                           {group.tasks.filter(task => task.type === 'TaskSet').length > 0 && (
                             <Box sx={{ mb: 1.5 }}>
-                              <Typography variant="subtitle2" sx={{ color: 'primary.main', fontWeight: 600, mb: 0.5, fontSize: '0.85rem' }}>
+                              <Typography variant="subtitle2" sx={{ color: 'primary.main', fontWeight: 600, mb: 0.5, fontSize: '0.875rem' }}>
                                 TaskSet ({group.tasks.filter(task => task.type === 'TaskSet').length})
                               </Typography>
                               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -528,7 +528,8 @@ const AllTasks: React.FC = () => {
                                     key={task.id}
                                     sx={{
                                       px: 1.5,
-                                      py: 0.75,
+                                      py: 1,
+                                      minHeight: 40,
                                       bgcolor: 'action.hover',
                                       borderRadius: 0.5,
                                       border: '1px solid',
@@ -538,7 +539,7 @@ const AllTasks: React.FC = () => {
                                       alignItems: 'center',
                                     }}
                                   >
-                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 500 }}>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8125rem', fontWeight: 500 }}>
                                       {task.name}
                                     </Typography>
                                   </Box>
@@ -550,7 +551,7 @@ const AllTasks: React.FC = () => {
                           {/* SLI Tasks */}
                           {group.tasks.filter(task => task.type === 'SLI').length > 0 && (
                             <Box>
-                              <Typography variant="subtitle2" sx={{ color: 'secondary.main', fontWeight: 600, mb: 0.5, fontSize: '0.85rem' }}>
+                              <Typography variant="subtitle2" sx={{ color: 'secondary.main', fontWeight: 600, mb: 0.5, fontSize: '0.875rem' }}>
                                 SLI ({group.tasks.filter(task => task.type === 'SLI').length})
                               </Typography>
                               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -559,7 +560,8 @@ const AllTasks: React.FC = () => {
                                     key={task.id}
                                     sx={{
                                       px: 1.5,
-                                      py: 0.75,
+                                      py: 1,
+                                      minHeight: 40,
                                       bgcolor: 'action.hover',
                                       borderRadius: 0.5,
                                       border: '1px solid',
@@ -569,7 +571,7 @@ const AllTasks: React.FC = () => {
                                       alignItems: 'center',
                                     }}
                                   >
-                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 500 }}>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8125rem', fontWeight: 500 }}>
                                       {task.name}
                                     </Typography>
                                   </Box>

@@ -210,8 +210,8 @@ const Home: React.FC = () => {
           ? 'linear-gradient(180deg, #1a1a2e 0%, #1a1a2e 5%, #16163a 50%, #1e2a4a 100%)'
           : 'linear-gradient(180deg, #5282f1 0%, #5282f1 5%, #4a75d9 50%, #6b93f5 100%)',
         borderBottom: 'none',
-        py: { xs: 6, md: 10 },
-        mt: '-1px',
+        pt: { xs: 12, md: 16 },
+        pb: { xs: 6, md: 10 },
         position: 'relative',
         overflow: 'hidden',
         '&::before': {
@@ -343,8 +343,8 @@ const Home: React.FC = () => {
                 key={item.label}
                 title={
                   <Box sx={{ p: 0.5, maxWidth: 280 }}>
-                    <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 0.5 }}>{item.label}</Typography>
-                    <Typography sx={{ fontSize: 12, lineHeight: 1.5 }}>{item.tooltip}</Typography>
+                    <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 0.5, color: '#fff' }}>{item.label}</Typography>
+                    <Typography sx={{ fontSize: 12, lineHeight: 1.5, color: 'rgba(255,255,255,0.95)' }}>{item.tooltip}</Typography>
                   </Box>
                 }
                 arrow
@@ -354,7 +354,7 @@ const Home: React.FC = () => {
                   tooltip: {
                     sx: {
                       bgcolor: '#1a1a2e',
-                      color: 'rgba(255,255,255,0.88)',
+                      color: 'rgba(255,255,255,0.95)',
                       boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
                       borderRadius: 2,
                       px: 2,

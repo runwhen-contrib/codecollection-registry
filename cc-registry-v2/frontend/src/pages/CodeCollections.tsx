@@ -85,7 +85,7 @@ const CodeCollections: React.FC = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ mb: 1, fontWeight: 'bold' }}>
+        <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
           CodeCollections
         </Typography>
         <Typography variant="body1" color="text.secondary">
@@ -138,7 +138,7 @@ const CodeCollections: React.FC = () => {
                     }}
                   />
                   <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5 }} noWrap>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }} noWrap>
                       {collection.name}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" noWrap>
@@ -227,7 +227,7 @@ const CodeCollections: React.FC = () => {
       {collections.length === 0 && !loading && (
         <Card sx={{ p: 6, textAlign: 'center' }}>
           <CodeIcon sx={{ fontSize: '4rem', color: 'text.secondary', mb: 2 }} />
-          <Typography variant="h5" sx={{ mb: 1, fontWeight: 'bold' }}>
+          <Typography variant="h5" sx={{ mb: 1, fontWeight: 600 }}>
             No CodeCollections Found
           </Typography>
           <Typography variant="body1" color="text.secondary">

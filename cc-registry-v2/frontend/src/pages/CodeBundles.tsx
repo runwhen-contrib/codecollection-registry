@@ -155,7 +155,7 @@ const CodeBundles: React.FC = () => {
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+        <Typography variant="h4" sx={{ fontWeight: 600 }}>
           All CodeBundles
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -170,7 +170,7 @@ const CodeBundles: React.FC = () => {
       <Card sx={{ mb: 3, p: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <FilterListIcon color="primary" />
-          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
             Search & Filters
           </Typography>
           <Box sx={{ flexGrow: 1 }} />
@@ -303,7 +303,7 @@ const CodeBundles: React.FC = () => {
                 sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
               >
                 <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                  <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>
                     {codebundle.display_name}
                   </Typography>
                   
