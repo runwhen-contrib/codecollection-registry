@@ -290,7 +290,8 @@ const AllTasks: React.FC = () => {
               <Box sx={{ 
                 flex: 1,
                 overflow: 'auto', 
-                border: '1px solid #ddd', 
+                border: '1px solid', 
+                borderColor: 'divider',
                 borderRadius: 1,
                 bgcolor: 'background.paper'
               }}>
@@ -305,7 +306,8 @@ const AllTasks: React.FC = () => {
                       py: 0.25,
                       cursor: 'pointer',
                       '&:hover': { bgcolor: 'action.hover' },
-                      borderBottom: index < filteredSupportTags.length - 1 ? '1px solid #eee' : 'none',
+                      borderBottom: index < filteredSupportTags.length - 1 ? '1px solid' : 'none',
+                      borderBottomColor: 'divider',
                       bgcolor: selectedSupportTags.includes(tag) ? 'primary.50' : 'transparent'
                     }}
                     onClick={() => {
@@ -390,7 +392,7 @@ const AllTasks: React.FC = () => {
         {/* Right Content - Tasks List */}
         <Box sx={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
           {/* Compact Filter Bar */}
-          <Box sx={{ mb: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.200' }}>
+          <Box sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                 {Object.keys(groupedTasks).length} CodeBundle{Object.keys(groupedTasks).length !== 1 ? 's' : ''} • {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
@@ -527,10 +529,10 @@ const AllTasks: React.FC = () => {
                                     sx={{
                                       px: 1.5,
                                       py: 0.75,
-                                      bgcolor: 'grey.50',
+                                      bgcolor: 'action.hover',
                                       borderRadius: 0.5,
                                       border: '1px solid',
-                                      borderColor: 'grey.200',
+                                      borderColor: 'divider',
                                       display: 'flex',
                                       justifyContent: 'space-between',
                                       alignItems: 'center',
@@ -558,10 +560,10 @@ const AllTasks: React.FC = () => {
                                     sx={{
                                       px: 1.5,
                                       py: 0.75,
-                                      bgcolor: 'grey.50',
+                                      bgcolor: 'action.hover',
                                       borderRadius: 0.5,
                                       border: '1px solid',
-                                      borderColor: 'grey.200',
+                                      borderColor: 'divider',
                                       display: 'flex',
                                       justifyContent: 'space-between',
                                       alignItems: 'center',

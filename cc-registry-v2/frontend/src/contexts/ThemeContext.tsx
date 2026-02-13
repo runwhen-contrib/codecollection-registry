@@ -28,6 +28,8 @@ export const ThemeContextProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   useEffect(() => {
     localStorage.setItem('themeMode', mode);
+    // Set class on body for CSS-level dark mode (scrollbars, etc.)
+    document.body.classList.toggle('dark-mode', mode === 'dark');
   }, [mode]);
 
   const toggleTheme = () => {
