@@ -13,7 +13,7 @@ const Footer: React.FC = () => {
   return (
     <Box
       sx={{
-        backgroundColor: '#2f80ed',
+        backgroundColor: (theme) => theme.palette.mode === 'light' ? '#2f80ed' : '#1a1a2e',
         color: 'white',
         padding: 3,
         marginTop: 'auto',
@@ -54,7 +54,7 @@ const Footer: React.FC = () => {
           </Box>
           
           <Typography variant="body2" sx={{ color: 'white' }}>
-            © 2025 RunWhen Inc. All rights reserved.
+            © 2026 RunWhen Inc. All rights reserved.
           </Typography>
         </Box>
       </Container>

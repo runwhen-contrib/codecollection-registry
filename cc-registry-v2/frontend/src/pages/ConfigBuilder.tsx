@@ -1927,7 +1927,7 @@ ${yamlString}`;
                   />
                 </Box>
 
-                <Box sx={{ mt: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+                <Box sx={{ mt: 3, p: 2, backgroundColor: 'action.hover', borderRadius: 1 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Next Steps:
                   </Typography>
@@ -2463,7 +2463,7 @@ ${yamlString}`;
                 variant="outlined" 
                 sx={{ 
                   p: 2, 
-                  backgroundColor: '#f5f5f5',
+                  backgroundColor: 'action.hover',
                   maxHeight: '300px',
                   overflow: 'auto',
                   fontFamily: 'monospace',

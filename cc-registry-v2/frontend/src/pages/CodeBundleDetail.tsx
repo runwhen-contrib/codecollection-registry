@@ -546,7 +546,7 @@ const CodeBundleDetail: React.FC = () => {
                         href={`${codebundle.codecollection.git_url}/blob/main/codebundles/${codebundle.slug}/README.md`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ color: '#1976d2', textDecoration: 'none' }}
+                        style={{ color: 'inherit', textDecoration: 'none' }}
                       >
                         View README on GitHub →
                       </a>

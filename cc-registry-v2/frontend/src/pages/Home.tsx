@@ -27,6 +27,7 @@ import {
   SettingsSuggestOutlined as RunnerIcon,
   CheckCircleOutline as ResolveIcon,
 } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import TaskGrowthChart from '../components/TaskGrowthChart';
@@ -73,6 +74,8 @@ const EXAMPLE_SEARCHES = [
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState<RegistryStats | null>(null);
   const [recentCodebundles, setRecentCodebundles] = useState<RecentCodebundle[]>([]);
@@ -203,7 +206,9 @@ const Home: React.FC = () => {
     <Box>
       {/* Hero Registry Chat Section */}
       <Box sx={{ 
-        background: 'linear-gradient(180deg, #5282f1 0%, #5282f1 5%, #4a75d9 50%, #6b93f5 100%)',
+        background: isDark
+          ? 'linear-gradient(180deg, #1a1a2e 0%, #1a1a2e 5%, #16163a 50%, #1e2a4a 100%)'
+          : 'linear-gradient(180deg, #5282f1 0%, #5282f1 5%, #4a75d9 50%, #6b93f5 100%)',
         borderBottom: 'none',
         py: { xs: 6, md: 10 },
         mt: '-1px',
@@ -405,7 +410,7 @@ const Home: React.FC = () => {
       </Box>
 
       {/* How It Works — Compact pipeline + Category Carousel */}
-      <Box sx={{ py: { xs: 3, md: 4 }, bgcolor: 'white', overflow: 'hidden' }}>
+      <Box sx={{ py: { xs: 3, md: 4 }, bgcolor: 'background.default', overflow: 'hidden' }}>
         <Container maxWidth="lg">
 
           {/* ─── Flow timeline ─── */}
@@ -431,10 +436,10 @@ const Home: React.FC = () => {
               ].map((step) => (
                 <Box key={step.label} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.75 }}>
                   <Box sx={{
-                    width: 40, height: 40, borderRadius: '50%', bgcolor: 'white',
+                    width: 40, height: 40, borderRadius: '50%', bgcolor: 'background.paper',
                     border: `2.5px solid ${step.color}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: `0 0 0 4px white, 0 2px 8px ${step.color}20`,
+                    boxShadow: (t: any) => `0 0 0 4px ${t.palette.background.default}, 0 2px 8px ${step.color}20`,
                   }}>
                     {step.img ? (
                       <Box component="img" src={step.img} alt="" sx={{ width: 24, height: 24, borderRadius: '50%' }} />
@@ -469,7 +474,7 @@ const Home: React.FC = () => {
                 ],
               },
               // Page 3 — DevOps & Engineering
-              { name: 'CI/CD Pipelines', tag: 'GITHUB', color: '#24292f', tasks: ['GitHub Actions Health', 'Build Failure Triage', 'GitLab Pipeline Status', 'Artifact Registry Audit'] },
+              { name: 'CI/CD Pipelines', tag: 'GITHUB', color: '#8b949e', tasks: ['GitHub Actions Health', 'Build Failure Triage', 'GitLab Pipeline Status', 'Artifact Registry Audit'] },
               { name: 'GitOps', tag: 'ARGOCD', color: '#EF7B4D', tasks: ['ArgoCD Sync Health', 'FluxCD Drift Detection', 'Deployment Reconciliation', 'Helm Release Status'] },
               { name: 'OpenShift', tag: 'OPENSHIFT', color: '#EE0000', tasks: ['Cluster Health', 'Route Monitoring', 'Build Config Audit', 'Operator Status'] },
               { name: 'Cloud Governance', tag: 'CLOUDCUSTODIAN', color: '#1B9AAA', tasks: ['Policy Compliance', 'Tag Enforcement', 'Resource Rules Audit', 'Cost Policy Check'] },
@@ -498,8 +503,9 @@ const Home: React.FC = () => {
                         cursor: 'pointer',
                         p: 2.5,
                         borderRadius: 3,
-                        bgcolor: 'white',
-                        border: '1px solid #e8ecf2',
+                        bgcolor: 'background.paper',
+                        border: '1px solid',
+                        borderColor: 'divider',
                         transition: 'all 0.4s ease',
                         animation: 'catFadeIn 0.5s ease-out both',
                         '@keyframes catFadeIn': {
@@ -516,22 +522,22 @@ const Home: React.FC = () => {
                       {/* Header: icon + name */}
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
                         <Box sx={{
-                          width: 36, height: 36, borderRadius: 2, bgcolor: `${cat.color}12`,
+                          width: 36, height: 36, borderRadius: 2, bgcolor: isDark ? `${cat.color}25` : `${cat.color}12`,
                           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                         }}>
                           {(cat as any).langIcons ? (
                             <Box sx={{ display: 'flex', gap: 0.25 }}>
                               {(cat as any).langIcons.map((src: string, i: number) => (
-                                <Box key={i} component="img" src={src} alt="" sx={{ width: 18, height: 18 }} />
+                                <Box key={i} component="img" src={src} alt="" sx={{ width: 18, height: 18, filter: isDark ? 'brightness(1.5)' : 'none' }} />
                               ))}
                             </Box>
                           ) : tagIcons[cat.tag] ? (
-                            <Box component="img" src={tagIcons[cat.tag]} alt={cat.name} sx={{ width: 22, height: 22 }} />
+                            <Box component="img" src={tagIcons[cat.tag]} alt={cat.name} sx={{ width: 22, height: 22, filter: isDark ? 'brightness(1.5)' : 'none' }} />
                           ) : (
                             <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: cat.color }} />
                           )}
                         </Box>
-                        <Typography sx={{ fontSize: 17, fontWeight: 700, color: '#1a1a2e' }}>
+                        <Typography sx={{ fontSize: 17, fontWeight: 700, color: 'text.primary' }}>
                           {cat.name}
                         </Typography>
                       </Box>
@@ -631,8 +637,9 @@ const Home: React.FC = () => {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     p: 1.5,
-                    bgcolor: 'rgba(82, 130, 241, 0.03)',
-                    borderLeft: '3px solid #5282f1',
+                    bgcolor: (t: any) => t.palette.mode === 'light' ? 'rgba(82,130,241,0.03)' : 'rgba(82,130,241,0.06)',
+                    borderLeft: '3px solid',
+                    borderLeftColor: 'primary.main',
                     textDecoration: 'none',
                     color: 'inherit',
                     transition: 'all 0.3s ease',
@@ -654,7 +661,7 @@ const Home: React.FC = () => {
                       }
                     },
                     '&:hover': {
-                      bgcolor: 'rgba(82, 130, 241, 0.08)',
+                      bgcolor: (t: any) => t.palette.mode === 'light' ? 'rgba(82,130,241,0.08)' : 'rgba(82,130,241,0.12)',
                       transform: 'translateX(4px)',
                     }
                   }}
@@ -689,7 +696,7 @@ const Home: React.FC = () => {
                         fontSize: '13px',
                         fontWeight: 600,
                         fontFamily: 'monospace',
-                        color: '#5282f1',
+                        color: 'primary.main',
                         letterSpacing: '0.5px'
                       }}
                     >
@@ -759,8 +766,9 @@ const Home: React.FC = () => {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     p: 1.5,
-                    bgcolor: 'rgba(82, 130, 241, 0.03)',
-                    borderLeft: '3px solid #5282f1',
+                    bgcolor: (t: any) => t.palette.mode === 'light' ? 'rgba(82,130,241,0.03)' : 'rgba(82,130,241,0.06)',
+                    borderLeft: '3px solid',
+                    borderLeftColor: 'primary.main',
                     textDecoration: 'none',
                     color: 'inherit',
                     transition: 'all 0.3s ease',
@@ -782,7 +790,7 @@ const Home: React.FC = () => {
                       }
                     },
                     '&:hover': {
-                      bgcolor: 'rgba(82, 130, 241, 0.08)',
+                      bgcolor: (t: any) => t.palette.mode === 'light' ? 'rgba(82,130,241,0.08)' : 'rgba(82,130,241,0.12)',
                       transform: 'translateX(4px)',
                     }
                   }}
@@ -817,7 +825,7 @@ const Home: React.FC = () => {
                         fontSize: '13px',
                         fontWeight: 600,
                         fontFamily: 'monospace',
-                        color: '#5282f1',
+                        color: 'primary.main',
                         letterSpacing: '0.5px'
                       }}
                     >
@@ -863,12 +871,12 @@ const Home: React.FC = () => {
               textTransform: 'none',
               fontSize: '15px',
               fontWeight: 600,
-              backgroundColor: '#5282f1',
+              backgroundColor: 'primary.main',
               color: 'white',
               px: 4,
               py: 1.25,
               '&:hover': {
-                backgroundColor: '#3a5cb8',
+                backgroundColor: 'primary.dark',
                 color: 'white'
               }
             }}

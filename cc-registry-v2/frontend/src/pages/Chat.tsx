@@ -312,7 +312,7 @@ const Chat: React.FC = () => {
     '& ul, & ol': { pl: 2, mb: 1, fontSize: '0.9rem' },
     '& li': { mb: 0.25, lineHeight: 1.5 },
     '& code': { 
-      backgroundColor: 'rgba(0,0,0,0.06)', 
+      backgroundColor: (t: any) => t.palette.mode === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', 
       px: 0.5, 
       py: 0.25, 
       borderRadius: 0.5,
@@ -320,7 +320,7 @@ const Chat: React.FC = () => {
       fontSize: '0.8rem'
     },
     '& pre': { 
-      backgroundColor: 'rgba(0,0,0,0.04)', 
+      backgroundColor: (t: any) => t.palette.mode === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', 
       p: 1.5, 
       borderRadius: 1,
       overflow: 'auto',
@@ -358,7 +358,7 @@ const Chat: React.FC = () => {
       height: 'calc(100vh - 64px)', 
       display: 'flex', 
       flexDirection: 'column',
-      backgroundColor: '#f7f7f8'
+      backgroundColor: 'background.default'
     }}>
       {/* Messages Area */}
       <Box sx={{ flexGrow: 1, overflow: 'auto', pb: 2 }}>
@@ -370,7 +370,7 @@ const Chat: React.FC = () => {
             textAlign: 'center',
             mt: { xs: 2, md: 8 }
           }}>
-            <Typography variant="h4" sx={{ mb: 2, fontWeight: 500, color: '#202124' }}>
+            <Typography variant="h4" sx={{ mb: 2, fontWeight: 500, color: 'text.primary' }}>
               Welcome to Registry Chat
             </Typography>
             
@@ -485,7 +485,7 @@ const Chat: React.FC = () => {
                   sx={{ 
                     width: 36, 
                     height: 36,
-                    backgroundColor: message.type === 'user' ? '#5282f1' : 'transparent',
+                    backgroundColor: message.type === 'user' ? 'primary.main' : 'transparent',
                     flexShrink: 0
                   }}
                 >
@@ -626,12 +626,12 @@ const Chat: React.FC = () => {
                                 startIcon={<RequestIcon />}
                                 onClick={() => handleOpenRequestDialog(message.userQuery || message.content)}
                                 sx={{
-                                  backgroundColor: '#1976d2',
+                                  backgroundColor: 'primary.main',
                                   color: 'white',
                                   textTransform: 'none',
                                   fontWeight: 500,
                                   '&:hover': { 
-                                    backgroundColor: '#1565c0',
+                                    backgroundColor: 'primary.dark',
                                     color: 'white'
                                   }
                                 }}
@@ -750,7 +750,7 @@ const Chat: React.FC = () => {
 
       {/* Input Area - ChatGPT-style fixed bottom input */}
       <Box sx={{ 
-        backgroundColor: '#f7f7f8',
+        backgroundColor: 'background.default',
         pt: 2,
         pb: { xs: 2, md: 3 },
         px: 2
@@ -771,7 +771,7 @@ const Chat: React.FC = () => {
               borderColor: 'divider',
               borderRadius: 3,
               overflow: 'hidden',
-              backgroundColor: '#fff',
+              backgroundColor: 'background.paper',
               boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
               transition: 'border-color 0.15s, box-shadow 0.15s',
               '&:focus-within': {
@@ -897,14 +897,14 @@ const Chat: React.FC = () => {
             startIcon={submittingRequest ? <CircularProgress size={16} sx={{ color: 'white' }} /> : <RequestIcon />}
             disabled={submittingRequest}
             sx={{
-              backgroundColor: '#1976d2',
+              backgroundColor: 'primary.main',
               color: 'white',
               '&:hover': { 
-                backgroundColor: '#1565c0',
+                backgroundColor: 'primary.dark',
                 color: 'white'
               },
               '&.Mui-disabled': {
-                backgroundColor: 'rgba(25, 118, 210, 0.6)',
+                backgroundColor: 'rgba(82, 130, 241, 0.6)',
                 color: 'white'
               }
             }}

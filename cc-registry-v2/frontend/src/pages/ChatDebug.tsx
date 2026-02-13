@@ -449,7 +449,7 @@ export default function ChatDebug() {
                 <Accordion 
                   key={index}
                   sx={{
-                    borderLeft: isFollowup ? '4px solid #5282f1' : 'none',
+                    borderLeft: isFollowup ? '4px solid' : 'none', borderLeftColor: isFollowup ? 'primary.main' : undefined,
                     marginLeft: isFollowup ? 2 : 0,
                   }}
                 >
@@ -466,7 +466,7 @@ export default function ChatDebug() {
                             width: 4,
                             height: 4,
                             borderRadius: '50%',
-                            bgcolor: '#5282f1',
+                            bgcolor: 'primary.main',
                             mr: -1,
                           }}
                         />
@@ -485,7 +485,7 @@ export default function ChatDebug() {
                                 ml: 1, 
                                 height: 20,
                                 fontSize: '0.7rem',
-                                bgcolor: '#5282f1',
+                                bgcolor: 'primary.main',
                                 color: 'white',
                               }}
                             />

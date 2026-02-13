@@ -7,6 +7,7 @@ import {
   CircularProgress,
   Alert,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import {
   LineChart,
   Line,
@@ -26,6 +27,8 @@ interface ChartData {
 }
 
 const TaskGrowthChart: React.FC = () => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const [data, setData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,25 +110,26 @@ const TaskGrowthChart: React.FC = () => {
                 <stop offset="95%" stopColor="#FF6B35" stopOpacity={0}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#333' : '#e0e0e0'} />
             <XAxis 
               dataKey="week" 
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
               interval={labelInterval}
               angle={-45}
               textAnchor="end"
               height={60}
             />
             <YAxis 
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
               tickFormatter={(value) => value.toLocaleString()}
             />
             <Tooltip 
               formatter={(value: number | undefined) => [`${(value ?? 0).toLocaleString()} tasks`, 'Total Tasks']}
               contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                border: '1px solid #ccc',
+                backgroundColor: isDark ? '#2a2a2a' : 'rgba(255, 255, 255, 0.95)',
+                border: `1px solid ${isDark ? '#444' : '#ccc'}`,
                 borderRadius: '4px',
+                color: theme.palette.text.primary,
               }}
             />
             <Area 

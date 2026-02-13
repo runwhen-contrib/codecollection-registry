@@ -15,15 +15,19 @@ import {
   Menu as MenuIcon,
   KeyboardArrowDown as ArrowDownIcon,
   MoreVert as MoreVertIcon,
+  DarkMode as DarkModeIcon,
+  LightMode as LightModeIcon,
 } from '@mui/icons-material';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useThemeMode } from '../contexts/ThemeContext';
 
 const Header: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { itemCount } = useCart();
   const { isAuthenticated, user, logout } = useAuth();
+  const { mode, toggleTheme } = useThemeMode();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [moreMenuAnchor, setMoreMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [browseMenuAnchor, setBrowseMenuAnchor] = React.useState<null | HTMLElement>(null);
@@ -78,7 +82,7 @@ const Header: React.FC = () => {
   );
 
   return (
-    <AppBar position="static" sx={{ backgroundColor: '#5282f1' }}>
+    <AppBar position="static">
       <Toolbar>
         <Box
           component={Link}
@@ -283,6 +287,11 @@ const Header: React.FC = () => {
                 </MenuItem>
               </>
             )}
+            <Divider />
+            <MenuItem onClick={() => { toggleTheme(); handleMoreMenuClose(); }}>
+              {mode === 'dark' ? <LightModeIcon sx={{ fontSize: 18, mr: 1 }} /> : <DarkModeIcon sx={{ fontSize: 18, mr: 1 }} />}
+              {mode === 'dark' ? 'Light Mode' : 'Dark Mode'}
+            </MenuItem>
           </Menu>
           
           {/* User Menu (when authenticated) */}
