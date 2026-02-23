@@ -1,105 +1,56 @@
 # CodeCollection Registry v2 Documentation
 
-Welcome to the CodeCollection Registry v2 documentation. This directory contains all project documentation organized by topic.
+All project documentation, organized by topic.
 
-## 📚 Documentation Index
+## Architecture and Design
 
-### Getting Started
-
-- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Complete deployment guide for Docker Compose and Kubernetes
-- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Quick commands and common operations
-- **[CONFIGURATION.md](CONFIGURATION.md)** - Configuration options and environment variables
-
-### Chat & AI
-
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture: services, data flow, PostgreSQL + pgvector, MCP server, Celery tasks
+- **[MCP_WORKFLOW.md](MCP_WORKFLOW.md)** - Document indexing pipeline, embedding generation, vector store, and search flow
 - **[CHAT.md](CHAT.md)** - Chat system architecture, dual search pipeline, LLM synthesis, follow-up detection
-- **[CHAT_DEBUG.md](CHAT_DEBUG.md)** - Debug console features, quality analysis, API endpoints, testing workflows
 
-### Core Features
+## Setup and Configuration
 
-- **[MCP_WORKFLOW.md](MCP_WORKFLOW.md)** - **Complete guide** to App → MCP → Indexing workflow
-- **[SCHEDULES.md](SCHEDULES.md)** - Celery Beat schedule management and configuration
-- **[MCP_INDEXING_SCHEDULE.md](MCP_INDEXING_SCHEDULE.md)** - Automated documentation indexing schedules
-- **[WORKFLOW_FIX.md](WORKFLOW_FIX.md)** - Workflow orchestration and task chaining
-- **[ANALYTICS_FEATURES.md](ANALYTICS_FEATURES.md)** - Task growth chart and Google Analytics integration
-
-### Infrastructure Setup
-
+- **[CONFIGURATION.md](CONFIGURATION.md)** - Environment variables, secrets, and configuration files
+- **[AZURE_OPENAI_SETUP.md](AZURE_OPENAI_SETUP.md)** - Azure OpenAI integration (GPT + Embeddings)
 - **[DATABASE_REDIS_CONFIG.md](DATABASE_REDIS_CONFIG.md)** - PostgreSQL and Redis configuration options
-- **[AZURE_OPENAI_SETUP.md](AZURE_OPENAI_SETUP.md)** - Azure OpenAI integration for AI features
-- **[HELM_VERSION_MANAGEMENT.md](HELM_VERSION_MANAGEMENT.md)** - Helm chart version tracking
-- **[SECRETS_UPDATED.md](SECRETS_UPDATED.md)** - Secret management and environment variables
+- **[SCHEDULES.md](SCHEDULES.md)** - Celery Beat schedule management and format reference
+- **[MCP_INDEXING_SCHEDULE.md](MCP_INDEXING_SCHEDULE.md)** - Automated documentation indexing schedules
 
-### Troubleshooting
+## Deployment
+
+- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Complete deployment guide (Docker Compose and Kubernetes)
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Quick commands and common operations
+
+## Feature Documentation
+
+- **[ANALYTICS_FEATURES.md](ANALYTICS_FEATURES.md)** - Task growth chart and Google Analytics integration
+- **[CHAT_DEBUG.md](CHAT_DEBUG.md)** - Chat debug console, quality analysis, testing workflows
+- **[HELM_VERSION_MANAGEMENT.md](HELM_VERSION_MANAGEMENT.md)** - Helm chart version tracking
+- **[USER_VARIABLES_FEATURE.md](USER_VARIABLES_FEATURE.md)** - User variables parsing and display
+
+## Troubleshooting
 
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
 
-### Kubernetes Specific
+## Kubernetes
 
-See the [`../k8s/`](../k8s/) directory for Kubernetes-specific documentation:
+See the [`../k8s/`](../k8s/) directory:
+
 - `k8s/README.md` - Kubernetes deployment overview
 - `k8s/INGRESS_SETUP.md` - Ingress and TLS configuration
-- `k8s/CONTAINER_BUILD.md` - Building container images
+- `k8s/CONTAINER_BUILD.md` - Container image build workflow
 - `k8s/ZALANDO_POSTGRES_CONFIG.md` - Zalando Postgres Operator setup
 
-### Archived Documentation
+## Quick Start
 
-The [`archive/`](archive/) directory contains older documentation that may still be useful for historical reference:
-- Previous migration guides
-- Deprecated features
-- Old troubleshooting notes
+1. Review [ARCHITECTURE.md](ARCHITECTURE.md) for system overview
+2. Follow [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for setup
+3. Configure with [CONFIGURATION.md](CONFIGURATION.md)
+4. Use [QUICK_REFERENCE.md](QUICK_REFERENCE.md) for day-to-day commands
 
-## 🏗️ Project Architecture
+## Contributing to Documentation
 
-```
-cc-registry-v2/
-├── backend/          # FastAPI backend
-│   ├── app/
-│   │   ├── routers/  # API endpoints
-│   │   ├── services/ # Business logic
-│   │   ├── models/   # Database models
-│   │   ├── tasks/    # Celery tasks
-│   │   └── core/     # Config & dependencies
-│   └── alembic/      # Database migrations
-├── frontend/         # React + TypeScript UI
-│   ├── src/
-│   │   ├── pages/    # Page components
-│   │   ├── components/ # Reusable components
-│   │   └── services/ # API clients
-├── k8s/              # Kubernetes manifests
-├── docs/             # Documentation (this directory)
-├── database/         # DB init scripts
-└── docker-compose.yml
-```
-
-## 🚀 Quick Start
-
-1. **Setup:** Follow [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
-2. **Configure:** Review [CONFIGURATION.md](CONFIGURATION.md)
-3. **Deploy:** Use [QUICK_REFERENCE.md](QUICK_REFERENCE.md) for common commands
-4. **Troubleshoot:** Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if issues arise
-
-## 🔗 External Resources
-
-- **Main Repository:** https://github.com/runwhen-contrib/codecollection-registry
-- **RunWhen Documentation:** https://docs.runwhen.com
-- **MCP Server:** ../mcp-server/
-
-## 📝 Contributing to Documentation
-
-When adding new documentation:
-1. Create files in `docs/` directory (not project root)
-2. Use clear, descriptive names (e.g., `FEATURE_NAME.md`)
-3. Update this README.md index
-4. Follow existing documentation style
-
-**Do NOT create:**
-- Temporary fix files (`*-FIX.md`, `*-SUMMARY.md`, `*-UPDATE.md`)
-- Duplicate documentation
-- Documentation in project root (except `README.md`)
-
-Old or deprecated docs should be moved to `docs/archive/`.
-
----
-
-**Last Updated:** 2026-02-09
+- All docs go in this `docs/` directory (not the project root)
+- Use clear, descriptive names (e.g., `FEATURE_NAME.md`)
+- Update this README index when adding new docs
+- Do not create temporary files (`*-FIX.md`, `*-SUMMARY.md`, `*-UPDATE.md`)
