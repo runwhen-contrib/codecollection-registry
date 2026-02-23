@@ -1,5 +1,10 @@
 """
-Embedding generation utilities using Azure OpenAI or local models.
+DEPRECATED — Embedding generation utilities.
+
+Embedding generation has moved to the backend:
+  cc-registry-v2/backend/app/services/embedding_service.py
+
+This file is kept for reference only.
 """
 import os
 import logging

@@ -139,6 +139,78 @@ class RegistryClient:
         return resp.json()
 
     # -----------------------------------------------------------------
+    # Vector / semantic search (backed by pgvector in the backend)
+    # -----------------------------------------------------------------
+
+    async def vector_search(
+        self,
+        query: str,
+        tables: str = None,
+        max_results: int = 10,
+    ) -> Dict[str, Any]:
+        """Unified semantic search across vector tables."""
+        params: Dict[str, Any] = {"query": query, "max_results": max_results}
+        if tables:
+            params["tables"] = tables
+        resp = await self._client.get("/api/v1/vector/search", params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def vector_search_codebundles(
+        self,
+        query: str,
+        max_results: int = 10,
+        platform: str = None,
+        collection_slug: str = None,
+    ) -> List[Dict[str, Any]]:
+        """Semantic search over codebundle embeddings."""
+        params: Dict[str, Any] = {"query": query, "max_results": max_results}
+        if platform:
+            params["platform"] = platform
+        if collection_slug:
+            params["collection_slug"] = collection_slug
+        resp = await self._client.get("/api/v1/vector/search/codebundles", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("results", [])
+
+    async def vector_search_documentation(
+        self,
+        query: str,
+        max_results: int = 10,
+        category: str = None,
+    ) -> List[Dict[str, Any]]:
+        """Semantic search over documentation embeddings."""
+        params: Dict[str, Any] = {"query": query, "max_results": max_results}
+        if category:
+            params["category"] = category
+        resp = await self._client.get("/api/v1/vector/search/documentation", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("results", [])
+
+    async def vector_search_libraries(
+        self,
+        query: str,
+        max_results: int = 10,
+        category: str = None,
+    ) -> List[Dict[str, Any]]:
+        """Semantic search over library embeddings."""
+        params: Dict[str, Any] = {"query": query, "max_results": max_results}
+        if category:
+            params["category"] = category
+        resp = await self._client.get("/api/v1/vector/search/libraries", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("results", [])
+
+    async def vector_stats(self) -> Dict[str, int]:
+        """Return row counts for each vector table."""
+        resp = await self._client.get("/api/v1/vector/stats")
+        resp.raise_for_status()
+        return resp.json()
+
+    # -----------------------------------------------------------------
     # Lifecycle
     # -----------------------------------------------------------------
 

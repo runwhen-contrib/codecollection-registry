@@ -8,5 +8,12 @@ from .version import CodeCollectionVersion, VersionCodebundle
 from .task_execution import TaskExecution
 from .helm_chart import HelmChart, HelmChartVersion, HelmChartTemplate
 from .analytics import TaskGrowthMetric
+from .vector_models import VectorCodebundle, VectorCodecollection, VectorLibrary, VectorDocumentation
 
-__all__ = ["CodeCollection", "Codebundle", "RawYamlData", "RawRepositoryData", "CodeCollectionMetrics", "SystemMetrics", "AIConfiguration", "AIEnhancementLog", "CodeCollectionVersion", "VersionCodebundle", "TaskExecution", "HelmChart", "HelmChartVersion", "HelmChartTemplate", "TaskGrowthMetric"]
+__all__ = [
+    "CodeCollection", "Codebundle", "RawYamlData", "RawRepositoryData",
+    "CodeCollectionMetrics", "SystemMetrics", "AIConfiguration", "AIEnhancementLog",
+    "CodeCollectionVersion", "VersionCodebundle", "TaskExecution",
+    "HelmChart", "HelmChartVersion", "HelmChartTemplate", "TaskGrowthMetric",
+    "VectorCodebundle", "VectorCodecollection", "VectorLibrary", "VectorDocumentation",
+]

@@ -131,29 +131,29 @@ schedules:
     enabled: true
 
   # =============================================================================
-  # MCP SERVER INDEXING
+  # VECTOR INDEXING (pgvector embeddings)
   # =============================================================================
 
-  # Documentation Indexing - Re-index documentation sources daily
+  # Documentation Indexing — crawl sources.yaml URLs, generate embeddings, store in pgvector
   - name: index-documentation-daily
-    task: app.tasks.mcp_tasks.index_documentation_task
-    description: Re-index documentation sources and update embeddings
+    task: app.tasks.indexing_tasks.index_documentation_task
+    description: Crawl documentation sources and update vector embeddings
     schedule_type: crontab
     crontab:
       hour: 3
       minute: 0
     enabled: true
 
-  # Full MCP Re-index - Complete rebuild of vector database (weekly)
-  - name: reindex-mcp-weekly
-    task: app.tasks.mcp_tasks.reindex_all_task
-    description: Full re-index of all MCP data (codebundles + documentation)
+  # Full vector reindex — codebundles + codecollections + documentation
+  - name: reindex-vectors-weekly
+    task: app.tasks.indexing_tasks.reindex_all_task
+    description: Full rebuild of all vector embeddings in pgvector
     schedule_type: crontab
     crontab:
       hour: 2
       minute: 0
       day_of_week: 0  # Sunday at 2 AM
-    enabled: false  # Disabled by default - enable if needed
+    enabled: true
 
   # =============================================================================
   # ANALYTICS COMPUTATION

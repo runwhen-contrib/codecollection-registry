@@ -35,11 +35,19 @@ class Settings(BaseSettings):
     AI_MODEL: str = "gpt-4"
     AI_ENHANCEMENT_ENABLED: bool = False
     
-    # Azure OpenAI Configuration
+    # Azure OpenAI Configuration (GPT / chat completions)
     AZURE_OPENAI_API_KEY: Optional[str] = None
     AZURE_OPENAI_ENDPOINT: Optional[str] = None
     AZURE_OPENAI_DEPLOYMENT_NAME: Optional[str] = None
     AZURE_OPENAI_API_VERSION: str = "2024-02-15-preview"
+    
+    # Azure OpenAI Embedding Configuration (separate endpoint supported)
+    AZURE_OPENAI_EMBEDDING_ENDPOINT: Optional[str] = None
+    AZURE_OPENAI_EMBEDDING_API_KEY: Optional[str] = None
+    AZURE_OPENAI_EMBEDDING_API_VERSION: Optional[str] = None
+    AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str = "text-embedding-3-small"
+    EMBEDDING_DIMENSIONS: int = 1536
+    EMBEDDING_BATCH_SIZE: int = 100
     
     # AI Service Provider (openai, azure-openai)
     AI_SERVICE_PROVIDER: str = "openai"
