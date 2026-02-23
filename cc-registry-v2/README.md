@@ -4,68 +4,48 @@ A modern, scalable registry for RunWhen CodeCollections with AI-powered enhancem
 
 ## Architecture Overview
 
+8 Docker services orchestrated by `docker-compose.yml`:
+
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Frontend  │    │   Backend   │    │   Worker    │
-│   (React)   │◄──►│  (FastAPI)  │◄──►│  (Celery)   │
-│   Port 3000 │    │  Port 8001  │    │             │
-└─────────────┘    └──────┬──────┘    └─────────────┘
-                          │                   │
-                          │                   │
-             ┌────────────┴────┬──────────────┘
-             │                 │
-             ▼                 ▼
-    ┌─────────────┐    ┌─────────────┐
-    │ MCP Server  │    │    Redis    │
-    │ (Semantic   │    │ (Message    │
-    │  Search)    │    │  Broker)    │
-    │  Port 8000  │    │  Port 6379  │
-    └─────────────┘    └─────────────┘
-             │
-             ▼
-    ┌─────────────┐
-    │  Database   │
-    │(PostgreSQL) │
-    │  Port 5432  │
-    └─────────────┘
+                ┌──────────────────────────────────────────────┐
+                │               Frontend (React)                │
+                │                   :3000                       │
+                └────────────────────┬─────────────────────────┘
+                                     │ HTTP
+                                     ▼
+┌────────────────┐          ┌────────────────────┐         ┌──────────────┐
+│   MCP Server   │◄─────────│     Backend        │────────►│    Worker    │
+│  (stateless)   │  HTTP    │    (FastAPI)       │  Celery │   (Celery)   │
+│    :8000       │  /tools/ │     :8001          │  tasks  │              │
+└────────────────┘  call    └────────┬───────────┘         └──────┬───────┘
+        │                            │                            │
+        │  REGISTRY_API_URL          │                            │
+        │  (all data queries         │                            │
+        │   delegate to backend)     │                            │
+        └───────────►────────────────┘                            │
+                                     │                            │
+                       ┌─────────────┼────────────────────────────┘
+                       │             │
+                       ▼             ▼
+              ┌──────────────┐  ┌──────────┐  ┌───────────┐
+              │  PostgreSQL  │  │  Redis   │  │ Scheduler │
+              │  + pgvector  │  │  :6379   │  │  (Beat)   │
+              │    :5432     │  └──────────┘  └───────────┘
+              └──────────────┘
 ```
 
-## Services
+| Service | Stack | Port | Purpose |
+|---------|-------|------|---------|
+| **frontend** | React 19 + TypeScript + MUI v7 | 3000 | SPA for browsing and managing CodeBundles |
+| **backend** | FastAPI + SQLAlchemy 2.0 | 8001 | REST API (`/api/v1/`), business logic, AI enhancement |
+| **mcp-server** | FastAPI (separate repo: `../mcp-server`) | 8000 | Stateless MCP tool server, delegates to backend API |
+| **worker** | Celery (shares backend image) | -- | Background task processing |
+| **scheduler** | Celery Beat (shares backend image) | -- | Cron-driven task scheduling |
+| **database** | PostgreSQL 15 + pgvector | 5432 | Primary data store with vector extension |
+| **redis** | Redis 7 Alpine | 6379 | Celery broker and result backend |
+| **flower** | Flower 2.0 | 5555 | Celery monitoring dashboard |
 
-### 🎨 Frontend Service (`/frontend`)
-- **Technology**: React + TypeScript + Material-UI
-- **Purpose**: User interface for registry browsing and management
-- **Port**: 3000
-- **Features**: Registry browsing, admin panel, task monitoring
-
-### ⚡ Backend Service (`/backend`)
-- **Technology**: FastAPI + SQLAlchemy + Pydantic
-- **Purpose**: REST API server and business logic
-- **Port**: 8001
-- **Features**: CRUD operations, authentication, task orchestration
-
-### 🔄 Worker Service (`/worker`)
-- **Technology**: Celery + Redis
-- **Purpose**: Background task processing
-- **Features**: Data population, AI enhancement, scheduled jobs
-
-### 🗄️ Database Service (`/database`)
-- **Technology**: PostgreSQL 15
-- **Purpose**: Persistent data storage
-- **Port**: 5432
-- **Features**: CodeCollections, Codebundles, metrics, task history
-
-### 📨 Redis Service
-- **Technology**: Redis 7
-- **Purpose**: Message broker for Celery
-- **Port**: 6379
-- **Features**: Task queuing, caching, session storage
-
-### 🔍 MCP Server Service (`/mcp-server`)
-- **Technology**: FastAPI + Vector Store
-- **Purpose**: Semantic search and knowledge base
-- **Port**: 8000
-- **Features**: CodeBundle search, library lookup, AI-powered search
+For full architecture details, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Quick Start
 
@@ -328,16 +308,23 @@ For detailed deployment instructions, see:
 
 ## Documentation
 
-- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Complete deployment guide
-- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Quick command reference
-- **[WORKFLOWS_SEPARATED.md](WORKFLOWS_SEPARATED.md)** - Why workflows are separate
-- **[MCP_SERVER_INTEGRATION.md](MCP_SERVER_INTEGRATION.md)** - MCP server integration guide
-- **[AZURE_OPENAI_SETUP.md](AZURE_OPENAI_SETUP.md)** - Azure OpenAI configuration guide
+### Architecture and Design
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture, services, data flow
+- **[docs/MCP_WORKFLOW.md](docs/MCP_WORKFLOW.md)** - Document indexing pipeline and search flow
+- **[docs/CHAT.md](docs/CHAT.md)** - Chat system architecture
+
+### Setup and Configuration
+- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** - Environment variables and secrets
+- **[docs/AZURE_OPENAI_SETUP.md](docs/AZURE_OPENAI_SETUP.md)** - Azure OpenAI configuration
+- **[docs/DATABASE_REDIS_CONFIG.md](docs/DATABASE_REDIS_CONFIG.md)** - Database and Redis setup
+- **[docs/SCHEDULES.md](docs/SCHEDULES.md)** - Schedule management
+- **[docs/MCP_INDEXING_SCHEDULE.md](docs/MCP_INDEXING_SCHEDULE.md)** - Automated indexing setup
+
+### Deployment
+- **[docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)** - Complete deployment guide
+- **[docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)** - Quick command reference
 - **[k8s/README.md](k8s/README.md)** - Kubernetes deployment details
 - **[k8s/CONTAINER_BUILD.md](k8s/CONTAINER_BUILD.md)** - Container build workflow
-- **[GCR_SETUP.md](GCR_SETUP.md)** - Google Cloud Registry setup
-- **[Taskfile.yml](Taskfile.yml)** - Available task commands
-- **[docker-compose.yml](docker-compose.yml)** - Local development setup
 
 ## Available Commands
 

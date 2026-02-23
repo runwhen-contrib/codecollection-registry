@@ -1,595 +1,375 @@
-# App → MCP → Indexing Workflow
+# MCP Server Workflow: Indexing and Search
 
-This document explains how the CodeCollection Registry app integrates with the MCP server and how indexing works.
+How document indexing, embedding generation, and semantic search work in the CodeCollection Registry.
 
-## 🏗️ Architecture Overview
+## Overview
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    CodeCollection Registry v2                    │
-│  (cc-registry-v2: FastAPI Backend + React Frontend)             │
-└─────────────────────────────────────────────────────────────────┘
-           │                                        ▲
-           │ 1. HTTP API calls                      │ 3. Returns semantic
-           │    (find_codebundle,                   │    search results
-           │     find_documentation,                │    (markdown formatted)
-           │     keyword_usage_help)                │
-           ▼                                        │
-┌─────────────────────────────────────────────────────────────────┐
-│                         MCP Server                               │
-│   (mcp-server: HTTP API + Vector Store)                         │
-│                                                                  │
-│   - server_http.py: HTTP API endpoint                           │
-│   - tools/: Semantic search tools                               │
-│   - utils/vector_store.py: ChromaDB interface                   │
-│   - chroma_db/: Vector database (embeddings)                    │
-└─────────────────────────────────────────────────────────────────┘
-           ▲                                        │
-           │ 2. Queries vector DB                   │ 4. Indexer updates
-           │    using embeddings                    │    embeddings
-           │                                        ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                          Indexer                                 │
-│   (mcp-server/indexer.py)                                       │
-│                                                                  │
-│   Processes:                                                     │
-│   - GitHub repos → Parse codebundles                            │
-│   - sources.yaml → Crawl documentation                          │
-│   - Generate embeddings (Azure OpenAI)                          │
-│   - Store in ChromaDB                                           │
-└─────────────────────────────────────────────────────────────────┘
-```
+There are two distinct data paths:
 
-## 📊 Data Flow
+1. **Runtime search** -- The MCP server (`server_http.py`) is a stateless API that delegates all queries to the backend Registry API over HTTP. No embeddings or vector store are involved at runtime.
+2. **Offline indexing** -- The indexer (`indexer.py`) clones repos, parses codebundles, crawls docs, generates embeddings via Azure OpenAI, and writes them to a local vector index file.
 
-### 1. User Asks Question in Chat UI
+The runtime search path is what production uses today. The offline indexer populates a local vector store that can supplement or replace the backend API search in future.
+
+## Runtime Search Flow
+
+### How a user query becomes results
 
 ```
-User: "How do I check Kubernetes pod health?"
-  │
-  ▼
-Chat.tsx → POST /api/v1/chat/query
-  │
-  ▼
-mcp_chat.py (FastAPI endpoint)
+User types question in Chat UI
+         │
+         ▼
+Frontend: POST /api/v1/chat/query
+         │
+         ▼
+Backend (mcp_chat.py):
+  1. Classifies question type
+  2. Calls MCP Server via MCPClient
+         │
+         ▼
+MCPClient: POST http://mcp-server:8000/tools/call
+  {
+    "tool_name": "find_codebundle",
+    "arguments": {"query": "...", "max_results": 10}
+  }
+         │
+         ▼
+MCP Server (server_http.py):
+  1. Looks up tool in ToolRegistry
+  2. Tool calls RegistryClient (HTTP)
+         │
+         ▼
+RegistryClient: GET http://backend:8001/api/v1/codebundles?search=...
+         │
+         ▼
+Backend: Queries PostgreSQL with text search
+         │
+         ▼
+Results flow back through the chain:
+  MCP Server formats as markdown
+         │
+         ▼
+Backend: LLM synthesizes natural language answer
+         │
+         ▼
+Frontend: Displays answer + relevant codebundles
 ```
 
-### 2. App Calls MCP Server for Semantic Search
+### MCP tools used at runtime
 
-```python
-# In cc-registry-v2/backend/app/routers/mcp_chat.py
+All tools delegate to the backend API via `RegistryClient` (`utils/registry_client.py`). The MCP server makes HTTP requests to the backend -- it never queries a database or vector store directly.
 
-mcp = get_mcp_client()
+| Tool | Backend endpoint | Purpose |
+|---|---|---|
+| `find_codebundle` | `GET /api/v1/codebundles?search=` | Natural language codebundle search |
+| `search_codebundles` | `GET /api/v1/codebundles?search=&platform=&tags=` | Filtered keyword search |
+| `list_codebundles` | `GET /api/v1/codebundles` | List all codebundles |
+| `get_codebundle_details` | `GET /api/v1/collections/{coll}/codebundles/{cb}` | Single codebundle detail |
+| `find_codecollection` | `GET /api/v1/registry/collections` | Search collections |
+| `list_codecollections` | `GET /api/v1/registry/collections` | List all collections |
+| `keyword_usage_help` | `GET /api/v1/codebundles?search=` | Robot Framework keyword help |
+| `find_library_info` | `GET /api/v1/codebundles?search=` | Library information |
+| `find_documentation` | Local `docs.yaml` | Search managed documentation |
+| `get_development_requirements` | Local `docs.yaml` | Dev requirements for a feature |
+| `request_codebundle` | GitHub API | Create GitHub issue |
+| `check_existing_requests` | GitHub API | Search existing GitHub issues |
 
-# Search for relevant codebundles
-result = await mcp.find_codebundle(
-    query="check Kubernetes pod health",
-    max_results=10
-)
-# Returns markdown with codebundles ranked by relevance
-```
+## Offline Indexing Pipeline
 
-```python
-# In cc-registry-v2/backend/app/services/mcp_client.py
+The indexer (`mcp-server/indexer.py`) is a batch CLI tool that builds a vector search index. It runs independently of the HTTP server.
 
-class MCPClient:
-    async def find_codebundle(self, query: str, ...):
-        # Makes HTTP POST to MCP server
-        response = await client.post(
-            "http://mcp-server:8000/tools/call",
-            json={
-                "tool_name": "find_codebundle",
-                "arguments": {"query": query, ...}
-            }
-        )
-```
-
-### 3. MCP Server Performs Semantic Search
+### Pipeline stages
 
 ```
-MCP Server receives request
-  │
-  ▼
-tools/codebundle_tools.py
-  │
-  ├─ Generate embedding for query
-  │  (using Azure OpenAI text-embedding-ada-002)
-  │
-  ├─ Search ChromaDB for similar embeddings
-  │  (cosine similarity)
-  │
-  ├─ Rank results by relevance score
-  │
-  └─ Format as markdown response
+Stage 1: Data Acquisition
+─────────────────────────
+  codecollections.yaml
+         │
+         ▼
+  For each collection:
+    git clone / git pull
+    (repos stored in data/repos/)
+
+Stage 2: Parsing
+────────────────
+  For each repo:
+    codebundles/ directory:
+      ├── meta.yaml        → name, author, tags, platform
+      ├── *.robot files    → tasks, keywords, libraries (RobotParser)
+      └── README.md        → description text
+
+    libraries/ directory:
+      └── *.py files       → functions, classes, docstrings (PythonParser AST)
+
+Stage 3: Document Creation
+──────────────────────────
+  Each codebundle → single text document containing:
+    - Display name and slug
+    - Description
+    - Platform and support tags
+    - Task names and documentation (up to 20 capabilities)
+    - README excerpt (up to 2000 chars)
+
+  Each library → single text document containing:
+    - Name and import path
+    - Category and description
+    - Function signatures + docstrings (up to 15)
+    - Class info + methods (up to 10)
+    - Robot Framework keywords (up to 20)
+
+Stage 4: Documentation Crawling
+───────────────────────────────
+  sources.yaml
+         │
+         ▼
+  WebCrawler (crawl4ai headless browser, or httpx+BeautifulSoup fallback)
+    - Fetches each URL
+    - Extracts title, body text, headings, code blocks
+    - Converts to clean markdown
+    - Stores up to 12,000 chars per page in embedding document
+
+Stage 5: Embedding Generation
+─────────────────────────────
+  All documents (codebundles + libraries + collections + docs)
+         │
+         ▼
+  EmbeddingGenerator
+    - Azure OpenAI: text-embedding-3-small (1536 dimensions)
+    - Batches of 100 texts per API call
+    - Fallback: local sentence-transformers all-MiniLM-L6-v2 (384 dimensions)
+
+Stage 6: Vector Storage
+───────────────────────
+  LocalVectorStore (utils/vector_store.py)
+    - In-memory numpy arrays
+    - Persisted to data/vector_index.json
+    - 4 tables: vector_codebundles, vector_codecollections,
+                vector_libraries, vector_documentation
+    - Brute-force cosine similarity search
+    - Metadata filtering (platform, collection, category)
 ```
 
-### 4. App Enhances with LLM and Returns to User
+### No chunking
 
-```
-MCP results (codebundles with scores)
-  │
-  ▼
-AIEnhancementService synthesizes natural language answer
-  │
-  ▼
-Returns ChatResponse with:
-  - answer: Natural language response
-  - relevant_tasks: Structured codebundle data
-  - confidence_score: How confident the AI is
-  - sources_used: Which MCP tools were used
-```
+Documents are **not** chunked. Each codebundle, library, collection, or documentation page is embedded as a single document. Text is truncated to fit within embedding model token limits:
 
-## 🔄 Indexing Process
+| Document type | Max text length |
+|---|---|
+| CodeBundle README | 2,000 chars |
+| CodeBundle capabilities | Up to 20 items |
+| Library functions | Up to 15 signatures |
+| Documentation page | 12,000 chars |
+| Description fields | 500 chars |
 
-### When Data is Indexed
-
-1. **Scheduled (Automated)**
-   - Daily at 3:00 AM: Documentation indexing
-   - Weekly (optional): Full re-index of everything
-
-2. **Manual Triggers**
-   - Admin panel → Schedules → "Run Now" button
-   - Direct API call to `/api/v1/schedule/schedules/{schedule_id}/trigger`
-   - Command line: `python mcp-server/indexer.py`
-
-3. **Workflow Integration**
-   - After sync/parse workflow updates codebundles in registry DB
-   - MCP indexer reads from GitHub repos (not registry DB)
-   - Both stay in sync because they read from same source
-
-### Indexing Pipeline: Codebundles
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│ 1. Clone/Update GitHub Repos                                 │
-│    - rw-cli-codecollection                                   │
-│    - rw-public-codecollection                                │
-│    - etc.                                                     │
-└──────────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 2. Parse Codebundles                                         │
-│    For each codebundle directory:                            │
-│    - Parse meta.yaml (metadata)                              │
-│    - Parse *.robot files (tasks, keywords)                   │
-│    - Parse README.md (description)                           │
-│    - Extract: name, tasks, platform, tags, etc.             │
-└──────────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 3. Create Embedding Documents                                │
-│    Rich text combining:                                      │
-│    - Display name & slug                                     │
-│    - Description                                             │
-│    - Platform & tags                                         │
-│    - Task names & documentation (capabilities)              │
-│    - README excerpts                                         │
-└──────────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 4. Generate Embeddings                                       │
-│    Azure OpenAI text-embedding-ada-002                       │
-│    - Input: Document text                                    │
-│    - Output: 1536-dimensional vector                         │
-└──────────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 5. Store in ChromaDB                                         │
-│    Collection: "codebundles"                                 │
-│    - Embedding vector                                        │
-│    - Metadata (all fields)                                   │
-│    - Document ID (slug)                                      │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Indexing Pipeline: Documentation
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│ 1. Load sources.yaml                                         │
-│    Documentation sources:                                    │
-│    - RunWhen docs                                            │
-│    - CodeCollection repos                                    │
-│    - Library documentation                                   │
-│    - FAQs, guides, examples                                  │
-└──────────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 2. Crawl Web Pages                                           │
-│    For each URL:                                             │
-│    - Fetch HTML content                                      │
-│    - Extract text, headings, code blocks                     │
-│    - Store up to 15,000 chars per page                       │
-└──────────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 3. Create Embedding Documents                                │
-│    Combining:                                                │
-│    - Page title & description                                │
-│    - Crawled content (main text)                             │
-│    - Section headings                                        │
-│    - Code examples                                           │
-└──────────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 4. Generate Embeddings                                       │
-│    Azure OpenAI text-embedding-ada-002                       │
-└──────────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 5. Store in ChromaDB                                         │
-│    Collection: "documentation"                               │
-└──────────────────────────────────────────────────────────────┘
-```
-
-## 🔧 Key Components
-
-### cc-registry-v2 (App)
-
-**Purpose:** Main web application for browsing and chatting
-
-**Key Files:**
-- `backend/app/routers/mcp_chat.py` - Chat API endpoint
-- `backend/app/services/mcp_client.py` - MCP HTTP client
-- `backend/app/tasks/mcp_tasks.py` - Celery tasks to trigger indexing
-- `frontend/src/pages/Chat.tsx` - Chat UI
-
-**Database:** PostgreSQL (stores codebundles, collections, tasks, user data)
-
-**Environment Variables:**
-```bash
-MCP_SERVER_URL=http://host.docker.internal:8000
-```
-
-### mcp-server
-
-**Purpose:** Semantic search engine using vector embeddings
-
-**Key Files:**
-- `server_http.py` - HTTP API server (port 8000)
-- `indexer.py` - Generates embeddings and updates database
-- `tools/codebundle_tools.py` - Codebundle search tools
-- `tools/documentation_tools.py` - Documentation search tools
-- `utils/vector_store.py` - ChromaDB interface
-- `utils/embeddings.py` - Azure OpenAI embedding generator
-
-**Database:** ChromaDB (vector database for embeddings)
-- Location: `mcp-server/chroma_db/`
-- Collections: `codebundles`, `codecollections`, `libraries`, `documentation`
-
-**Environment Variables:**
-```bash
-AZURE_OPENAI_API_KEY=...
-AZURE_OPENAI_ENDPOINT=...
-AZURE_OPENAI_DEPLOYMENT_NAME=...
-```
-
-## 🔁 Automated Indexing Schedule
-
-Defined in `cc-registry-v2/schedules.yaml`:
-
-```yaml
-# Daily documentation indexing (enabled)
-- id: index-documentation-daily
-  task: app.tasks.mcp_tasks.index_documentation_task
-  schedule_type: crontab
-  crontab:
-    hour: 3
-    minute: 0
-  enabled: true
-
-# Weekly full re-index (disabled by default)
-- id: reindex-mcp-weekly
-  task: app.tasks.mcp_tasks.reindex_all_task
-  schedule_type: crontab
-  crontab:
-    hour: 2
-    minute: 0
-    day_of_week: 0  # Sunday
-  enabled: false
-```
-
-**How it works:**
-
-1. Celery Beat scheduler runs in `cc-registry-v2/scheduler` container
-2. At scheduled time, Beat dispatches task to Celery worker
-3. Worker executes `app/tasks/mcp_tasks.py::index_documentation_task()`
-4. Task runs `subprocess` to execute:
-   ```bash
-   cd /workspaces/codecollection-registry/mcp-server
-   python indexer.py --docs-only
-   ```
-5. Indexer updates ChromaDB
-6. MCP server immediately uses updated embeddings for queries
-
-## 🎯 Search Flow Example
-
-### User Query: "troubleshoot slow Kubernetes pods"
-
-1. **Frontend** (`Chat.tsx`):
-   ```typescript
-   POST /api/v1/chat/query
-   {
-     "question": "troubleshoot slow Kubernetes pods",
-     "context_limit": 10
-   }
-   ```
-
-2. **Backend** (`mcp_chat.py`):
-   ```python
-   # Call MCP server
-   mcp_result = await mcp.find_codebundle(
-       query="troubleshoot slow Kubernetes pods",
-       max_results=10
-   )
-   
-   # MCP returns markdown with relevant codebundles:
-   # - k8s-pod-healthcheck (score: 0.89)
-   # - k8s-deployment-healthcheck (score: 0.85)
-   # - k8s-pod-logs (score: 0.78)
-   
-   # Parse markdown and get structured data from registry DB
-   # Enhance with LLM for natural language answer
-   ```
-
-3. **MCP Server** (`tools/codebundle_tools.py`):
-   ```python
-   # Generate embedding for query
-   query_embedding = embeddings.embed_text(
-       "troubleshoot slow Kubernetes pods"
-   )
-   
-   # Search ChromaDB
-   results = vector_store.query(
-       collection="codebundles",
-       query_embeddings=[query_embedding],
-       n_results=10,
-       where={"platform": "Kubernetes"}  # Optional filter
-   )
-   
-   # Results are ranked by cosine similarity
-   # Returns formatted markdown with codebundles
-   ```
-
-4. **Response to User**:
-   ```json
-   {
-     "answer": "To troubleshoot slow Kubernetes pods, I recommend...",
-     "relevant_tasks": [
-       {
-         "codebundle_slug": "k8s-pod-healthcheck",
-         "description": "Checks pod health and resource usage",
-         "relevance_score": 0.89
-       }
-     ],
-     "sources_used": ["MCP Codebundle Lookup"],
-     "query_metadata": {
-       "mcp_tools": ["find_codebundle"],
-       "search_time_ms": 245
-     }
-   }
-   ```
-
-## 🔍 Available MCP Tools
-
-The app can call these MCP tools via `MCPClient`:
-
-1. **`find_codebundle`** - Search codebundles by natural language
-   - Most commonly used for chat queries
-   - Returns ranked codebundles with relevance scores
-
-2. **`find_codecollection`** - Search collections
-   - Used when user asks about collections/repos
-
-3. **`keyword_usage_help`** - Get Robot Framework keyword help
-   - Used for technical keyword/library questions
-
-4. **`find_documentation`** - Search docs, guides, FAQs
-   - Used when user asks how-to questions
-   - Searches crawled documentation content
-
-5. **`search_codebundles`** - Advanced search with filters
-   - Used internally for complex queries
-
-## 🚀 Manual Indexing
-
-### From Command Line
+### Running the indexer
 
 ```bash
-# Full index (codebundles + documentation)
-cd /workspaces/codecollection-registry/mcp-server
+# Full index (codebundles + libraries + documentation)
+cd mcp-server
 python indexer.py
 
-# Documentation only
+# Documentation only (faster)
 python indexer.py --docs-only
 
-# Specific collection only
+# Specific collection
 python indexer.py --collection rw-cli-codecollection
 
-# Use local embeddings (no API calls)
+# Use local embeddings instead of Azure OpenAI
 python indexer.py --local
 ```
 
-### From Admin Panel
+## Vector Store
 
-1. Navigate to **Admin Panel** → **Schedules**
-2. Find `index-documentation-daily` or `reindex-mcp-weekly`
-3. Click **"Run Now"** button
-4. Task executes immediately via Celery worker
-5. Check **Task Manager** for progress
+### Implementation: LocalVectorStore
 
-### Via API
+The vector store is a zero-infrastructure, in-memory implementation using numpy for cosine similarity search. It persists to a single JSON file.
 
-```bash
-# Trigger documentation indexing
-curl -X POST http://localhost:8001/api/v1/admin/trigger-mcp-index \
-  -H "Authorization: Bearer $TOKEN"
+**Storage format** (`data/vector_index.json`):
 
-# Or trigger via schedule
-curl -X POST http://localhost:8001/api/v1/schedule/schedules/index-documentation-daily/trigger \
-  -H "Authorization: Bearer $TOKEN"
+```json
+{
+  "vector_codebundles": {
+    "rw-cli-codecollection/k8s-pod-healthcheck": {
+      "embedding": [0.012, -0.034, ...],
+      "document": "Kubernetes Pod Healthcheck\nPlatform: Kubernetes\n...",
+      "metadata": {
+        "slug": "k8s-pod-healthcheck",
+        "collection_slug": "rw-cli-codecollection",
+        "platform": "Kubernetes",
+        "tags": "kubernetes,pods,health"
+      }
+    }
+  },
+  "vector_codecollections": { ... },
+  "vector_libraries": { ... },
+  "vector_documentation": { ... }
+}
 ```
 
-## 🔄 Sync vs Index
+**Search algorithm:**
+1. Normalize the query embedding vector
+2. For each stored vector, compute cosine similarity: `dot(query_vec, stored_vec / norm)`
+3. Convert to distance: `distance = 1.0 - cosine_similarity`
+4. Apply optional metadata filters (platform, collection_slug, category)
+5. Sort by distance ascending (lowest = most similar)
+6. Return top N results as `SearchResult` objects
 
-**Important distinction:**
+This brute-force approach works well for the current dataset size (hundreds of vectors). For larger datasets, the pgvector tables in PostgreSQL can be used with HNSW indexing.
 
-- **Sync** (`registry_tasks.py`): Updates cc-registry-v2 PostgreSQL database
-  - Clones GitHub repos
-  - Parses codebundles
-  - Stores in PostgreSQL
-  - Used by web UI for browsing
+### pgvector (future)
 
-- **Index** (`mcp_tasks.py` → `indexer.py`): Updates MCP ChromaDB
-  - Clones GitHub repos (separate workspace)
-  - Parses codebundles
-  - Generates embeddings
-  - Stores in ChromaDB
-  - Used by chat for semantic search
+The PostgreSQL database has pgvector enabled and four vector tables created by migration `006_add_pgvector.sql`. These tables mirror the local vector store's structure with `vector(1536)` columns and HNSW indexes. They are ready for use but the MCP server has not been migrated to query them yet.
 
-Both read from the same GitHub repos but maintain separate databases.
+## Embedding Generation
 
-## 📦 Data Storage Locations
+### Azure OpenAI (production)
 
-```
-codecollection-registry/
-├── cc-registry-v2/
-│   └── PostgreSQL database (container)
-│       - codebundles table
-│       - codecollections table
-│       - tasks table
-│       - User data, chat logs, etc.
-│
-└── mcp-server/
-    ├── chroma_db/ (vector database)
-    │   ├── codebundles collection
-    │   ├── codecollections collection
-    │   ├── libraries collection
-    │   └── documentation collection
-    │
-    └── data/
-        ├── repos/ (cloned GitHub repos)
-        ├── codebundles.json (fallback)
-        └── libraries.json (fallback)
-```
+| Setting | Value |
+|---|---|
+| Model | `text-embedding-3-small` |
+| Dimensions | 1536 |
+| Batch size | 100 texts per API call |
+| API version | `2024-02-15-preview` |
 
-## 🎨 Diagram: Complete Flow
+Environment variables (checked in order):
 
-```
-User asks question
-     ↓
-[Chat UI (React)]
-     ↓
-[FastAPI /chat/query endpoint]
-     ↓
-[MCPClient.find_codebundle()]
-     ↓
-[HTTP POST to MCP Server]
-     ↓
-[MCP tools/codebundle_tools.py]
-     ↓
-[Generate query embedding] ← Azure OpenAI API
-     ↓
-[Search ChromaDB]
-     ↓
-[Rank by cosine similarity]
-     ↓
-[Format as markdown]
-     ↓
-[Return to app]
-     ↓
-[AI synthesizes answer] ← Azure OpenAI API
-     ↓
-[Return structured response]
-     ↓
-[Display in Chat UI]
+1. `AZURE_OPENAI_EMBEDDING_ENDPOINT` + `AZURE_OPENAI_EMBEDDING_API_KEY` (dedicated)
+2. `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` (shared with GPT)
 
+Deployment name: `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` (default: `text-embedding-3-small`)
 
-Meanwhile (scheduled):
-     ↓
-[Celery Beat triggers indexing]
-     ↓
-[Worker runs mcp_tasks.py]
-     ↓
-[Executes: python indexer.py --docs-only]
-     ↓
-[Indexer crawls docs from sources.yaml]
-     ↓
-[Generate embeddings] ← Azure OpenAI API
-     ↓
-[Update ChromaDB]
-     ↓
-[MCP server uses new embeddings immediately]
+### Local fallback
+
+If no Azure credentials are available, the indexer uses `sentence-transformers/all-MiniLM-L6-v2` (384-dimensional vectors). No API cost, but lower quality.
+
+Force local mode: `python indexer.py --local`
+
+## Web Crawler
+
+Documentation sources defined in `mcp-server/sources.yaml` are crawled for content.
+
+### Crawl4AI (primary)
+
+Uses headless Chromium to render JavaScript-heavy pages (Confluence, SPAs). Outputs clean markdown. Automatically strips navigation, headers, footers.
+
+### BeautifulSoup (fallback)
+
+Simple HTTP fetch + HTML parsing. Used when crawl4ai is not installed or fails for a URL.
+
+### Source configuration (`sources.yaml`)
+
+```yaml
+sources:
+  documentation:
+    - name: "RunWhen Platform Docs"
+      url: "https://docs.runwhen.com/..."
+      description: "Platform documentation"
+      topics: ["platform", "setup"]
+      priority: high
+
+  libraries:
+    - name: "RW.CLI Library"
+      url: "https://..."
+      description: "CLI automation library"
+      usage_examples: ["RW.CLI.Run Bash"]
+
+  faq:
+    - question: "How do I create a codebundle?"
+      answer: "..."
+      topics: ["development"]
+
+index_config:
+  refresh_interval: 24
+  crawl_linked_pages: true
+  max_crawl_depth: 3
+  include_code_examples: true
 ```
 
-## 🐛 Troubleshooting
+## Key Files
+
+### cc-registry-v2 (backend)
+
+| File | Purpose |
+|---|---|
+| `backend/app/routers/mcp_chat.py` | Chat API endpoint, calls MCP server |
+| `backend/app/services/mcp_client.py` | HTTP client for MCP server |
+| `backend/app/tasks/mcp_tasks.py` | Celery tasks for triggering indexing |
+| `schedules.yaml` | Celery Beat schedule configuration |
+
+### mcp-server
+
+| File | Purpose |
+|---|---|
+| `server_http.py` | Production HTTP server (stateless) |
+| `indexer.py` | Offline indexing CLI tool |
+| `utils/vector_store.py` | LocalVectorStore (numpy + JSON) |
+| `utils/embeddings.py` | Azure OpenAI / local embedding generator |
+| `utils/registry_client.py` | HTTP client for backend API |
+| `utils/web_crawler.py` | Documentation page crawler |
+| `utils/robot_parser.py` | Robot Framework file parser |
+| `utils/python_parser.py` | Python AST parser for libraries |
+| `tools/codebundle_tools.py` | CodeBundle search/list/detail tools |
+| `tools/collection_tools.py` | CodeCollection tools |
+| `tools/library_tools.py` | Library and keyword tools |
+| `tools/documentation_tools.py` | Documentation search tools |
+| `tools/github_issue.py` | GitHub issue creation tool |
+| `sources.yaml` | Documentation source URLs |
+| `docs.yaml` | Managed documentation catalog |
+| `codecollections.yaml` | CodeCollection repo definitions |
+
+## Troubleshooting
 
 ### Chat not returning results
 
-1. Check MCP server is running:
+1. Verify MCP server is running:
    ```bash
    curl http://localhost:8000/health
    ```
 
-2. Check MCP server has data:
+2. Verify backend API is reachable from MCP server:
    ```bash
-   ls -la mcp-server/chroma_db/
-   # Should see collection folders
+   docker exec registry-mcp-server curl http://backend:8001/api/v1/health
    ```
 
-3. Check embeddings config:
+3. Check MCP server logs:
    ```bash
-   # In mcp-server/
-   cat az.secret | grep AZURE_OPENAI
+   docker logs registry-mcp-server --tail=50
    ```
 
-### Indexing fails
+### Indexer failures
 
-1. Check worker logs:
-   ```bash
-   docker-compose logs worker
-   ```
-
-2. Run indexer manually to see errors:
+1. Run the indexer manually to see errors:
    ```bash
    cd mcp-server
    python indexer.py --docs-only
    ```
 
-3. Check Azure OpenAI quota:
-   - Rate limits on embedding API
-   - Check Azure portal for usage
+2. Check Azure OpenAI credentials:
+   ```bash
+   echo $AZURE_OPENAI_EMBEDDING_ENDPOINT
+   echo $AZURE_OPENAI_EMBEDDING_API_KEY
+   ```
+
+3. Use local embeddings to bypass API issues:
+   ```bash
+   python indexer.py --local
+   ```
 
 ### Search results not relevant
 
-1. Re-index with latest data:
+1. Re-index with fresh data:
    ```bash
-   cd mcp-server
-   python indexer.py
+   cd mcp-server && python indexer.py
    ```
 
-2. Check embedding document quality:
+2. Check what was indexed:
    ```bash
-   # See what text is being embedded
-   cat mcp-server/data/codebundles.json | jq '.codebundles[0]'
+   python -c "import json; d=json.load(open('data/vector_index.json')); print({k:len(v) for k,v in d.items()})"
    ```
 
-3. Adjust search parameters in `mcp_chat.py`:
-   - `max_results`: More results → better chance of relevance
-   - Filters: Platform, collection filters
+## Related Documentation
 
----
-
-**Last Updated:** 2026-01-24  
-**Related Docs:**
-- [MCP_INDEXING_SCHEDULE.md](MCP_INDEXING_SCHEDULE.md) - Automated indexing setup
-- [SCHEDULES.md](SCHEDULES.md) - General schedule management
-- [AZURE_OPENAI_SETUP.md](AZURE_OPENAI_SETUP.md) - AI service configuration
+- [ARCHITECTURE.md](ARCHITECTURE.md) -- System architecture overview
+- [MCP_INDEXING_SCHEDULE.md](MCP_INDEXING_SCHEDULE.md) -- Automated indexing schedules
+- [CONFIGURATION.md](CONFIGURATION.md) -- Environment variables and secrets
+- [AZURE_OPENAI_SETUP.md](AZURE_OPENAI_SETUP.md) -- Azure OpenAI credential setup

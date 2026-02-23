@@ -2,7 +2,7 @@
 
 This directory contains GitHub Actions workflows for building and deploying components.
 
-## 📋 Workflows
+## Workflows
 
 ### 1. `build-cc-registry-v2-images.yaml`
 **Purpose:** Build cc-registry-v2 application components
@@ -58,20 +58,7 @@ gh workflow run build-mcp-server.yaml \
 
 ---
 
-### 3. `deploy.yaml`
-**Purpose:** Deploy legacy cc-registry (v1) to GitHub Pages
-
-**Triggers:**
-- Push to `main`
-- Schedule (every 4 hours)
-- Manual dispatch
-
-**Deploys:**
-- MkDocs documentation to GitHub Pages
-
----
-
-## 🔑 Required Secrets
+## Required Secrets
 
 Both build workflows require these secrets:
 
@@ -235,12 +222,10 @@ scan-repo ──┐
 - Try with `build_multiarch=false` for amd64 only
 - ARM runners may have limited availability
 
-## 📚 Related Documentation
+## Related Documentation
 
-- **[../cc-registry-v2/WORKFLOWS_SEPARATED.md](../cc-registry-v2/WORKFLOWS_SEPARATED.md)** - Why separate workflows
-- **[../cc-registry-v2/GCR_SETUP.md](../cc-registry-v2/GCR_SETUP.md)** - GCP setup guide
-- **[../cc-registry-v2/DEPLOYMENT_GUIDE.md](../cc-registry-v2/DEPLOYMENT_GUIDE.md)** - Deployment guide
-- **[../cc-registry-v2/MCP_SERVER_INTEGRATION.md](../cc-registry-v2/MCP_SERVER_INTEGRATION.md)** - MCP integration
+- **[../cc-registry-v2/docs/DEPLOYMENT_GUIDE.md](../cc-registry-v2/docs/DEPLOYMENT_GUIDE.md)** - Deployment guide
+- **[../cc-registry-v2/docs/ARCHITECTURE.md](../cc-registry-v2/docs/ARCHITECTURE.md)** - System architecture
 
 ## ✅ Workflow Health
 
