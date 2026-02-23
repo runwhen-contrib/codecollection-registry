@@ -81,7 +81,8 @@ class EmbeddingService:
             batch = texts[start : start + self._batch_size]
             try:
                 response = self._client.embeddings.create(
-                    input=batch, model=self._deployment
+                    input=batch, model=self._deployment,
+                    dimensions=self._dimensions,
                 )
                 for item in response.data:
                     all_embeddings.append(item.embedding)

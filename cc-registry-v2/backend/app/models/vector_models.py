@@ -8,8 +8,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
 
 from app.core.database import Base
+from app.core.config import settings
 
-EMBEDDING_DIMENSIONS = 1536
+EMBEDDING_DIMENSIONS = settings.EMBEDDING_DIMENSIONS
 
 
 class VectorCodebundle(Base):

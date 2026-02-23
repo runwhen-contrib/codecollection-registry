@@ -6,6 +6,7 @@ vector tables (codebundles, codecollections, libraries, documentation).
 """
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
@@ -27,6 +28,15 @@ TABLE_MAP = {
     "codecollections": VectorCodecollection,
     "libraries": VectorLibrary,
     "documentation": VectorDocumentation,
+}
+
+_VALID_METADATA_KEYS = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+# Per-table filter keys that the unified search endpoint maps automatically.
+_TABLE_FILTER_KEYS: Dict[str, Dict[str, str]] = {
+    "codebundles": {"platform": "platform", "collection_slug": "collection_slug"},
+    "documentation": {"category": "category"},
+    "libraries": {"category": "category"},
 }
 
 
@@ -62,8 +72,19 @@ class VectorService:
         """Upsert embedding rows into a vector table.
 
         If *clear_existing* is True the table is truncated first (full rebuild).
-        Returns the number of rows written.
+        Returns the number of rows actually written (skips empty embeddings).
+
+        Raises ``ValueError`` if *clear_existing* is True but every embedding
+        in *embeddings* is empty — this prevents a transient API outage from
+        silently wiping all vector data.
         """
+        valid_count = sum(1 for e in embeddings if e)
+        if clear_existing and valid_count == 0 and len(ids) > 0:
+            raise ValueError(
+                f"Refusing to truncate {table_key}: all {len(ids)} embeddings are empty "
+                "(possible upstream embedding failure)"
+            )
+
         own_session = db is None
         if own_session:
             db = SessionLocal()
@@ -84,6 +105,7 @@ class VectorService:
                 f"  metadata = EXCLUDED.metadata, "
                 f"  updated_at = NOW()"
             )
+            written = 0
             for i in range(len(ids)):
                 emb = embeddings[i]
                 if not emb:
@@ -94,10 +116,11 @@ class VectorService:
                     stmt,
                     {"id": ids[i], "emb": emb_literal, "doc": documents[i], "meta": meta_json},
                 )
+                written += 1
 
             db.commit()
-            logger.info(f"Upserted {len(ids)} rows into {table_name}")
-            return len(ids)
+            logger.info(f"Upserted {written}/{len(ids)} rows into {table_name}")
+            return written
         except Exception:
             if own_session:
                 db.rollback()
@@ -122,6 +145,7 @@ class VectorService:
 
         *metadata_filters* is a dict of key-value pairs that are ANDed
         together, e.g. ``{"platform": "kubernetes"}``.
+        Keys must be alphanumeric/underscore identifiers.
         """
         own_session = db is None
         if own_session:
@@ -139,6 +163,8 @@ class VectorService:
 
             if metadata_filters:
                 for idx, (key, value) in enumerate(metadata_filters.items()):
+                    if not _VALID_METADATA_KEYS.match(key):
+                        raise ValueError(f"Invalid metadata filter key: {key!r}")
                     param_name = f"mf_{idx}"
                     where_clauses.append(f"metadata->>'{key}' = :{param_name}")
                     params[param_name] = value
@@ -180,13 +206,33 @@ class VectorService:
         query_embedding: List[float],
         n_results: int = 10,
         table_keys: Optional[List[str]] = None,
+        metadata_filters: Optional[Dict[str, str]] = None,
         db: Session = None,
     ) -> Dict[str, List[VectorSearchResult]]:
-        """Run similarity search across multiple vector tables."""
+        """Run similarity search across multiple vector tables.
+
+        *metadata_filters* are applied on a per-table basis: only filter
+        keys that are relevant to a given table are forwarded (e.g.
+        ``platform`` only applies to codebundles, ``category`` only to
+        documentation and libraries).
+        """
         keys = table_keys or list(TABLE_MAP.keys())
         results: Dict[str, List[VectorSearchResult]] = {}
         for key in keys:
-            results[key] = self.search(key, query_embedding, n_results=n_results, db=db)
+            table_filters: Optional[Dict[str, str]] = None
+            if metadata_filters:
+                relevant = _TABLE_FILTER_KEYS.get(key, {})
+                table_filters = {
+                    v: metadata_filters[k]
+                    for k, v in relevant.items()
+                    if k in metadata_filters
+                }
+                if not table_filters:
+                    table_filters = None
+            results[key] = self.search(
+                key, query_embedding, n_results=n_results,
+                metadata_filters=table_filters, db=db,
+            )
         return results
 
     # ------------------------------------------------------------------

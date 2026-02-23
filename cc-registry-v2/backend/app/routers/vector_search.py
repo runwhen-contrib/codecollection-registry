@@ -67,8 +67,15 @@ async def semantic_search(
         if invalid:
             raise HTTPException(status_code=400, detail=f"Invalid table keys: {invalid}")
 
+    filters: Optional[Dict[str, str]] = {}
+    if platform:
+        filters["platform"] = platform
+    if category:
+        filters["category"] = category
+
     results_map = vec_svc.search_all(
-        query_embedding, n_results=max_results, table_keys=table_keys, db=db
+        query_embedding, n_results=max_results, table_keys=table_keys,
+        metadata_filters=filters or None, db=db,
     )
 
     output: Dict[str, Any] = {}

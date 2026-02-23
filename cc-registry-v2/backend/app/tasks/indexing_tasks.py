@@ -41,6 +41,10 @@ def _rows_to_dicts(rows, collection_slug_map: Dict[int, str]) -> List[Dict[str, 
     return results
 
 
+def _count_valid_embeddings(embeddings: List[List[float]]) -> int:
+    return sum(1 for e in embeddings if e)
+
+
 # ---------------------------------------------------------------------------
 # Index codebundles + codecollections
 # ---------------------------------------------------------------------------
@@ -79,6 +83,11 @@ def index_codebundles_task(self) -> Dict[str, Any]:
         ids = [f"{cb['collection_slug']}/{cb['slug']}" for cb in cb_dicts]
         metadatas = [vec_svc.codebundle_metadata(cb) for cb in cb_dicts]
 
+        valid = _count_valid_embeddings(embeddings)
+        if valid == 0:
+            logger.error(f"All {len(embeddings)} codebundle embeddings are empty — skipping upsert to preserve existing data")
+            return {"status": "failed", "error": "all embeddings empty (upstream API failure)"}
+
         vec_svc.upsert_vectors(
             "codebundles", ids, embeddings, documents, metadatas, clear_existing=True
         )
@@ -95,20 +104,25 @@ def index_codebundles_task(self) -> Dict[str, Any]:
         finally:
             db2.close()
 
+        cc_written = 0
         if cc_dicts:
             cc_docs = [vec_svc.collection_to_document(cc) for cc in cc_dicts]
             cc_embs = embed_svc.embed_texts(cc_docs)
-            cc_ids = [cc["slug"] for cc in cc_dicts]
-            cc_metas = [vec_svc.collection_metadata(cc) for cc in cc_dicts]
-            vec_svc.upsert_vectors(
-                "codecollections", cc_ids, cc_embs, cc_docs, cc_metas, clear_existing=True
-            )
+            cc_valid = _count_valid_embeddings(cc_embs)
+            if cc_valid == 0:
+                logger.error("All codecollection embeddings empty — skipping upsert")
+            else:
+                cc_ids = [cc["slug"] for cc in cc_dicts]
+                cc_metas = [vec_svc.collection_metadata(cc) for cc in cc_dicts]
+                cc_written = vec_svc.upsert_vectors(
+                    "codecollections", cc_ids, cc_embs, cc_docs, cc_metas, clear_existing=True
+                )
 
-        logger.info(f"Codebundle indexing complete: {len(cb_dicts)} codebundles, {len(cc_dicts)} collections")
+        logger.info(f"Codebundle indexing complete: {valid} codebundles, {cc_written} collections")
         return {
             "status": "success",
-            "codebundles": len(cb_dicts),
-            "codecollections": len(cc_dicts),
+            "codebundles": valid,
+            "codecollections": cc_written,
         }
 
     except Exception as e:
@@ -142,6 +156,11 @@ def index_documentation_task(self, crawl: bool = True) -> Dict[str, Any]:
         documents = [vec_svc.doc_to_document(d) for d in docs]
         embeddings = embed_svc.embed_texts(documents)
 
+        valid = _count_valid_embeddings(embeddings)
+        if valid == 0:
+            logger.error(f"All {len(embeddings)} documentation embeddings are empty — skipping upsert to preserve existing data")
+            return {"status": "failed", "error": "all embeddings empty (upstream API failure)"}
+
         seen: set = set()
         ids: List[str] = []
         for doc in docs:
@@ -156,12 +175,12 @@ def index_documentation_task(self, crawl: bool = True) -> Dict[str, Any]:
             ids.append(final_id)
 
         metadatas = [vec_svc.doc_metadata(d) for d in docs]
-        vec_svc.upsert_vectors(
+        written = vec_svc.upsert_vectors(
             "documentation", ids, embeddings, documents, metadatas, clear_existing=True
         )
 
-        logger.info(f"Documentation indexing complete: {len(docs)} entries")
-        return {"status": "success", "documentation": len(docs)}
+        logger.info(f"Documentation indexing complete: {written} entries")
+        return {"status": "success", "documentation": written}
 
     except Exception as e:
         logger.error(f"Documentation indexing failed: {e}", exc_info=True)
@@ -180,8 +199,24 @@ def reindex_all_task(self) -> Dict[str, Any]:
     cb_result = index_codebundles_task()
     doc_result = index_documentation_task(crawl=True)
 
+    any_failed = (
+        cb_result.get("status") == "failed"
+        or doc_result.get("status") == "failed"
+    )
+    all_skipped = (
+        cb_result.get("status") == "skipped"
+        and doc_result.get("status") == "skipped"
+    )
+
+    if any_failed:
+        status = "failed"
+    elif all_skipped:
+        status = "skipped"
+    else:
+        status = "success"
+
     return {
-        "status": "success",
+        "status": status,
         "codebundles": cb_result,
         "documentation": doc_result,
     }
