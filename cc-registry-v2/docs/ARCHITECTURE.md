@@ -49,49 +49,115 @@ The registry runs as 8 Docker services coordinated by `docker-compose.yml`.
                  └──────────────┘
 ```
 
-## Data Flow
+## Production Data Flows
 
-### Primary data path: Registry API
+These are the flows that run in production today.
 
-All persistent data lives in PostgreSQL. The backend is the only service that talks to the database directly.
+### 1. Data ingestion: Sync-Parse-Enhance pipeline
+
+The **backend Celery worker** is responsible for populating the database. The `sync_parse_enhance_workflow_task` runs every 6 hours and is the primary ingestion path:
+
+```
+Celery Beat dispatches scheduled-sync
+         │
+         ▼
+Worker: sync_parse_enhance_workflow_task
+  │
+  ├── Step 1: sync_all_collections_task
+  │     Clone/update git repos for each CodeCollection
+  │
+  ├── Step 2: parse_all_codebundles_task
+  │     Parse meta.yaml, *.robot files, README.md
+  │     Extract tasks, SLIs, metadata, support tags
+  │     INSERT/UPDATE codebundles in PostgreSQL
+  │
+  └── Step 3: enhance_pending_codebundles_task
+        AI-enhance NEW codebundles only (pending/NULL status)
+        Generate descriptions, classify platforms, etc.
+        UPDATE codebundles in PostgreSQL
+```
+
+All parsed and enhanced data is written to the `codebundles` and `codecollections` tables in PostgreSQL. This is the single source of truth for all search and browsing.
+
+### 2. Search: Backend keyword search on PostgreSQL
+
+All search -- whether from the frontend, the MCP server, or the chat system -- ultimately hits the backend's `GET /api/v1/codebundles?search=` endpoint, which runs **weighted keyword search** directly on PostgreSQL:
+
+```
+Frontend / MCP Server / Chat
+         │
+         ▼
+Backend: GET /api/v1/codebundles?search=...
+         │
+         ▼
+PostgreSQL: ILIKE keyword matching across multiple fields
+  - name:         weight 4  (most specific)
+  - display_name: weight 3
+  - support_tags: weight 3  (curated metadata)
+  - description:  weight 1
+  - doc:          weight 1  (long text)
+  Results ranked by aggregate relevance score
+```
+
+No embeddings or vector search are used in the production search path.
+
+### 3. Chat: MCP tool delegation
+
+The chat system uses the MCP server as an intermediary, but the MCP server is stateless and delegates back to the backend:
+
+```
+User question → Frontend → POST /api/v1/chat/query
+  │
+  ▼
+Backend (mcp_chat.py):
+  1. Classify question type
+  2. Call MCP Server: POST http://mcp-server:8000/tools/call
+  │
+  ▼
+MCP Server (server_http.py):
+  1. Look up tool in ToolRegistry
+  2. Tool strips stop words, extracts keywords
+  3. Call backend: GET http://backend:8001/api/v1/codebundles?search=...
+  4. Format results as markdown
+  │
+  ▼
+Backend (mcp_chat.py):
+  5. LLM synthesizes natural language answer from results
+  6. Return structured response to frontend
+```
+
+### 4. Frontend browsing
+
+Direct REST API calls from the frontend to the backend. No MCP server involvement.
 
 ```
 Frontend  ──HTTP──►  Backend  ──SQLAlchemy──►  PostgreSQL
 ```
 
-### MCP Server path: Tool-based access
+## Development / Offline Flows
 
-The MCP server is a **thin, stateless proxy**. It exposes MCP tools (find_codebundle, find_documentation, etc.) that clients can call. Every tool delegates to the backend REST API via `RegistryClient` -- the MCP server never touches the database.
+These components exist in the codebase but are **not part of the production search or ingestion pipeline**.
 
-```
-Client  ──POST /tools/call──►  MCP Server  ──HTTP──►  Backend API  ──►  PostgreSQL
-```
+### MCP Indexer (`mcp-server/indexer.py`)
 
-### Background tasks: Celery pipeline
+A standalone CLI tool that can build a local vector search index. It clones repos, parses codebundles and libraries, crawls documentation URLs, generates embeddings, and writes them to `data/vector_index.json`.
 
-Long-running operations (repo sync, codebundle parsing, AI enhancement, indexing) run as Celery tasks dispatched by the scheduler or triggered manually from the admin UI.
+The `mcp_tasks.py` Celery tasks (`index_documentation_task`, `reindex_all_task`) shell out to this indexer as a subprocess. The resulting `vector_index.json` file is **not read by the production MCP HTTP server** -- the server uses the backend API for all queries instead.
 
-```
-Scheduler (Beat)  ──dispatches──►  Redis  ──consumed by──►  Worker  ──►  PostgreSQL
-```
+This indexer is useful for:
+- Development and testing of semantic search
+- Generating embeddings for future pgvector migration
+- Offline analysis of the codebundle corpus
 
-### Document indexing path
+### LocalVectorStore (`mcp-server/utils/vector_store.py`)
 
-The indexer (`mcp-server/indexer.py`) is a standalone CLI tool. It clones GitHub repos, parses codebundles and libraries, crawls documentation URLs, generates vector embeddings, and stores them in a local vector index file (`data/vector_index.json`). This index is used by the MCP server for semantic search when configured, or the MCP server can delegate to the backend API for text-based search instead.
+In-memory numpy vector store with JSON file persistence. Used by the indexer to store embeddings. Not used by the MCP HTTP server at runtime.
 
-```
-Indexer  ──git clone──►  GitHub
-    │
-    ├── Parse codebundles (meta.yaml, *.robot, README.md)
-    ├── Parse libraries (Python AST, Robot keywords)
-    ├── Crawl documentation (sources.yaml URLs)
-    │
-    ▼
-Embedding Generator  ──API──►  Azure OpenAI (text-embedding-3-small)
-    │
-    ▼
-LocalVectorStore  ──writes──►  data/vector_index.json
-```
+### pgvector tables
+
+The PostgreSQL database has pgvector enabled and four vector tables created by migration `006_add_pgvector.sql`. These tables are empty -- no code writes to or reads from them yet. They are prepared for a future migration from keyword search to vector similarity search.
+
+See [MCP_WORKFLOW.md](MCP_WORKFLOW.md) for full details on both production and development flows.
 
 ## PostgreSQL + pgvector
 
@@ -102,7 +168,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-### Core tables (managed by Alembic)
+### Core tables (managed by Alembic) -- used in production
 
 | Table | Purpose |
 |---|---|
@@ -115,7 +181,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 | `analytics` | Task growth metrics |
 | `task_executions` | Celery task execution history |
 
-### Vector tables (created by migration `006_add_pgvector.sql`)
+### Vector tables (created by `006_add_pgvector.sql`) -- not yet used
 
 | Table | Embedding dim | Purpose |
 |---|---|---|
@@ -124,32 +190,21 @@ CREATE EXTENSION IF NOT EXISTS vector;
 | `vector_libraries` | 1536 | Library/keyword embeddings |
 | `vector_documentation` | 1536 | Documentation page embeddings |
 
-Each vector table uses HNSW indexes for cosine similarity search plus B-tree indexes on metadata columns.
-
-**Current state:** The pgvector tables exist in the schema but are not yet used by the MCP server in production. The MCP server's indexer writes to a `LocalVectorStore` (in-memory numpy + JSON file). Migration to pgvector-backed search is planned.
+Each vector table has HNSW indexes for cosine similarity search plus B-tree indexes on metadata columns. The schema is ready but no code path writes to or queries these tables.
 
 ## MCP Server Architecture
 
 The MCP server (`../mcp-server/`) is a sibling directory, not nested inside cc-registry-v2. It is built as a separate Docker image.
 
-### Runtime mode: Stateless API
+### Production: Stateless HTTP proxy
 
-In production, `server_http.py` runs as a FastAPI app. It registers MCP tools on startup and delegates all data access to the backend API through `RegistryClient`.
-
-- No database connection
-- No local vector store at runtime
-- No embedding generation at runtime
-- Pure HTTP proxy with tool-call semantics
-
-### Indexer mode: Batch processing
-
-`indexer.py` is a separate CLI tool that runs offline (or via Celery task). It **does** use the local vector store and embedding generator to build the search index.
+In production, `server_http.py` runs as a FastAPI app. It registers MCP tools on startup and delegates **all data access** to the backend API through `RegistryClient`. It does not use a database connection, vector store, or embedding generator.
 
 ### Tool categories
 
 | Category | Tools | Data source |
 |---|---|---|
-| **search** | `find_codebundle`, `search_codebundles`, `find_codecollection`, `keyword_usage_help`, `find_library_info`, `find_documentation`, `check_existing_requests` | Backend API |
+| **search** | `find_codebundle`, `search_codebundles`, `find_codecollection`, `keyword_usage_help`, `find_library_info`, `find_documentation`, `check_existing_requests` | Backend API (keyword search on PostgreSQL) |
 | **info** | `list_codebundles`, `list_codecollections`, `get_codebundle_details`, `get_development_requirements` | Backend API / local docs.yaml |
 | **action** | `request_codebundle` | GitHub API |
 
@@ -157,27 +212,36 @@ In production, `server_http.py` runs as a FastAPI app. It registers MCP tools on
 
 ### Task types
 
-| Module | Key tasks |
-|---|---|
-| `workflow_tasks` | `sync_parse_enhance_workflow_task` -- the primary pipeline |
-| `registry_tasks` | `sync_all_collections_task`, `parse_all_codebundles_task` |
-| `ai_enhancement_tasks` | `enhance_pending_codebundles_task` |
-| `mcp_tasks` | `index_documentation_task`, `reindex_all_task` |
-| `data_population_tasks` | `update_collection_statistics_task` |
-| `analytics_tasks` | `compute_task_growth_analytics` |
-| `task_monitoring` | `cleanup_old_tasks_task`, `health_check_tasks_task` |
+| Module | Key tasks | Production? |
+|---|---|---|
+| `workflow_tasks` | `sync_parse_enhance_workflow_task` | Yes -- primary ingestion pipeline |
+| `registry_tasks` | `sync_all_collections_task`, `parse_all_codebundles_task` | Yes -- steps within the workflow |
+| `ai_enhancement_tasks` | `enhance_pending_codebundles_task` | Yes -- AI metadata enhancement |
+| `data_population_tasks` | `update_collection_statistics_task` | Yes -- hourly stats refresh |
+| `analytics_tasks` | `compute_task_growth_analytics` | Yes -- daily analytics |
+| `task_monitoring` | `cleanup_old_tasks_task`, `health_check_tasks_task` | Yes -- maintenance |
+| `mcp_tasks` | `index_documentation_task`, `reindex_all_task` | No -- writes to local vector_index.json, not used by production search |
 
 ### Scheduling
 
-All schedules are defined in `schedules.yaml` and loaded by Celery Beat. Key schedules:
+All schedules are defined in `schedules.yaml` and loaded by Celery Beat.
+
+**Production schedules (active):**
 
 | Schedule | Frequency | Task |
 |---|---|---|
-| `scheduled-sync` | Every 6 hours | Full sync-parse-enhance workflow |
-| `index-documentation-daily` | Daily 3 AM | Re-index documentation embeddings |
+| `scheduled-sync` | Every 6 hours | Sync repos, parse codebundles, AI enhance new entries |
 | `update-statistics-hourly` | Hourly | Refresh collection statistics |
+| `compute-task-growth-analytics` | Daily 2:30 AM | Git history analysis for task growth |
 | `health-check` | Every 5 min | System health check |
 | `cleanup-old-tasks` | Daily 12:30 AM | Purge old task execution records |
+
+**Development/future schedules:**
+
+| Schedule | Frequency | Task | Status |
+|---|---|---|---|
+| `index-documentation-daily` | Daily 3 AM | MCP indexer (vector_index.json) | Enabled but output not used in production |
+| `reindex-mcp-weekly` | Sunday 2 AM | Full MCP re-index | Disabled by default |
 
 See [SCHEDULES.md](SCHEDULES.md) and [MCP_INDEXING_SCHEDULE.md](MCP_INDEXING_SCHEDULE.md) for details.
 
@@ -200,7 +264,7 @@ See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) and [k8s/README.md](../k8s/README
 ## Related Documentation
 
 - [CONFIGURATION.md](CONFIGURATION.md) -- Environment variables and secrets
-- [MCP_WORKFLOW.md](MCP_WORKFLOW.md) -- Document indexing pipeline and search flow
+- [MCP_WORKFLOW.md](MCP_WORKFLOW.md) -- Search and indexing flows in detail
 - [MCP_INDEXING_SCHEDULE.md](MCP_INDEXING_SCHEDULE.md) -- Automated indexing setup
 - [AZURE_OPENAI_SETUP.md](AZURE_OPENAI_SETUP.md) -- Azure OpenAI configuration
 - [DATABASE_REDIS_CONFIG.md](DATABASE_REDIS_CONFIG.md) -- Database and Redis setup
