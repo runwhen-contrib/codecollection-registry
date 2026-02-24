@@ -6,6 +6,7 @@ endpoint configuration via AZURE_OPENAI_EMBEDDING_* env vars, falling back
 to the main AZURE_OPENAI_* credentials.
 """
 import logging
+import threading
 from typing import List, Optional
 
 from app.core.config import settings
@@ -99,10 +100,13 @@ class EmbeddingService:
 
 
 _instance: Optional[EmbeddingService] = None
+_lock = threading.Lock()
 
 
 def get_embedding_service() -> EmbeddingService:
     global _instance
     if _instance is None:
-        _instance = EmbeddingService()
+        with _lock:
+            if _instance is None:
+                _instance = EmbeddingService()
     return _instance

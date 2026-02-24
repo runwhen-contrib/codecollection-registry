@@ -7,6 +7,7 @@ vector tables (codebundles, codecollections, libraries, documentation).
 import json
 import logging
 import re
+import threading
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
@@ -78,10 +79,17 @@ class VectorService:
         in *embeddings* is empty — this prevents a transient API outage from
         silently wiping all vector data.
         """
-        valid_count = sum(1 for e in embeddings if e)
-        if clear_existing and valid_count == 0 and len(ids) > 0:
+        n = len(ids)
+        if len(embeddings) != n or len(documents) != n or len(metadatas) != n:
             raise ValueError(
-                f"Refusing to truncate {table_key}: all {len(ids)} embeddings are empty "
+                f"List length mismatch: ids={n}, embeddings={len(embeddings)}, "
+                f"documents={len(documents)}, metadatas={len(metadatas)}"
+            )
+
+        valid_count = sum(1 for e in embeddings if e)
+        if clear_existing and valid_count == 0 and n > 0:
+            raise ValueError(
+                f"Refusing to truncate {table_key}: all {n} embeddings are empty "
                 "(possible upstream embedding failure)"
             )
 
@@ -333,10 +341,13 @@ class VectorService:
 
 
 _instance: Optional[VectorService] = None
+_lock = threading.Lock()
 
 
 def get_vector_service() -> VectorService:
     global _instance
     if _instance is None:
-        _instance = VectorService()
+        with _lock:
+            if _instance is None:
+                _instance = VectorService()
     return _instance

@@ -29,6 +29,7 @@ def ensure_base_tables():
     from app.core.database import Base, engine
     # Import all models so they are registered on Base.metadata
     from app.models import CodeCollection, Codebundle, CodeCollectionVersion, AIEnhancementLog, TaskGrowthMetric  # noqa: F401
+    from app.models.vector_models import VectorCodebundle, VectorCodecollection, VectorLibrary, VectorDocumentation  # noqa: F401
 
     # pgvector extension must exist before creating vector tables
     with engine.connect() as conn:
