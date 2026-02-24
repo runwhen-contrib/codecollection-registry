@@ -70,6 +70,10 @@ spec:
           mountPath: /app/schedules.yaml
           subPath: schedules.yaml
           readOnly: true
+        - name: documentation-sources
+          mountPath: /app/sources.yaml
+          subPath: sources.yaml
+          readOnly: true
         # - name: tag-icons
         #   mountPath: /app/map-tag-icons.yaml
         #   subPath: map-tag-icons.yaml
@@ -109,6 +113,9 @@ spec:
       - name: schedules-config
         configMap:
           name: cc-registry-schedules
+      - name: documentation-sources
+        configMap:
+          name: documentation-sources
       # - name: tag-icons
       #   configMap:
       #     name: tag-icon-mappings

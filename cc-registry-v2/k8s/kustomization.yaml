@@ -67,6 +67,14 @@ configMapGenerator:
     literals:
       - ENVIRONMENT=production
       - LOG_LEVEL=info
+  # Documentation sources for vector embedding indexing.
+  # Before running `kustomize build`, copy sources.yaml into this directory:
+  #   cp ../../mcp-server/sources.yaml ./sources.yaml
+  # Or create it via kubectl:
+  #   kubectl create configmap documentation-sources --from-file=sources.yaml=../../mcp-server/sources.yaml -n <namespace>
+  - name: documentation-sources
+    files:
+      - sources.yaml
 
 # Secret generator (for non-sensitive defaults)
 # secretGenerator:
