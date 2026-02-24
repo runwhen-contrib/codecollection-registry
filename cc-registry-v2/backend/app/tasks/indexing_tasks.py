@@ -21,9 +21,19 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _rows_to_dicts(rows, collection_slug_map: Dict[int, str]) -> List[Dict[str, Any]]:
-    """Convert SQLAlchemy Codebundle rows to plain dicts for the vector service."""
+    """Convert SQLAlchemy Codebundle rows to plain dicts for the vector service.
+
+    Codebundles whose ``codecollection_id`` doesn't resolve to an active
+    collection slug are skipped — they're orphaned rows that would produce
+    non-unique vector IDs (e.g. ``/<slug>``).
+    """
     results = []
+    skipped = 0
     for cb in rows:
+        coll_slug = collection_slug_map.get(cb.codecollection_id)
+        if not coll_slug:
+            skipped += 1
+            continue
         d = {
             "id": cb.id,
             "slug": cb.slug,
@@ -35,9 +45,11 @@ def _rows_to_dicts(rows, collection_slug_map: Dict[int, str]) -> List[Dict[str, 
             "support_tags": cb.support_tags or [],
             "tasks": cb.tasks or [],
             "discovery_platform": cb.discovery_platform,
-            "collection_slug": collection_slug_map.get(cb.codecollection_id, ""),
+            "collection_slug": coll_slug,
         }
         results.append(d)
+    if skipped:
+        logger.warning(f"Skipped {skipped} codebundles with no active collection")
     return results
 
 
@@ -81,6 +93,10 @@ def index_codebundles_task(self) -> Dict[str, Any]:
         documents = [vec_svc.codebundle_to_document(cb) for cb in cb_dicts]
         embeddings = embed_svc.embed_texts(documents)
         ids = [f"{cb['collection_slug']}/{cb['slug']}" for cb in cb_dicts]
+        if len(set(ids)) != len(ids):
+            dupes = [vid for vid in ids if ids.count(vid) > 1]
+            logger.error(f"Duplicate vector IDs detected: {set(dupes)}")
+            return {"status": "failed", "error": f"duplicate vector IDs: {set(dupes)}"}
         metadatas = [vec_svc.codebundle_metadata(cb) for cb in cb_dicts]
 
         valid = _count_valid_embeddings(embeddings)
