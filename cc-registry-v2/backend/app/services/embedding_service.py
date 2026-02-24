@@ -9,6 +9,7 @@ import logging
 from typing import List, Optional
 
 from app.core.config import settings
+from app.models.vector_models import EMBEDDING_DIMENSIONS
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,6 @@ class EmbeddingService:
     def __init__(self):
         self._client = None
         self._deployment: str = settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT
-        self._dimensions: int = settings.EMBEDDING_DIMENSIONS
         self._batch_size: int = settings.EMBEDDING_BATCH_SIZE
         self._init_client()
 
@@ -82,7 +82,7 @@ class EmbeddingService:
             try:
                 response = self._client.embeddings.create(
                     input=batch, model=self._deployment,
-                    dimensions=self._dimensions,
+                    dimensions=EMBEDDING_DIMENSIONS,
                 )
                 for item in response.data:
                     all_embeddings.append(item.embedding)

@@ -6,7 +6,8 @@ The new tasks in indexing_tasks.py run natively inside the backend worker,
 generating embeddings and storing them directly in pgvector.
 
 These stubs remain only so that any in-flight Celery messages referencing
-the old task names don't cause import errors. They redirect to the new tasks.
+the old task names don't cause import errors. They dispatch the new tasks
+as proper sub-tasks to preserve task context and monitoring visibility.
 """
 import logging
 from typing import Dict, Any
@@ -18,15 +19,31 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(bind=True, name='app.tasks.mcp_tasks.index_documentation_task')
 def index_documentation_task(self) -> Dict[str, Any]:
-    """Deprecated — redirects to indexing_tasks.index_documentation_task."""
-    logger.warning("mcp_tasks.index_documentation_task is deprecated; use indexing_tasks.index_documentation_task")
+    """Deprecated — dispatches indexing_tasks.index_documentation_task."""
+    logger.warning(
+        "mcp_tasks.index_documentation_task is deprecated; "
+        "update callers to use indexing_tasks.index_documentation_task"
+    )
     from app.tasks.indexing_tasks import index_documentation_task as new_task
-    return new_task()
+    result = new_task.apply_async()
+    return {
+        "status": "redirected",
+        "new_task_id": result.id,
+        "new_task_name": "app.tasks.indexing_tasks.index_documentation_task",
+    }
 
 
 @celery_app.task(bind=True, name='app.tasks.mcp_tasks.reindex_all_task')
 def reindex_all_task(self) -> Dict[str, Any]:
-    """Deprecated — redirects to indexing_tasks.reindex_all_task."""
-    logger.warning("mcp_tasks.reindex_all_task is deprecated; use indexing_tasks.reindex_all_task")
+    """Deprecated — dispatches indexing_tasks.reindex_all_task."""
+    logger.warning(
+        "mcp_tasks.reindex_all_task is deprecated; "
+        "update callers to use indexing_tasks.reindex_all_task"
+    )
     from app.tasks.indexing_tasks import reindex_all_task as new_task
-    return new_task()
+    result = new_task.apply_async()
+    return {
+        "status": "redirected",
+        "new_task_id": result.id,
+        "new_task_name": "app.tasks.indexing_tasks.reindex_all_task",
+    }

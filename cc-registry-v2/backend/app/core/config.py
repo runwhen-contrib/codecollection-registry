@@ -46,7 +46,6 @@ class Settings(BaseSettings):
     AZURE_OPENAI_EMBEDDING_API_KEY: Optional[str] = None
     AZURE_OPENAI_EMBEDDING_API_VERSION: Optional[str] = None
     AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str = "text-embedding-3-small"
-    EMBEDDING_DIMENSIONS: int = 1536
     EMBEDDING_BATCH_SIZE: int = 100
     
     # AI Service Provider (openai, azure-openai)

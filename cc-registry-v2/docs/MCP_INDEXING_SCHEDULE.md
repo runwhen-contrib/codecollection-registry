@@ -85,7 +85,8 @@ Embedding generation requires Azure OpenAI credentials. Set these in `az.secret`
 | `AZURE_OPENAI_EMBEDDING_ENDPOINT` | Dedicated embedding endpoint (falls back to `AZURE_OPENAI_ENDPOINT`) | If using dedicated endpoint |
 | `AZURE_OPENAI_EMBEDDING_API_KEY` | Dedicated embedding API key (falls back to `AZURE_OPENAI_API_KEY`) | If using dedicated key |
 | `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Deployment name (default: `text-embedding-3-small`) | No |
-| `EMBEDDING_DIMENSIONS` | Vector dimensions (default: `1536`) | No |
 | `EMBEDDING_BATCH_SIZE` | Texts per API call (default: `100`) | No |
+
+> **Note:** Vector dimensions are fixed at **1536** to match the `text-embedding-3-small` model and the database schema. This is not configurable.
 
 If embedding credentials are not configured, the embedding step is silently skipped and vector tables remain empty. Keyword search continues to work.
