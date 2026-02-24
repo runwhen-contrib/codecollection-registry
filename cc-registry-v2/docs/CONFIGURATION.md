@@ -158,7 +158,7 @@ codecollections:
     description: "CLI-based automation codebundles"
 ```
 
-### `mcp-server/sources.yaml`
+### `cc-registry-v2/sources.yaml`
 
 Defines documentation URLs to crawl for indexing. See [MCP_WORKFLOW.md](MCP_WORKFLOW.md) for format details.
 

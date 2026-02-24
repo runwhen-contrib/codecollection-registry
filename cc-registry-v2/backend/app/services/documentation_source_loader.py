@@ -1,8 +1,8 @@
 """
 Load documentation sources from sources.yaml and crawl their content.
 
-This replaces the MCP server's standalone indexer for documentation.
-The same sources.yaml is used — it is mounted into the backend container.
+sources.yaml lives in cc-registry-v2/ alongside schedules.yaml and is
+mounted into the backend container at /app/sources.yaml.
 """
 import logging
 from pathlib import Path
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 SOURCES_PATHS = [
     Path("/app/sources.yaml"),
-    Path("/workspaces/codecollection-registry/mcp-server/sources.yaml"),
+    Path("/workspaces/codecollection-registry/cc-registry-v2/sources.yaml"),
 ]
 
 

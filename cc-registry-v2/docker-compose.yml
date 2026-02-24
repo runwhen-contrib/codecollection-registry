@@ -77,7 +77,7 @@ services:
       - ./backend:/app
       - /app/__pycache__
       - ../mcp-server/data/repos:/mcp-repos:ro
-      - ../mcp-server/sources.yaml:/app/sources.yaml:ro
+      - ./sources.yaml:/app/sources.yaml:ro
       - ../map-tag-icons.yaml:/app/map-tag-icons.yaml:ro
       - ./schedules.yaml:/app/schedules.yaml:ro
     command: sh -c "python run_migrations.py && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload"
@@ -107,7 +107,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
-      - ../mcp-server/sources.yaml:/app/sources.yaml:ro
+      - ./sources.yaml:/app/sources.yaml:ro
       - ./schedules.yaml:/app/schedules.yaml:ro
     command: celery -A app.tasks.celery_app worker --loglevel=info
     restart: unless-stopped
@@ -131,7 +131,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
-      - ../mcp-server/sources.yaml:/app/sources.yaml:ro
+      - ./sources.yaml:/app/sources.yaml:ro
       - ./schedules.yaml:/app/schedules.yaml:ro
     command: celery -A app.tasks.celery_app beat --loglevel=info
     restart: unless-stopped

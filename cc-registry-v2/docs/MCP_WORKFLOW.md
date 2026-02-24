@@ -178,7 +178,7 @@ The MCP server (`../mcp-server/server_http.py`) is a FastAPI app that:
 | `mcp-server/server_http.py` | FastAPI HTTP server (stateless) |
 | `mcp-server/utils/registry_client.py` | HTTP client for backend API (includes vector search methods) |
 | `mcp-server/tools/documentation_tools.py` | Documentation search (backend vector → local keyword fallback) |
-| `mcp-server/sources.yaml` | Documentation URLs (mounted into backend container) |
+| `cc-registry-v2/sources.yaml` | Documentation URLs for vector indexing |
 
 ### Deprecated (kept for reference)
 
