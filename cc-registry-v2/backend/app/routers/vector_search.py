@@ -34,7 +34,7 @@ def _result_to_dict(r: VectorSearchResult) -> Dict[str, Any]:
 # --------------------------------------------------------------------------
 
 @router.get("/search")
-async def semantic_search(
+def semantic_search(
     query: str,
     tables: Optional[str] = Query(
         None,
@@ -90,7 +90,7 @@ async def semantic_search(
 # --------------------------------------------------------------------------
 
 @router.get("/search/codebundles")
-async def search_codebundles(
+def search_codebundles(
     query: str,
     max_results: int = Query(10, ge=1, le=50),
     platform: Optional[str] = None,
@@ -122,7 +122,7 @@ async def search_codebundles(
 
 
 @router.get("/search/documentation")
-async def search_documentation(
+def search_documentation(
     query: str,
     max_results: int = Query(10, ge=1, le=50),
     category: Optional[str] = None,
@@ -148,7 +148,7 @@ async def search_documentation(
 
 
 @router.get("/search/libraries")
-async def search_libraries(
+def search_libraries(
     query: str,
     max_results: int = Query(10, ge=1, le=50),
     category: Optional[str] = None,
@@ -178,7 +178,7 @@ async def search_libraries(
 # --------------------------------------------------------------------------
 
 @router.get("/stats")
-async def vector_stats(db: Session = Depends(get_db)):
+def vector_stats(db: Session = Depends(get_db)):
     """Return row counts for each vector table."""
     vec_svc = get_vector_service()
     return vec_svc.get_stats(db=db)
