@@ -104,11 +104,11 @@ AZURE_OPENAI_EMBEDDING_API_VERSION=2024-02-15-preview
 
 **Fallback to main endpoint:**
 
-If `AZURE_OPENAI_EMBEDDING_*` vars are not set, the indexer uses `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_API_KEY` instead.
+If `AZURE_OPENAI_EMBEDDING_*` vars are not set, the backend's embedding service uses `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_API_KEY` instead.
 
 **No Azure credentials:**
 
-If neither set of credentials is available, the indexer falls back to local `sentence-transformers` (`all-MiniLM-L6-v2`, 384 dimensions).
+If neither set of credentials is available, the embedding step is silently skipped. Vector tables remain empty and keyword search continues to work normally.
 
 See [AZURE_OPENAI_SETUP.md](AZURE_OPENAI_SETUP.md) for detailed setup instructions.
 
@@ -158,7 +158,7 @@ codecollections:
     description: "CLI-based automation codebundles"
 ```
 
-### `mcp-server/sources.yaml`
+### `cc-registry-v2/sources.yaml`
 
 Defines documentation URLs to crawl for indexing. See [MCP_WORKFLOW.md](MCP_WORKFLOW.md) for format details.
 

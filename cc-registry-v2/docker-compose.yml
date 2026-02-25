@@ -76,9 +76,10 @@ services:
     volumes:
       - ./backend:/app
       - /app/__pycache__
-      - ../mcp-server/data/repos:/mcp-repos:ro  # MCP cloned repos for genrules parsing
-      - ../map-tag-icons.yaml:/app/map-tag-icons.yaml:ro  # Tag icon mappings
-      - ./schedules.yaml:/app/schedules.yaml:ro  # Schedule configuration
+      - ../mcp-server/data/repos:/mcp-repos:ro
+      - ./sources.yaml:/app/sources.yaml:ro
+      - ../map-tag-icons.yaml:/app/map-tag-icons.yaml:ro
+      - ./schedules.yaml:/app/schedules.yaml:ro
     command: sh -c "python run_migrations.py && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload"
     # Note: Migrations run on startup, then uvicorn starts in reload mode for development
     healthcheck:
@@ -92,7 +93,7 @@ services:
     build: ./worker
     container_name: registry-worker
     env_file:
-      - az.secret  # Azure OpenAI credentials for AI enhancement
+      - az.secret
     environment:
       - DATABASE_URL=postgresql://user:password@database:5432/codecollection_registry
       - REDIS_URL=redis://redis:6379/0
@@ -105,8 +106,9 @@ services:
       backend:
         condition: service_healthy
     volumes:
-      - ./backend:/app  # Share backend code
-      - ./schedules.yaml:/app/schedules.yaml:ro  # Schedule configuration
+      - ./backend:/app
+      - ./sources.yaml:/app/sources.yaml:ro
+      - ./schedules.yaml:/app/schedules.yaml:ro
     command: celery -A app.tasks.celery_app worker --loglevel=info
     restart: unless-stopped
 
@@ -115,7 +117,7 @@ services:
     build: ./worker
     container_name: registry-scheduler
     env_file:
-      - az.secret  # Azure OpenAI credentials for AI enhancement
+      - az.secret
     environment:
       - DATABASE_URL=postgresql://user:password@database:5432/codecollection_registry
       - REDIS_URL=redis://redis:6379/0
@@ -128,8 +130,9 @@ services:
       backend:
         condition: service_healthy
     volumes:
-      - ./backend:/app  # Share backend code
-      - ./schedules.yaml:/app/schedules.yaml:ro  # Schedule configuration
+      - ./backend:/app
+      - ./sources.yaml:/app/sources.yaml:ro
+      - ./schedules.yaml:/app/schedules.yaml:ro
     command: celery -A app.tasks.celery_app beat --loglevel=info
     restart: unless-stopped
 

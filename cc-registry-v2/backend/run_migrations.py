@@ -25,9 +25,16 @@ def ensure_base_tables():
     create_all() is safe to call on an existing DB — it only creates
     tables that are missing and never alters existing ones.
     """
+    from sqlalchemy import text
     from app.core.database import Base, engine
     # Import all models so they are registered on Base.metadata
     from app.models import CodeCollection, Codebundle, CodeCollectionVersion, AIEnhancementLog, TaskGrowthMetric  # noqa: F401
+    from app.models.vector_models import VectorCodebundle, VectorCodecollection, VectorLibrary, VectorDocumentation  # noqa: F401
+
+    # pgvector extension must exist before creating vector tables
+    with engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        conn.commit()
 
     print("Ensuring base tables exist...")
     Base.metadata.create_all(bind=engine)

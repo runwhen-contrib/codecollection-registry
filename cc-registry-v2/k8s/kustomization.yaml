@@ -67,6 +67,12 @@ configMapGenerator:
     literals:
       - ENVIRONMENT=production
       - LOG_LEVEL=info
+  # Documentation sources for vector embedding indexing.
+  # Before running `kustomize build`, copy sources.yaml into this directory:
+  #   cp ../sources.yaml ./sources.yaml
+  - name: documentation-sources
+    files:
+      - sources.yaml
 
 # Secret generator (for non-sensitive defaults)
 # secretGenerator:

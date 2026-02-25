@@ -1,12 +1,12 @@
 """
-Vector store for semantic search.
+DEPRECATED — Local vector store (in-memory / JSON file).
 
-In-memory vector store with JSON file persistence. Embeddings are stored
-in a local JSON file and loaded into memory on startup. Brute-force
-cosine similarity with numpy. Fast enough for thousands of vectors
-(our dataset is ~200-500 items).
+Vector storage and search have moved to the backend, which uses pgvector
+in PostgreSQL. See:
+  - cc-registry-v2/backend/app/services/vector_service.py
+  - cc-registry-v2/backend/app/tasks/indexing_tasks.py
 
-Zero external infrastructure required beyond the embedding API itself.
+This file is kept for reference only.
 """
 import json
 import logging

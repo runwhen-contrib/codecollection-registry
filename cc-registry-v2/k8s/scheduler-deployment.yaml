@@ -118,26 +118,26 @@ data:
         enabled: true
 
       # =============================================================================
-      # MCP SERVER INDEXING
+      # VECTOR INDEXING (pgvector embeddings)
       # =============================================================================
       - name: index-documentation-daily
-        task: app.tasks.mcp_tasks.index_documentation_task
-        description: Re-index documentation sources and update embeddings
+        task: app.tasks.indexing_tasks.index_documentation_task
+        description: Crawl documentation sources and update vector embeddings
         schedule_type: crontab
         crontab:
           hour: 3
           minute: 0
         enabled: true
 
-      - name: reindex-mcp-weekly
-        task: app.tasks.mcp_tasks.reindex_all_task
-        description: Full re-index of all MCP data (codebundles + documentation)
+      - name: reindex-vectors-weekly
+        task: app.tasks.indexing_tasks.reindex_all_task
+        description: Full rebuild of all vector embeddings in pgvector
         schedule_type: crontab
         crontab:
           hour: 2
           minute: 0
           day_of_week: 0
-        enabled: false
+        enabled: true
 
       # =============================================================================
       # ANALYTICS COMPUTATION
@@ -226,6 +226,10 @@ spec:
           mountPath: /app/schedules.yaml
           subPath: schedules.yaml
           readOnly: true
+        - name: documentation-sources
+          mountPath: /app/sources.yaml
+          subPath: sources.yaml
+          readOnly: true
         - name: celerybeat-schedule
           mountPath: /tmp
         resources:
@@ -247,6 +251,9 @@ spec:
       - name: schedules-config
         configMap:
           name: cc-registry-schedules
+      - name: documentation-sources
+        configMap:
+          name: documentation-sources
       - name: celerybeat-schedule
         emptyDir: {}
 ---

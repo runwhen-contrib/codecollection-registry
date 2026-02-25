@@ -1,5 +1,10 @@
 """
-Semantic search utilities combining embeddings and vector store.
+DEPRECATED — Semantic search utilities (local in-memory).
+
+Semantic search is now handled by the backend via pgvector.
+The MCP server delegates to /api/v1/vector/search/* endpoints.
+
+This file is kept for reference only.
 """
 import os
 import logging

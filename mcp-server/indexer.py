@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """
-CodeCollection Indexer
+DEPRECATED — CodeCollection Indexer (standalone CLI)
 
-Clones/updates all codecollection repositories, parses codebundles,
-generates embeddings, and stores them in the vector database.
+Embedding generation and vector storage have moved into the backend
+(cc-registry-v2/backend/app/tasks/indexing_tasks.py). The backend
+stores embeddings directly in pgvector and exposes them via
+/api/v1/vector/search/* endpoints.
 
-Usage:
+This file is kept for reference only. Use the backend's Celery tasks
+or the Admin UI to trigger reindexing.
+
+Original usage (no longer recommended):
     python indexer.py                    # Full index
     python indexer.py --local            # Use local embeddings (no API)
     python indexer.py --collection rw-cli-codecollection  # Index specific collection

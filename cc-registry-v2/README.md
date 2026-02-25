@@ -37,9 +37,9 @@ A modern, scalable registry for RunWhen CodeCollections with AI-powered enhancem
 | Service | Stack | Port | Purpose |
 |---------|-------|------|---------|
 | **frontend** | React 19 + TypeScript + MUI v7 | 3000 | SPA for browsing and managing CodeBundles |
-| **backend** | FastAPI + SQLAlchemy 2.0 | 8001 | REST API (`/api/v1/`), business logic, AI enhancement |
-| **mcp-server** | FastAPI (separate repo: `../mcp-server`) | 8000 | Stateless MCP tool server, delegates to backend API |
-| **worker** | Celery (shares backend image) | -- | Background task processing |
+| **backend** | FastAPI + SQLAlchemy 2.0 + pgvector | 8001 | REST API, business logic, AI enhancement, embedding generation, vector search |
+| **mcp-server** | FastAPI (separate repo: `../mcp-server`) | 8000 | Stateless MCP tool server, delegates all queries to backend API |
+| **worker** | Celery (shares backend image) | -- | Background tasks: sync, parse, enhance, embed |
 | **scheduler** | Celery Beat (shares backend image) | -- | Cron-driven task scheduling |
 | **database** | PostgreSQL 15 + pgvector | 5432 | Primary data store with vector extension |
 | **redis** | Redis 7 Alpine | 6379 | Celery broker and result backend |

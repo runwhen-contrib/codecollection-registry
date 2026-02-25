@@ -279,27 +279,28 @@ const Home: React.FC = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: '#666', fontSize: 24 }} />
+                    <SearchIcon sx={{ color: 'text.secondary', fontSize: 24 }} />
                   </InputAdornment>
                 ),
                 endAdornment: searchQuery && (
                   <InputAdornment position="end">
-                    <IconButton type="submit" edge="end" sx={{ color: '#5282f1' }}>
+                    <IconButton type="submit" edge="end" sx={{ color: 'primary.main' }}>
                       <ArrowIcon />
                     </IconButton>
                   </InputAdornment>
                 ),
                 sx: {
-                  backgroundColor: 'white',
+                  backgroundColor: 'background.paper',
+                  color: 'text.primary',
                   fontSize: '15px',
                   borderRadius: 3,
                   py: 1.25,
                   fontWeight: 400,
-                  '& fieldset': { borderColor: '#d0d0d0', borderWidth: 1.5 },
-                  '&:hover fieldset': { borderColor: '#5282f1' },
-                  '&.Mui-focused fieldset': { borderColor: '#5282f1', borderWidth: 1.5 },
+                  '& fieldset': { borderColor: 'divider', borderWidth: 1.5 },
+                  '&:hover fieldset': { borderColor: 'primary.main' },
+                  '&.Mui-focused fieldset': { borderColor: 'primary.main', borderWidth: 1.5 },
                   '& input::placeholder': {
-                    color: '#666',
+                    color: 'text.secondary',
                     opacity: 0.8,
                     fontSize: '15px',
                     fontStyle: 'italic'
