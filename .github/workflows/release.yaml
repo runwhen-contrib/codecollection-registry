@@ -1,4 +1,4 @@
-name: Release CC-Registry-V2
+name: Release
 
 on:
   push:
@@ -6,14 +6,14 @@ on:
       - main
     paths:
       - 'cc-registry-v2/**'
-      - '.github/workflows/release-cc-registry-v2.yaml'
+      - 'mcp-server/**'
+      - '.github/workflows/release.yaml'
 
   workflow_dispatch:
 
 env:
   GCP_PROJECT_ID: runwhen-nonprod-shared
   GCR_REGISTRY: us-docker.pkg.dev/runwhen-nonprod-shared/public-images
-  IMAGE_PREFIX: cc-registry-v2
 
 permissions:
   contents: write
@@ -41,7 +41,6 @@ jobs:
           DATE_FORMAT="+%Y-%m-%d"
           BASE_TAG=$(date "$DATE_FORMAT")
 
-          # Find the next release number for today
           get_next_release_number() {
             local last_tag_number=$(git tag | grep "^$BASE_TAG" | awk -F '.' '{print $NF}' | sort -n | tail -1)
             if [ -z "$last_tag_number" ]; then
@@ -62,6 +61,10 @@ jobs:
           echo "release_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
+
+  # ---------------------------------------------------------------------------
+  # cc-registry-v2 images
+  # ---------------------------------------------------------------------------
 
   build-backend:
     name: Build Backend
@@ -93,8 +96,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ needs.create-release.outputs.release_tag }}
-            ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:latest
+            ${{ env.GCR_REGISTRY }}/cc-registry-v2-backend:${{ needs.create-release.outputs.release_tag }}
+            ${{ env.GCR_REGISTRY }}/cc-registry-v2-backend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -131,8 +134,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_PREFIX }}-frontend:${{ needs.create-release.outputs.release_tag }}
-            ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_PREFIX }}-frontend:latest
+            ${{ env.GCR_REGISTRY }}/cc-registry-v2-frontend:${{ needs.create-release.outputs.release_tag }}
+            ${{ env.GCR_REGISTRY }}/cc-registry-v2-frontend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -172,19 +175,64 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ needs.create-release.outputs.release_tag }}
-            ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:latest
+            ${{ env.GCR_REGISTRY }}/cc-registry-v2-worker:${{ needs.create-release.outputs.release_tag }}
+            ${{ env.GCR_REGISTRY }}/cc-registry-v2-worker:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
             GITHUB_SHA=${{ github.sha }}
             GITHUB_REF=${{ github.ref }}
 
-  # Trigger prod environment deployment with the release tag
+  # ---------------------------------------------------------------------------
+  # MCP server image
+  # ---------------------------------------------------------------------------
+
+  build-mcp-server:
+    name: Build MCP Server
+    runs-on: ubuntu-latest
+    needs: [create-release]
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_PROVIDER }}
+          service_account: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_SA }}
+
+      - name: Configure Docker for GCR
+        run: gcloud --quiet auth configure-docker us-docker.pkg.dev
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push MCP Server
+        uses: docker/build-push-action@v5
+        with:
+          context: mcp-server
+          file: mcp-server/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.GCR_REGISTRY }}/runwhen-mcp-server:${{ needs.create-release.outputs.release_tag }}
+            ${{ env.GCR_REGISTRY }}/runwhen-mcp-server:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            GITHUB_SHA=${{ github.sha }}
+            GITHUB_REF=${{ github.ref }}
+
+  # ---------------------------------------------------------------------------
+  # Deploy all images to prod with the same tag
+  # ---------------------------------------------------------------------------
+
   deploy-to-prod:
     name: Deploy Release to Prod
     runs-on: ubuntu-latest
-    needs: [create-release, build-backend, build-frontend, build-worker]
+    needs: [create-release, build-backend, build-frontend, build-worker, build-mcp-server]
     steps:
       - name: Trigger registry-prod image update
         uses: actions/github-script@v7
@@ -200,7 +248,8 @@ jobs:
               inputs: {
                 backend_tag: tag,
                 frontend_tag: tag,
-                worker_tag: tag
+                worker_tag: tag,
+                mcp_server_tag: tag
               }
             });
             console.log(`Triggered prod deploy with release tag: ${tag}`);
@@ -208,13 +257,13 @@ jobs:
   summary:
     name: Release Summary
     runs-on: ubuntu-latest
-    needs: [create-release, build-backend, build-frontend, build-worker, deploy-to-prod]
+    needs: [create-release, build-backend, build-frontend, build-worker, build-mcp-server, deploy-to-prod]
     if: always()
     steps:
       - name: Build summary
         run: |
           TAG="${{ needs.create-release.outputs.release_tag }}"
-          echo "## CC-Registry-V2 Release: ${TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "## Release: ${TAG}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
@@ -222,17 +271,24 @@ jobs:
           echo "| Backend | ${{ needs.build-backend.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Frontend | ${{ needs.build-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Worker | ${{ needs.build-worker.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| MCP Server | ${{ needs.build-mcp-server.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Prod Deploy | ${{ needs.deploy-to-prod.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ needs.build-backend.result }}" = "success" ] && \
-             [ "${{ needs.build-frontend.result }}" = "success" ] && \
-             [ "${{ needs.build-worker.result }}" = "success" ]; then
+          REGISTRY="us-docker.pkg.dev/runwhen-nonprod-shared/public-images"
+          ALL_OK=true
+          for result in "${{ needs.build-backend.result }}" "${{ needs.build-frontend.result }}" \
+                        "${{ needs.build-worker.result }}" "${{ needs.build-mcp-server.result }}"; do
+            [ "$result" != "success" ] && ALL_OK=false
+          done
+
+          if $ALL_OK; then
             echo "### Images" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            echo "${{ env.GCR_REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${TAG}" >> $GITHUB_STEP_SUMMARY
-            echo "${{ env.GCR_REGISTRY }}/${{ env.IMAGE_PREFIX }}-frontend:${TAG}" >> $GITHUB_STEP_SUMMARY
-            echo "${{ env.GCR_REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${TAG}" >> $GITHUB_STEP_SUMMARY
+            echo "${REGISTRY}/cc-registry-v2-backend:${TAG}" >> $GITHUB_STEP_SUMMARY
+            echo "${REGISTRY}/cc-registry-v2-frontend:${TAG}" >> $GITHUB_STEP_SUMMARY
+            echo "${REGISTRY}/cc-registry-v2-worker:${TAG}" >> $GITHUB_STEP_SUMMARY
+            echo "${REGISTRY}/runwhen-mcp-server:${TAG}" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Some builds failed" >> $GITHUB_STEP_SUMMARY
