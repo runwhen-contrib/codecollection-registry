@@ -52,7 +52,11 @@ class WebCrawler:
             logger.error(f"Failed to fetch {url}: {e}")
             return None
 
-        return self._extract(html, url)
+        try:
+            return self._extract(html, url)
+        except Exception as e:
+            logger.error(f"Failed to parse {url}: {e}")
+            return None
 
     def crawl_urls(self, urls: List[str]) -> List[Dict[str, str]]:
         results = []
