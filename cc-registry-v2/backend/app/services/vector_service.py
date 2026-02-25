@@ -87,11 +87,18 @@ class VectorService:
             )
 
         valid_count = sum(1 for e in embeddings if e)
-        if clear_existing and valid_count == 0 and n > 0:
-            raise ValueError(
-                f"Refusing to truncate {table_key}: all {n} embeddings are empty "
-                "(possible upstream embedding failure)"
-            )
+        if clear_existing and n > 0:
+            if valid_count == 0:
+                raise ValueError(
+                    f"Refusing to truncate {table_key}: all {n} embeddings are empty "
+                    "(possible upstream embedding failure)"
+                )
+            ratio = valid_count / n
+            if ratio < 0.5:
+                raise ValueError(
+                    f"Refusing to truncate {table_key}: only {valid_count}/{n} "
+                    f"embeddings valid ({ratio:.0%}), likely partial API failure"
+                )
 
         own_session = db is None
         if own_session:

@@ -85,7 +85,7 @@ class EmbeddingService:
                     input=batch, model=self._deployment,
                     dimensions=EMBEDDING_DIMENSIONS,
                 )
-                for item in response.data:
+                for item in sorted(response.data, key=lambda x: x.index):
                     all_embeddings.append(item.embedding)
             except Exception as e:
                 logger.error(f"Embedding batch {start // self._batch_size} failed: {e}")
