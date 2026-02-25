@@ -188,9 +188,16 @@ const CodeBundles: React.FC = () => {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchIcon />
+                  <SearchIcon sx={{ color: 'text.secondary' }} />
                 </InputAdornment>
               ),
+              sx: {
+                backgroundColor: 'background.paper',
+                color: 'text.primary',
+                '& fieldset': { borderColor: 'divider' },
+                '&:hover fieldset': { borderColor: 'primary.main' },
+                '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+              }
             }}
             sx={{ flex: '1 1 300px' }}
             size="small"
