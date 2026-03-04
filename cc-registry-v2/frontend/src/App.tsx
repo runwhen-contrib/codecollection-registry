@@ -17,6 +17,7 @@ import Login from './pages/Login';
 import ConfigBuilder from './pages/ConfigBuilder';
 import Chat from './pages/Chat';
 import ChatDebug from './pages/ChatDebug';
+import IntakeWizard from './pages/IntakeWizard';
 import Footer from './components/Footer';
 import { CartProvider } from './contexts/CartContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -38,6 +39,7 @@ function AppContent() {
           <Route path="/collections/:collectionSlug/codebundles/:codebundleSlug" element={<CodeBundleDetail />} />
           <Route path="/all-tasks" element={<AllTasks />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/intake" element={<IntakeWizard />} />
           <Route path="/test-api" element={<TestAPI />} />
           <Route path="/login" element={<Login />} />
           

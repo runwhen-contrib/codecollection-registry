@@ -228,6 +228,18 @@ const Header: React.FC = () => {
               Registry Chat
             </Button>
 
+            <Button
+              component={Link}
+              to="/intake"
+              color="inherit"
+              sx={{
+                color: 'white',
+                fontWeight: location.pathname === '/intake' ? 'bold' : 'normal',
+              }}
+            >
+              Request
+            </Button>
+
             <Box sx={{ borderLeft: '1px solid rgba(255,255,255,0.3)', height: 20, mx: 1, alignSelf: 'center' }} />
             
             <Button

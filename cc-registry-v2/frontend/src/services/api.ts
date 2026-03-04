@@ -1031,6 +1031,77 @@ export const chatApi = {
   }
 };
 
+// =============================================================================
+// Intake Wizard API
+// =============================================================================
+
+export interface IntakeSearchMatch {
+  display_name: string;
+  slug: string;
+  collection_slug: string;
+  platform: string;
+  description: string;
+  tasks: string[];
+  tags: string[];
+  relevance_score: number;
+  source_url: string;
+}
+
+export interface IntakeExistingRequest {
+  number: number;
+  title: string;
+  url: string;
+  created_at: string;
+}
+
+export interface IntakeSearchResponse {
+  matches: IntakeSearchMatch[];
+  existing_requests: IntakeExistingRequest[];
+  suggested_platform: string;
+  query_used: string;
+}
+
+export interface IntakeDesignSpec {
+  codebundle_name: string;
+  target_collection: string;
+  platform: string;
+  purpose: string;
+  tasks: Array<{ name: string; checks: string }>;
+  resource_types: string[];
+  env_vars: Array<{ name: string; description: string; example: string }>;
+  secrets: Array<{ name: string; description: string }>;
+  tools_required: string[];
+  related_bundles: string[];
+  user_description: string;
+  coverage_notes: string;
+}
+
+export interface IntakeSubmitResponse {
+  issue_url: string;
+  issue_number: number;
+  message: string;
+}
+
+export const intakeApi = {
+  async getPlatforms(): Promise<{ platforms: string[] }> {
+    const response = await api.get('/intake/platforms');
+    return response.data;
+  },
+
+  async search(description: string, platform?: string): Promise<IntakeSearchResponse> {
+    const response = await api.post('/intake/search', { description, platform });
+    return response.data;
+  },
+
+  async submit(designSpec: IntakeDesignSpec, contactEmail?: string): Promise<IntakeSubmitResponse> {
+    const response = await api.post('/intake/submit', {
+      design_spec: designSpec,
+      contact_email: contactEmail,
+    });
+    return response.data;
+  },
+};
+
 export const githubApi = {
   // Get issue template for a query
   async getIssueTemplate(userQuery: string): Promise<IssueTemplate> {
