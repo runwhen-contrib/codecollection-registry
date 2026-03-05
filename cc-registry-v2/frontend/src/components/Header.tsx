@@ -18,7 +18,7 @@ import {
   MoreVert as MoreVertIcon,
   DarkMode as DarkModeIcon,
   LightMode as LightModeIcon,
-  SmartToy as SmartToyIcon,
+  ChatBubbleOutline as ChatIcon,
 } from '@mui/icons-material';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -126,30 +126,24 @@ const Header: React.FC = () => {
             CodeCollection Registry
           </Typography>
         </Box>
-
-        <Tooltip
-          title="Registry Chat is an AI-powered agent here to assist you and answer your questions"
-          arrow
-          placement="bottom"
-        >
-          <IconButton
-            component={Link}
-            to="/chat"
-            color="inherit"
-            size="medium"
-            sx={{
-              ml: 2,
-              color: 'white',
-              opacity: location.pathname === '/chat' ? 1 : 0.9,
-              '&:hover': { opacity: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
-            }}
-          >
-            <SmartToyIcon sx={{ fontSize: 22 }} />
-          </IconButton>
-        </Tooltip>
         
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginLeft: 'auto' }}>
-          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1, alignItems: 'center' }}>
+            <Tooltip title="Chat with the Registry AI assistant" arrow placement="bottom">
+              <Button
+                component={Link}
+                to="/chat"
+                color="inherit"
+                startIcon={<ChatIcon sx={{ fontSize: 20 }} />}
+                sx={{
+                  color: 'white',
+                  fontWeight: location.pathname === '/chat' ? 'bold' : 'normal',
+                }}
+              >
+                Chat
+              </Button>
+            </Tooltip>
+
             {/* Browse Dropdown */}
             <Button
               color="inherit"
