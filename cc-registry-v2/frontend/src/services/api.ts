@@ -1061,19 +1061,14 @@ export interface IntakeSearchResponse {
   query_used: string;
 }
 
-export interface IntakeDesignSpec {
-  codebundle_name: string;
-  target_collection: string;
-  platform: string;
-  purpose: string;
-  tasks: Array<{ name: string; checks: string }>;
-  resource_types: string[];
-  env_vars: Array<{ name: string; description: string; example: string }>;
-  secrets: Array<{ name: string; description: string }>;
-  tools_required: string[];
-  related_bundles: string[];
-  user_description: string;
-  coverage_notes: string;
+export interface IntakeSubmitRequest {
+  title: string;
+  description: string;
+  extra_context?: string;
+  contact_email?: string;
+  contact_ok?: boolean;
+  matches: IntakeSearchMatch[];
+  existing_requests: IntakeExistingRequest[];
 }
 
 export interface IntakeSubmitResponse {
@@ -1093,11 +1088,8 @@ export const intakeApi = {
     return response.data;
   },
 
-  async submit(designSpec: IntakeDesignSpec, contactEmail?: string): Promise<IntakeSubmitResponse> {
-    const response = await api.post('/intake/submit', {
-      design_spec: designSpec,
-      contact_email: contactEmail,
-    });
+  async submit(payload: IntakeSubmitRequest): Promise<IntakeSubmitResponse> {
+    const response = await api.post('/intake/submit', payload);
     return response.data;
   },
 };

@@ -64,12 +64,12 @@ class SearchResponse(BaseModel):
 
 
 class DesignSpecDraft(BaseModel):
-    """Step 4–5: The structured Design Spec generated from user answers."""
+    """Legacy: structured Design Spec. Kept for backwards compat; minimal intake uses SubmitRequest."""
     codebundle_name: str
     target_collection: str = "rw-cli-codecollection"
-    platform: str
+    platform: str = ""
     purpose: str
-    tasks: List[Dict[str, str]]
+    tasks: List[Dict[str, str]] = []
     resource_types: List[str] = []
     env_vars: List[Dict[str, str]] = []
     secrets: List[Dict[str, str]] = []
@@ -80,9 +80,14 @@ class DesignSpecDraft(BaseModel):
 
 
 class SubmitRequest(BaseModel):
-    """Step 6: Submit the Design Spec as a GitHub Issue."""
-    design_spec: DesignSpecDraft
+    """Minimal intake: title + description required. Search results included for the designer."""
+    title: str
+    description: str
+    extra_context: Optional[str] = None
     contact_email: Optional[str] = None
+    contact_ok: Optional[bool] = False
+    matches: List[SearchMatch] = []
+    existing_requests: List[ExistingRequest] = []
 
 
 class SubmitResponse(BaseModel):
@@ -181,8 +186,9 @@ async def generate_design_spec(
 @router.post("/submit", response_model=SubmitResponse)
 async def submit_intake(req: SubmitRequest):
     """
-    Create a GitHub Issue in codebundle-farm with the Design Spec
-    and label it for the Architect pipeline.
+    Create a GitHub Issue in codebundle-farm. Requires only title + description.
+    Search results (matches, existing_requests) are included in the issue body
+    so the designer can see existing coverage and avoid duplication.
     """
     if settings.GITHUB_TOKEN == "your_github_token_here":
         raise HTTPException(
@@ -190,16 +196,12 @@ async def submit_intake(req: SubmitRequest):
             detail="GitHub integration not configured. Set GITHUB_TOKEN.",
         )
 
-    spec = req.design_spec
-    title = f"[intake] {spec.codebundle_name}: {spec.purpose[:80]}"
-
-    body = _build_issue_body(spec, req.contact_email)
-
-    labels = [
-        "intake",
-        "needs-architect",
-        f"platform:{spec.platform.lower()}",
-    ]
+    title = f"[intake] {req.title[:100]}"
+    body = _build_minimal_issue_body(req)
+    platform = _infer_platform(req.description)
+    labels = ["intake", "needs-architect"]
+    if platform:
+        labels.append(f"platform:{platform.lower()}")
 
     try:
         api_url = f"https://api.github.com/repos/{CODEBUNDLE_FARM_REPO}/issues"
@@ -235,6 +237,79 @@ async def submit_intake(req: SubmitRequest):
 # =============================================================================
 # Helpers
 # =============================================================================
+
+
+def _build_minimal_issue_body(req: SubmitRequest) -> str:
+    """Build issue body with original request + full existing coverage details for the designer."""
+    parts = [
+        "## Request",
+        "",
+        f"**Title:** {req.title}",
+        "",
+        "**Description:**",
+        "",
+        f"> {req.description}",
+        "",
+    ]
+
+    if req.extra_context:
+        parts.extend([
+            "**Additional context:**",
+            "",
+            req.extra_context,
+            "",
+        ])
+
+    # Existing CodeBundles found by search — full details for the designer
+    if req.matches:
+        parts.extend([
+            "---",
+            "## Existing Coverage (from registry search)",
+            "",
+            "The following CodeBundles may overlap with this request. Designer: consider reusing, extending, or differentiating.",
+            "",
+        ])
+        for i, m in enumerate(req.matches, 1):
+            score_str = f" ({int(m.relevance_score * 100)}% match)" if m.relevance_score > 0 else ""
+            parts.append(f"### {i}. {m.display_name}{score_str}")
+            parts.append("")
+            parts.append(f"- **Collection:** `{m.collection_slug}`")
+            parts.append(f"- **Platform:** {m.platform or '—'}")
+            parts.append(f"- **Description:** {m.description[:500]}{'…' if len(m.description) > 500 else ''}")
+            if m.tasks:
+                parts.append(f"- **Tasks:** {', '.join(m.tasks[:8])}{'…' if len(m.tasks) > 8 else ''}")
+            if m.tags:
+                parts.append(f"- **Tags:** {', '.join(m.tags[:10])}")
+            if m.source_url:
+                parts.append(f"- **Link:** {m.source_url}")
+            parts.append("")
+
+    # Existing open requests — designer can consolidate
+    if req.existing_requests:
+        parts.extend([
+            "---",
+            "## Open Requests (may overlap)",
+            "",
+            "Consider commenting on an existing issue instead of duplicating work.",
+            "",
+        ])
+        for r in req.existing_requests:
+            parts.append(f"- [#{r.number} {r.title}]({r.url})")
+        parts.append("")
+
+    if req.contact_email:
+        parts.append(f"**Contact:** {req.contact_email}")
+        parts.append("")
+    if req.contact_ok:
+        parts.append("**Contact OK:** Yes, please reach out.")
+        parts.append("")
+
+    parts.extend([
+        "---",
+        f"*Created via CodeCollection Registry intake at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.*",
+    ])
+    return "\n".join(parts)
+
 
 def _build_issue_body(spec: DesignSpecDraft, contact_email: Optional[str]) -> str:
     """Build the GitHub Issue body with the Design Spec in YAML."""
