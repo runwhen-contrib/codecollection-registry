@@ -13,13 +13,14 @@ from pydantic import BaseModel
 import requests
 
 from app.core.config import settings
+from app.services.github_auth import get_github_auth
 from app.services.mcp_client import get_mcp_client, MCPError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/intake", tags=["intake"])
 
-CODEBUNDLE_FARM_REPO = "stewartshea/codebundle-farm"
+CODEBUNDLE_FARM_REPO = settings.GITHUB_INTAKE_REPO
 
 PLATFORMS = [
     "Kubernetes", "AWS", "Azure", "GCP", "Linux",
@@ -190,10 +191,11 @@ async def submit_intake(req: SubmitRequest):
     Search results (matches, existing_requests) are included in the issue body
     so the designer can see existing coverage and avoid duplication.
     """
-    if settings.GITHUB_TOKEN == "your_github_token_here":
+    gh = get_github_auth()
+    if not gh.is_configured:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="GitHub integration not configured. Set GITHUB_TOKEN.",
+            detail="GitHub integration not configured. Set GITHUB_APP_ID/GITHUB_APP_PRIVATE_KEY or GITHUB_TOKEN.",
         )
 
     title = f"[intake] {req.title[:100]}"
@@ -206,7 +208,7 @@ async def submit_intake(req: SubmitRequest):
     try:
         api_url = f"https://api.github.com/repos/{CODEBUNDLE_FARM_REPO}/issues"
         headers = {
-            "Authorization": f"token {settings.GITHUB_TOKEN}",
+            **gh.auth_header(),
             "Accept": "application/vnd.github.v3+json",
         }
         issue_data = {"title": title, "body": body, "labels": labels}
@@ -218,7 +220,7 @@ async def submit_intake(req: SubmitRequest):
             return SubmitResponse(
                 issue_url=info["html_url"],
                 issue_number=info["number"],
-                message=f"Created issue #{info['number']} in codebundle-farm",
+                message=f"Created issue #{info['number']} in {CODEBUNDLE_FARM_REPO}",
             )
         else:
             logger.error(f"GitHub API error: {response.status_code} - {response.text}")
@@ -226,6 +228,8 @@ async def submit_intake(req: SubmitRequest):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"GitHub API error: {response.text}",
             )
+    except HTTPException:
+        raise
     except requests.RequestException as e:
         logger.error(f"Error creating GitHub issue: {e}")
         raise HTTPException(

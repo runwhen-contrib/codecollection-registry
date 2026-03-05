@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     GITHUB_WEBHOOK_SECRET: str = "your_webhook_secret_here"
     GITHUB_OWNER: str = "runwhen-contrib"
     GITHUB_REPO: str = "codecollection-registry"
+
+    # GitHub App Authentication (preferred over GITHUB_TOKEN when configured)
+    GITHUB_APP_ID: Optional[str] = None
+    GITHUB_APP_PRIVATE_KEY: Optional[str] = None
+    GITHUB_APP_INSTALLATION_ID: Optional[int] = None
+
+    # Target repo for intake wizard issue creation
+    GITHUB_INTAKE_REPO: str = "runwhen-contrib/codecollection-registry"
     
     # Security
     SECRET_KEY: str = "your-secret-key-change-in-production"
