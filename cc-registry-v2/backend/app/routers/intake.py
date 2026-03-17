@@ -236,6 +236,12 @@ async def submit_intake(req: SubmitRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error communicating with GitHub: {e}",
         )
+    except Exception as e:
+        logger.error(f"Unexpected error in submit_intake: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error: {e}",
+        )
 
 
 # =============================================================================
@@ -252,7 +258,7 @@ def _build_minimal_issue_body(req: SubmitRequest) -> str:
         "",
         "**Description:**",
         "",
-        f"> {req.description}",
+        "\n".join(f"> {line}" for line in req.description.splitlines()),
         "",
     ]
 
@@ -312,85 +318,6 @@ def _build_minimal_issue_body(req: SubmitRequest) -> str:
         "---",
         f"*Created via CodeCollection Registry intake at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.*",
     ])
-    return "\n".join(parts)
-
-
-def _build_issue_body(spec: DesignSpecDraft, contact_email: Optional[str]) -> str:
-    """Build the GitHub Issue body with the Design Spec in YAML."""
-    tasks_yaml = ""
-    for t in spec.tasks:
-        tasks_yaml += f'  - name: "{t.get("name", "")}"\n'
-        tasks_yaml += f'    checks: "{t.get("checks", "")}"\n'
-
-    env_yaml = ""
-    for v in spec.env_vars:
-        env_yaml += f'  - name: "{v.get("name", "")}"\n'
-        env_yaml += f'    description: "{v.get("description", "")}"\n'
-        env_yaml += f'    example: "{v.get("example", "")}"\n'
-
-    secrets_yaml = ""
-    for s in spec.secrets:
-        secrets_yaml += f'  - name: "{s.get("name", "")}"\n'
-        secrets_yaml += f'    description: "{s.get("description", "")}"\n'
-
-    parts = [
-        "## Original Request",
-        "",
-        f"> {spec.user_description}",
-        "",
-    ]
-
-    if spec.coverage_notes:
-        parts.extend([
-            "## Existing Coverage Notes",
-            "",
-            spec.coverage_notes,
-            "",
-        ])
-
-    parts.extend([
-        "## Design Spec (draft)",
-        "",
-        "```yaml",
-        f"codebundle_name: {spec.codebundle_name}",
-        f"target_collection: {spec.target_collection}",
-        f"platform: {spec.platform}",
-        f'purpose: "{spec.purpose}"',
-        "",
-        "tasks:",
-        tasks_yaml.rstrip(),
-        "",
-        "resource_types:",
-    ])
-    for r in spec.resource_types:
-        parts.append(f"  - {r}")
-
-    if spec.env_vars:
-        parts.extend(["", "env_vars:", env_yaml.rstrip()])
-    if spec.secrets:
-        parts.extend(["", "secrets:", secrets_yaml.rstrip()])
-    if spec.tools_required:
-        parts.append("")
-        parts.append("tools_required:")
-        for t in spec.tools_required:
-            parts.append(f"  - {t}")
-    if spec.related_bundles:
-        parts.append("")
-        parts.append("related_bundles:")
-        for b in spec.related_bundles:
-            parts.append(f"  - {b}")
-
-    parts.extend(["```", ""])
-
-    if contact_email:
-        parts.append(f"**Contact**: {contact_email}")
-        parts.append("")
-
-    parts.extend([
-        "---",
-        f"*Created via the CodeCollection Registry intake wizard at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.*",
-    ])
-
     return "\n".join(parts)
 
 

@@ -15,7 +15,7 @@ tasks:
     desc: Start all services
     cmds:
       - echo "🚀 Starting all services..."
-      - source az.secret && docker-compose up -d --build
+      - . ./az.secret && docker-compose up -d --build
 
   stop:
     desc: Stop all services
@@ -27,7 +27,7 @@ tasks:
     desc: Restart all services
     cmds:
       - echo "🔄 Restarting all services..."
-      - source az.secret && docker-compose restart
+      - . ./az.secret && docker-compose restart
 
   # Monitoring commands
   logs:
@@ -83,7 +83,7 @@ tasks:
     desc: Start only backend services (db, redis, backend)
     cmds:
       - echo "🔧 Starting backend services..."
-      - source az.secret && docker-compose up -d database redis backend
+      - . ./az.secret && docker-compose up -d database redis backend
 
   frontend:
     desc: Start only frontend (requires backend)
@@ -95,14 +95,14 @@ tasks:
     desc: Start worker services
     cmds:
       - echo "🔄 Starting worker services..."
-      - source az.secret && docker-compose up -d worker scheduler flower
+      - . ./az.secret && docker-compose up -d worker scheduler flower
 
   # Development commands
   dev:
     desc: Start development environment (backend + frontend)
     cmds:
       - echo "💻 Starting development environment..."
-      - source az.secret && docker-compose up -d database redis backend frontend
+      - . ./az.secret && docker-compose up -d database redis backend frontend
 
   dev:logs:
     desc: Show logs for development services

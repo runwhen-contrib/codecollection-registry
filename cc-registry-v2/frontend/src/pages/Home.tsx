@@ -101,7 +101,7 @@ const Home: React.FC = () => {
   };
 
   const handleTagClick = (tag: string) => {
-    navigate(`/all-tasks?category=${tag}`);
+    navigate(`/all-tasks?support_tags=${encodeURIComponent(tag)}`);
   };
 
   useEffect(() => {

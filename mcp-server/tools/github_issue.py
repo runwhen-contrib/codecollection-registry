@@ -6,6 +6,9 @@ fails to find matching codebundles.
 
 Uses the codebundle-wanted.yaml template format from:
 https://github.com/runwhen-contrib/codecollection-registry/blob/main/.github/ISSUE_TEMPLATE/codebundle-wanted.yaml
+
+Requires GitHub App or PAT credentials -- see cc-registry-v2/README.md
+"GitHub App (Issue Creation)" section for env var details.
 """
 
 import base64
@@ -37,7 +40,11 @@ class CodeBundleRequest:
 
 
 class _AppTokenManager:
-    """Manages GitHub App JWT -> installation token lifecycle."""
+    """Manages GitHub App JWT -> installation token lifecycle.
+
+    Parallel implementation to backend's GitHubAuth (different service,
+    different JWT library).  Keep changes in sync.
+    """
 
     def __init__(self, app_id: str, private_key_raw: str, installation_id: Optional[int] = None):
         self._app_id = app_id

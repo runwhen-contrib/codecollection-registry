@@ -43,12 +43,12 @@ const AllTasks: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const initialCategory = searchParams.get('category');
+  const initialTags = searchParams.get('support_tags');
   const initialView = searchParams.get('view') as ViewMode | null;
   const initialSort = searchParams.get('sort') as SortOrder | null;
   
   const [selectedSupportTags, setSelectedSupportTags] = useState<string[]>(
-    initialCategory ? [initialCategory] : []
+    initialTags ? initialTags.split(',').map(t => t.trim()).filter(Boolean) : []
   );
   const [supportTagSearch, setSupportTagSearch] = useState('');
   const [supportTagSearchInput, setSupportTagSearchInput] = useState('');
@@ -333,6 +333,20 @@ const AllTasks: React.FC = () => {
           ============================================================ */}
       {isPresentation ? (
         <Box sx={{ height: 'calc(100vh - 220px)', overflow: 'auto' }}>
+          {/* Active filters bar */}
+          {(selectedSupportTags.length > 0 || selectedCollection) && (
+            <Box sx={{ mb: 1.5, p: 1, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <FilterIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+              {selectedSupportTags.map(tag => (
+                <Chip key={tag} label={tag} size="small" onDelete={() => handleSupportTagRemove(tag)} deleteIcon={<CloseIcon />} color="primary" variant="filled" sx={{ height: 24, fontSize: '0.75rem' }} />
+              ))}
+              {selectedCollection && (
+                <Chip label={selectedCollection} size="small" onDelete={() => handleCollectionChange('')} deleteIcon={<CloseIcon />} color="secondary" variant="filled" sx={{ height: 24, fontSize: '0.75rem' }} />
+              )}
+              <Button size="small" variant="text" onClick={clearFilters} startIcon={<ClearIcon />} sx={{ fontSize: '0.75rem', ml: 'auto' }}>Clear All</Button>
+            </Box>
+          )}
+
           {loading && (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
               <CircularProgress />
