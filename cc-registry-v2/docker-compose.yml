@@ -165,6 +165,9 @@ services:
       - SKIP_PREFLIGHT_CHECK=true
       - DISABLE_ESLINT_PLUGIN=true
       - NODE_OPTIONS=--max-old-space-size=4096
+      # Accept any Host header (required for Remote SSH port forwarding / tunnels)
+      - HOST=0.0.0.0
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
       - WDS_SOCKET_HOST=localhost
       - WDS_SOCKET_PORT=3000
     volumes:

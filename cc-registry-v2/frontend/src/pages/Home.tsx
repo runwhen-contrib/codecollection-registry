@@ -208,7 +208,7 @@ const Home: React.FC = () => {
       <Box sx={{ 
         background: isDark
           ? 'linear-gradient(180deg, #1a1a2e 0%, #1a1a2e 5%, #16163a 50%, #1e2a4a 100%)'
-          : 'linear-gradient(180deg, #5282f1 0%, #5282f1 5%, #4a75d9 50%, #6b93f5 100%)',
+          : 'linear-gradient(180deg, #2F80ED 0%, #2F80ED 5%, #1a5fc9 50%, #5b9bf5 100%)',
         borderBottom: 'none',
         pt: { xs: 12, md: 16 },
         pb: { xs: 6, md: 10 },
@@ -249,7 +249,7 @@ const Home: React.FC = () => {
               lineHeight: 1.2
             }}
           >
-            CodeCollection Registry
+            RunWhen Registry
           </Typography>
           
           <Typography 
@@ -265,7 +265,7 @@ const Home: React.FC = () => {
               mx: 'auto'
             }}
           >
-            Explore the largest open library of AI SRE tools. Describe your problem and the assistant will suggest the right automation — then run it securely in your own environment.
+            Explore the largest open library of AI SRE tools. Describe your problem and the assistant will suggest the right automation to run securely in your own environment.
           </Typography>
 
           {/* Search Bar that routes to Registry Chat */}
@@ -423,17 +423,17 @@ const Home: React.FC = () => {
               left: '12%',
               right: '12%',
               height: 2,
-              background: '#5282f1',
+              background: '#2F80ED',
               borderRadius: 1,
               zIndex: 0,
             }} />
             {/* Steps */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: 700, position: 'relative', zIndex: 1 }}>
               {[
-                { label: 'Ask', color: '#5282f1', muiIcon: ChatIcon },
-                { label: 'Run Tools', color: '#5282f1', muiIcon: RunnerIcon },
-                { label: 'Collect Insights', color: '#5282f1', img: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png' },
-                { label: 'Resolve', color: '#5282f1', muiIcon: ResolveIcon },
+                { label: 'Ask', color: '#2F80ED', muiIcon: ChatIcon },
+                { label: 'Run Tools', color: '#2F80ED', muiIcon: RunnerIcon },
+                { label: 'Collect Insights', color: '#2F80ED', img: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png' },
+                { label: 'Resolve', color: '#2F80ED', muiIcon: ResolveIcon },
               ].map((step) => (
                 <Box key={step.label} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.75 }}>
                   <Box sx={{
@@ -575,7 +575,7 @@ const Home: React.FC = () => {
                           width: page === activeCatPage ? 24 : 8,
                           height: 8,
                           borderRadius: 4,
-                          bgcolor: page === activeCatPage ? '#5282f1' : '#d0d8e8',
+                          bgcolor: page === activeCatPage ? '#2F80ED' : '#e2e8f0',
                           cursor: 'pointer',
                           transition: 'all 0.3s',
                         }}
@@ -600,7 +600,7 @@ const Home: React.FC = () => {
           {/* Left Column: Recently Updated CodeBundles */}
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-              <TrendingIcon sx={{ color: '#5282f1', fontSize: 24 }} />
+              <TrendingIcon sx={{ color: '#2F80ED', fontSize: 24 }} />
               <Typography 
                 variant="h2" 
                 sx={{ 
@@ -729,7 +729,7 @@ const Home: React.FC = () => {
           {/* Right Column: Recently Updated Tasks */}
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-              <TrendingIcon sx={{ color: '#5282f1', fontSize: 24 }} />
+              <TrendingIcon sx={{ color: '#2F80ED', fontSize: 24 }} />
               <Typography 
                 variant="h2" 
                 sx={{ 

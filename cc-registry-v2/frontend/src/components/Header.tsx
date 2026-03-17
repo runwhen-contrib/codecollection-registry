@@ -123,7 +123,7 @@ const Header: React.FC = () => {
               fontWeight: 'bold',
             }}
           >
-            CodeCollection Registry
+            Registry
           </Typography>
         </Box>
         

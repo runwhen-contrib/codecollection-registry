@@ -139,21 +139,24 @@ docker-compose restart backend
 
 ### Theme & Design Tokens
 
+Registry theme is aligned with RunWhen docs (`/workspaces/docs` Starlight custom.css). Use theme tokens; do not hardcode colors.
+
 | Token | Light | Dark | Usage |
 |-------|-------|------|-------|
-| `primary.main` | `#5282f1` | `#5282f1` | Interactive elements, links |
-| `text.primary` | `#3f3f3f` | `#e0e0e0` | Headings, body text |
-| `text.secondary` | `#858484` | `#a0a0a0` | Descriptions, metadata |
-| `background.paper` | `#ffffff` | `#1e1e1e` | Cards, surfaces |
-| `background.default` | `#ffffff` | `#121212` | Page background |
-| `divider` | `rgba(0,0,0,0.12)` | `rgba(255,255,255,0.12)` | Borders, separators |
+| `primary.main` | `#2F80ED` | `#2F80ED` | Interactive elements, links, header/footer |
+| `text.primary` | `#1a202c` | `#e2e8f0` | Headings, body text |
+| `text.secondary` | `#4a5568` | `#94a3b8` | Descriptions, metadata |
+| `background.paper` | `#ffffff` | `#1e293b` | Cards, surfaces |
+| `background.default` | `#ffffff` | `#0f172a` | Page background |
+| `divider` | `#e2e8f0` | `rgba(255,255,255,0.12)` | Borders, separators |
 | `action.hover` | — | — | Hover/zebra backgrounds |
 
 **Rules:**
 - Always use theme tokens — never hardcode `#fff`, `#000`, `#666`, `#ddd`
-- Font family: **Raleway** (brand font, do not change)
+- Font family: **Inter** (aligned with RunWhen docs; load via Google Fonts in `index.html`)
 - Font weight: `400` body, `500` emphasis, `600` headings/buttons — never `700` or `'bold'`
 - Font size grid: `0.75rem` (12px), `0.8125rem` (13px), `0.875rem` (14px), `0.9375rem` (15px), `1rem` (16px) — no sizes below 12px
+- Border radius: buttons/chips `6px`, cards `8px` (docs `--rw-radius-sm` / `--rw-radius-md`)
 - Chip min height: `24px`, row min height: `40px`
 - Dark mode is supported via `ThemeContext` — test both modes
 
@@ -221,5 +224,4 @@ All containers: `runAsNonRoot: true`, `runAsUser: 1000`, drop all capabilities.
 4. Run database operations in HTTP request handlers (use Celery)
 5. Show raw database IDs in the UI (use slugs)
 6. Use emoji in code or docs unless explicitly requested
-7. Change the font to Inter or the primary color to `#0570de` (registry has its own brand)
-8. "Fix" `Home.tsx` to match the app design system — it's intentionally different
+7. "Fix" `Home.tsx` to match the app design system — it's intentionally different
