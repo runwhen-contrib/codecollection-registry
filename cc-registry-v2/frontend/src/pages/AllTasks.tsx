@@ -328,171 +328,159 @@ const AllTasks: React.FC = () => {
         />
       </Box>
 
-      {/* ============================================================
-          PRESENTATION MODE — flat, full-width task list
-          ============================================================ */}
-      {isPresentation ? (
-        <Box sx={{ height: 'calc(100vh - 220px)', overflow: 'auto' }}>
-          {/* Active filters bar */}
-          {(selectedSupportTags.length > 0 || selectedCollection) && (
-            <Box sx={{ mb: 1.5, p: 1, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-              <FilterIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-              {selectedSupportTags.map(tag => (
-                <Chip key={tag} label={tag} size="small" onDelete={() => handleSupportTagRemove(tag)} deleteIcon={<CloseIcon />} color="primary" variant="filled" sx={{ height: 24, fontSize: '0.75rem' }} />
-              ))}
-              {selectedCollection && (
-                <Chip label={selectedCollection} size="small" onDelete={() => handleCollectionChange('')} deleteIcon={<CloseIcon />} color="secondary" variant="filled" sx={{ height: 24, fontSize: '0.75rem' }} />
-              )}
-              <Button size="small" variant="text" onClick={clearFilters} startIcon={<ClearIcon />} sx={{ fontSize: '0.75rem', ml: 'auto' }}>Clear All</Button>
-            </Box>
-          )}
-
-          {loading && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-              <CircularProgress />
-            </Box>
-          )}
-
-          {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
-          {!loading && !error && (
-            <>
-              {sortedFlatTasks.length > 0 ? (
-                <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-                  {sortedFlatTasks.map((task, idx) => (
-                    <Box
-                      key={task.id}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        px: 3,
-                        py: 1.5,
-                        minHeight: 52,
-                        borderBottom: idx < sortedFlatTasks.length - 1 ? '1px solid' : 'none',
-                        borderBottomColor: 'divider',
-                        '&:hover': { bgcolor: 'action.hover' },
-                        transition: 'background-color 0.1s',
-                      }}
-                    >
-                      <Typography sx={{ fontSize: '1.0625rem', fontWeight: 500, color: 'text.primary', flex: 1, mr: 2 }}>
-                        {task.name}
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-                        {task.support_tags.slice(0, 2).map(tag => (
-                          <Chip
-                            key={tag}
-                            label={tag}
-                            size="small"
-                            variant="outlined"
-                            onClick={() => handleSupportTagAdd(tag)}
-                            sx={{
-                              height: 22,
-                              fontSize: '0.6875rem',
-                              fontWeight: 500,
-                              borderColor: 'divider',
-                              color: 'text.secondary',
-                              cursor: 'pointer',
-                              '&:hover': { borderColor: 'primary.main', color: 'primary.main' },
-                            }}
-                          />
-                        ))}
-                      </Box>
-                    </Box>
+      {/* Main Layout: Sidebar + Content (shared across both modes) */}
+      <Box sx={{ display: 'flex', gap: 1.5, height: 'calc(100vh - 220px)' }}>
+        {/* Left: Support Tags Filter */}
+        <Box sx={{ width: 280, flexShrink: 0 }}>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ p: 1.5, display: 'flex', flexDirection: 'column', height: '100%', '&:last-child': { pb: 1.5 } }}>
+              <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600, mb: 1 }}>
+                <FilterIcon sx={{ mr: 1, fontSize: 18 }} />
+                Support Tags ({selectedSupportTags.length}/{filteredSupportTags.length})
+              </Typography>
+              
+              {selectedSupportTags.length > 0 && (
+                <Box sx={{ mb: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {selectedSupportTags.map((tag) => (
+                    <Chip key={tag} label={tag} size="small" onDelete={() => handleSupportTagRemove(tag)} deleteIcon={<CloseIcon />} color="primary" variant="filled" sx={{ height: 24, fontSize: '0.75rem' }} />
                   ))}
                 </Box>
-              ) : (
-                <Box sx={{ textAlign: 'center', py: 8 }}>
-                  <Typography variant="h6" color="text.secondary" gutterBottom>No tasks found</Typography>
-                  <Typography variant="body2" color="text.secondary">Try adjusting your search criteria or clearing filters.</Typography>
-                </Box>
               )}
-
-              {totalPages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-                  <Pagination count={totalPages} page={page} onChange={handlePageChange} color="primary" size="large" showFirstButton showLastButton />
-                </Box>
-              )}
-            </>
-          )}
-        </Box>
-      ) : (
-        /* ============================================================
-           GROUPED MODE — original sidebar + codebundle cards
-           ============================================================ */
-        <Box sx={{ display: 'flex', gap: 1.5, height: 'calc(100vh - 220px)' }}>
-          {/* Left: Support Tags Filter */}
-          <Box sx={{ width: 280, flexShrink: 0 }}>
-            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <CardContent sx={{ p: 1.5, display: 'flex', flexDirection: 'column', height: '100%', '&:last-child': { pb: 1.5 } }}>
-                <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600, mb: 1 }}>
-                  <FilterIcon sx={{ mr: 1, fontSize: 18 }} />
-                  Support Tags ({selectedSupportTags.length}/{filteredSupportTags.length})
-                </Typography>
-                
-                {selectedSupportTags.length > 0 && (
-                  <Box sx={{ mb: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selectedSupportTags.map((tag) => (
-                      <Chip key={tag} label={tag} size="small" onDelete={() => handleSupportTagRemove(tag)} deleteIcon={<CloseIcon />} color="primary" variant="filled" sx={{ height: 24, fontSize: '0.75rem' }} />
-                    ))}
+              
+              <TextField
+                fullWidth size="small" placeholder="Filter tags..."
+                value={supportTagSearchInput}
+                onChange={(e) => setSupportTagSearchInput(e.target.value)}
+                InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>) }}
+                sx={{ mb: 1 }}
+              />
+              
+              <Box sx={{ flex: 1, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
+                {filteredSupportTags.map((tag, index) => (
+                  <Box
+                    key={tag}
+                    sx={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      px: 1, py: 0.5, cursor: 'pointer',
+                      '&:hover': { bgcolor: 'action.hover' },
+                      borderBottom: index < filteredSupportTags.length - 1 ? '1px solid' : 'none',
+                      borderBottomColor: 'divider',
+                      bgcolor: selectedSupportTags.includes(tag) ? 'primary.50' : 'transparent'
+                    }}
+                    onClick={() => {
+                      if (selectedSupportTags.includes(tag)) { handleSupportTagRemove(tag); }
+                      else { handleSupportTagAdd(tag); }
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ flex: 1, fontSize: '0.75rem', fontWeight: selectedSupportTags.includes(tag) ? 500 : 400, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {tag}
+                    </Typography>
+                    <Box sx={{ width: 12, height: 12, border: '2px solid', borderColor: selectedSupportTags.includes(tag) ? 'primary.main' : 'grey.400', borderRadius: 0.5, bgcolor: selectedSupportTags.includes(tag) ? 'primary.main' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {selectedSupportTags.includes(tag) && <Box sx={{ width: 6, height: 6, bgcolor: 'white', borderRadius: 0.25 }} />}
+                    </Box>
+                  </Box>
+                ))}
+                {filteredSupportTags.length === 0 && supportTagSearch.length >= 2 && (
+                  <Box sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>No tags found matching "{supportTagSearch}"</Typography>
                   </Box>
                 )}
-                
-                <TextField
-                  fullWidth size="small" placeholder="Filter tags..."
-                  value={supportTagSearchInput}
-                  onChange={(e) => setSupportTagSearchInput(e.target.value)}
-                  InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>) }}
-                  sx={{ mb: 1 }}
-                />
-                
-                <Box sx={{ flex: 1, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
-                  {filteredSupportTags.map((tag, index) => (
-                    <Box
-                      key={tag}
-                      sx={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        px: 1, py: 0.5, cursor: 'pointer',
-                        '&:hover': { bgcolor: 'action.hover' },
-                        borderBottom: index < filteredSupportTags.length - 1 ? '1px solid' : 'none',
-                        borderBottomColor: 'divider',
-                        bgcolor: selectedSupportTags.includes(tag) ? 'primary.50' : 'transparent'
-                      }}
-                      onClick={() => {
-                        if (selectedSupportTags.includes(tag)) { handleSupportTagRemove(tag); }
-                        else { handleSupportTagAdd(tag); }
-                      }}
-                    >
-                      <Typography variant="body2" sx={{ flex: 1, fontSize: '0.75rem', fontWeight: selectedSupportTags.includes(tag) ? 500 : 400, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {tag}
-                      </Typography>
-                      <Box sx={{ width: 12, height: 12, border: '2px solid', borderColor: selectedSupportTags.includes(tag) ? 'primary.main' : 'grey.400', borderRadius: 0.5, bgcolor: selectedSupportTags.includes(tag) ? 'primary.main' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        {selectedSupportTags.includes(tag) && <Box sx={{ width: 6, height: 6, bgcolor: 'white', borderRadius: 0.25 }} />}
-                      </Box>
+              </Box>
+
+              <Box sx={{ mt: 1 }}>
+                <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+                  <Select value={selectedCollection} onChange={(e) => handleCollectionChange(e.target.value)} displayEmpty sx={{ fontSize: '0.8125rem' }}>
+                    <MenuItem value="">All Collections</MenuItem>
+                    {uniqueCollections.map((collection) => (<MenuItem key={collection} value={collection}>{collection}</MenuItem>))}
+                  </Select>
+                </FormControl>
+                <Button variant="outlined" onClick={clearFilters} fullWidth size="small" sx={{ py: 0.5, fontSize: '0.75rem' }}>Clear Filters</Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Box>
+
+        {/* Right Content */}
+        <Box sx={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
+          {isPresentation ? (
+            /* ============================================================
+               PRESENTATION MODE — flat task list
+               ============================================================ */
+            <>
+              {loading && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                  <CircularProgress />
+                </Box>
+              )}
+
+              {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
+              {!loading && !error && (
+                <>
+                  {sortedFlatTasks.length > 0 ? (
+                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                      {sortedFlatTasks.map((task, idx) => (
+                        <Box
+                          key={task.id}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            px: 3,
+                            py: 1.5,
+                            minHeight: 52,
+                            borderBottom: idx < sortedFlatTasks.length - 1 ? '1px solid' : 'none',
+                            borderBottomColor: 'divider',
+                            '&:hover': { bgcolor: 'action.hover' },
+                            transition: 'background-color 0.1s',
+                          }}
+                        >
+                          <Typography sx={{ fontSize: '1.0625rem', fontWeight: 500, color: 'text.primary', flex: 1, mr: 2 }}>
+                            {task.name}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                            {task.support_tags.slice(0, 3).map(tag => (
+                              <Chip
+                                key={tag}
+                                label={tag}
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleSupportTagAdd(tag)}
+                                sx={{
+                                  height: 22,
+                                  fontSize: '0.6875rem',
+                                  fontWeight: 500,
+                                  borderColor: 'divider',
+                                  color: 'text.secondary',
+                                  cursor: 'pointer',
+                                  '&:hover': { borderColor: 'primary.main', color: 'primary.main' },
+                                }}
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      ))}
                     </Box>
-                  ))}
-                  {filteredSupportTags.length === 0 && supportTagSearch.length >= 2 && (
-                    <Box sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
-                      <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>No tags found matching "{supportTagSearch}"</Typography>
+                  ) : (
+                    <Box sx={{ textAlign: 'center', py: 8 }}>
+                      <Typography variant="h6" color="text.secondary" gutterBottom>No tasks found</Typography>
+                      <Typography variant="body2" color="text.secondary">Try adjusting your search criteria or clearing filters.</Typography>
                     </Box>
                   )}
-                </Box>
 
-                <Box sx={{ mt: 1 }}>
-                  <FormControl fullWidth size="small" sx={{ mb: 1 }}>
-                    <Select value={selectedCollection} onChange={(e) => handleCollectionChange(e.target.value)} displayEmpty sx={{ fontSize: '0.8125rem' }}>
-                      <MenuItem value="">All Collections</MenuItem>
-                      {uniqueCollections.map((collection) => (<MenuItem key={collection} value={collection}>{collection}</MenuItem>))}
-                    </Select>
-                  </FormControl>
-                  <Button variant="outlined" onClick={clearFilters} fullWidth size="small" sx={{ py: 0.5, fontSize: '0.75rem' }}>Clear Filters</Button>
-                </Box>
-              </CardContent>
-            </Card>
-          </Box>
-
-          {/* Right Content - Tasks List */}
-          <Box sx={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
+                  {totalPages > 1 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                      <Pagination count={totalPages} page={page} onChange={handlePageChange} color="primary" size="large" showFirstButton showLastButton />
+                    </Box>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            /* ============================================================
+               GROUPED MODE — codebundle cards
+               ============================================================ */
+            <>
             <Box sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
@@ -609,9 +597,10 @@ const AllTasks: React.FC = () => {
                 )}
               </>
             )}
-          </Box>
+            </>
+          )}
         </Box>
-      )}
+      </Box>
     </Box>
   );
 };
