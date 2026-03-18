@@ -126,16 +126,15 @@ async def search_existing_coverage(req: SearchRequest):
                 args["platform"] = req.platform
 
             result = await mcp.call_tool("find_codebundle", args)
-            if result and result.get("success"):
-                parsed = _parse_codebundle_results(result.get("result", ""))
-                matches = parsed
+            if result:
+                matches = _parse_codebundle_results(result)
 
             # Check for open requests
             search_term = req.platform or req.description.split()[0] if req.description else ""
             if search_term:
                 req_result = await mcp.call_tool("check_existing_requests", {"search_term": search_term})
-                if req_result and req_result.get("success"):
-                    existing_requests = _parse_existing_requests(req_result.get("result", ""))
+                if req_result:
+                    existing_requests = _parse_existing_requests(req_result)
     except MCPError as e:
         logger.warning(f"MCP search failed, continuing without results: {e}")
     except Exception as e:

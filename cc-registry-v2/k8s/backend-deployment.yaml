@@ -65,6 +65,9 @@ spec:
         envFrom:
         - secretRef:
             name: azure-openai-credentials
+        - secretRef:
+            name: github-credentials
+            optional: true
         volumeMounts:
         - name: schedules-config
           mountPath: /app/schedules.yaml

@@ -33,13 +33,37 @@ class GitHubAuth:
         self._lock = threading.Lock()
 
         raw_key = settings.GITHUB_APP_PRIVATE_KEY
-        if raw_key and settings.GITHUB_APP_ID:
+        has_app_id = bool(settings.GITHUB_APP_ID)
+        has_key = bool(raw_key)
+        has_pat = bool(settings.GITHUB_TOKEN and settings.GITHUB_TOKEN != "your_github_token_here")
+
+        logger.info(
+            "GitHub auth init: GITHUB_APP_ID=%s, GITHUB_APP_PRIVATE_KEY=%s (%d chars), "
+            "GITHUB_APP_INSTALLATION_ID=%s, GITHUB_TOKEN=%s",
+            "set" if has_app_id else "MISSING",
+            "set" if has_key else "MISSING",
+            len(raw_key) if raw_key else 0,
+            settings.GITHUB_APP_INSTALLATION_ID or "not set (will auto-discover)",
+            "set" if has_pat else "MISSING/default",
+        )
+
+        if has_app_id and has_key:
             self._app_id = settings.GITHUB_APP_ID
             self._private_key = self._decode_key(raw_key)
             if self._private_key:
                 logger.info("GitHub App authentication configured (app_id=%s)", self._app_id)
             else:
                 logger.warning("GITHUB_APP_PRIVATE_KEY could not be decoded; falling back to PAT")
+        elif has_app_id and not has_key:
+            logger.warning("GITHUB_APP_ID is set but GITHUB_APP_PRIVATE_KEY is missing")
+        elif has_key and not has_app_id:
+            logger.warning("GITHUB_APP_PRIVATE_KEY is set but GITHUB_APP_ID is missing")
+
+        if not self.is_configured:
+            logger.warning(
+                "GitHub integration NOT configured — issue creation will be disabled. "
+                "Set GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY, or GITHUB_TOKEN."
+            )
 
     @property
     def is_app_auth(self) -> bool:
