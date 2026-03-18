@@ -12,10 +12,6 @@ import {
   Link,
   Avatar,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -30,8 +26,8 @@ import {
 } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useLocation } from 'react-router-dom';
-import { chatApi, githubApi, ChatResponse, ExampleQueries, TaskRequestIssue } from '../services/api';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { chatApi, ChatResponse, ExampleQueries } from '../services/api';
 
 interface ChatMessage {
   id: string;
@@ -45,6 +41,7 @@ interface ChatMessage {
 
 const Chat: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
@@ -53,10 +50,6 @@ const Chat: React.FC = () => {
   const [examples, setExamples] = useState<ExampleQueries | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
-  const [requestDialogOpen, setRequestDialogOpen] = useState(false);
-  const [requestContext, setRequestContext] = useState('');
-  const [currentRequestQuery, setCurrentRequestQuery] = useState('');
-  const [submittingRequest, setSubmittingRequest] = useState(false);
   const [initialQueryProcessed, setInitialQueryProcessed] = useState(false);
   const [codebundleContext, setCodebundleContext] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -240,43 +233,8 @@ const Chat: React.FC = () => {
     }
   };
 
-  const handleOpenRequestDialog = (userQuery: string) => {
-    setCurrentRequestQuery(userQuery);
-    setRequestContext('');
-    setRequestDialogOpen(true);
-  };
-
-  const handleCloseRequestDialog = () => {
-    setRequestDialogOpen(false);
-    setRequestContext('');
-    setCurrentRequestQuery('');
-  };
-
-  const handleSubmitRequest = async () => {
-    setSubmittingRequest(true);
-    try {
-      // Combine the original query with additional context
-      const fullQuery = requestContext.trim() 
-        ? `${currentRequestQuery}\n\nAdditional context: ${requestContext}`
-        : currentRequestQuery;
-      
-      const template = await githubApi.getIssueTemplate(fullQuery);
-      const issueData: TaskRequestIssue = {
-        user_query: template.user_query,
-        task_description: template.task_description,
-        use_case: template.use_case,
-        platform: template.platform,
-        priority: template.priority
-      };
-      const result = await githubApi.createTaskRequest(issueData);
-      window.open(result.issue_url, '_blank');
-      handleCloseRequestDialog();
-    } catch (error: any) {
-      console.error('Error creating GitHub issue:', error);
-      alert(error.response?.data?.detail || 'Error creating GitHub issue');
-    } finally {
-      setSubmittingRequest(false);
-    }
+  const handleRequestCodeBundle = (userQuery: string) => {
+    navigate('/intake', { state: { initialQuery: userQuery } });
   };
 
   const handleKeyPress = (event: React.KeyboardEvent) => {
@@ -559,7 +517,7 @@ const Chat: React.FC = () => {
                                 size="small"
                                 variant="outlined"
                                 startIcon={<RequestIcon sx={{ fontSize: 16 }} />}
-                                onClick={() => handleOpenRequestDialog(message.userQuery || message.content)}
+                                onClick={() => handleRequestCodeBundle(message.userQuery || message.content)}
                                 sx={{
                                   textTransform: 'none',
                                   fontSize: '0.75rem',
@@ -624,7 +582,7 @@ const Chat: React.FC = () => {
                                 variant="contained"
                                 size="small"
                                 startIcon={<RequestIcon />}
-                                onClick={() => handleOpenRequestDialog(message.userQuery || message.content)}
+                                onClick={() => handleRequestCodeBundle(message.userQuery || message.content)}
                                 sx={{
                                   backgroundColor: 'primary.main',
                                   color: 'white',
@@ -845,74 +803,6 @@ const Chat: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Request CodeBundle Dialog */}
-      <Dialog 
-        open={requestDialogOpen} 
-        onClose={handleCloseRequestDialog}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          Request a CodeBundle
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Your original query:
-            </Typography>
-            <Paper sx={{ p: 2, backgroundColor: 'grey.50', mb: 3 }}>
-              <Typography variant="body2">
-                {currentRequestQuery}
-              </Typography>
-            </Paper>
-            
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Add more context to help us understand your needs (optional):
-            </Typography>
-            <TextField
-              fullWidth
-              multiline
-              rows={4}
-              value={requestContext}
-              onChange={(e) => setRequestContext(e.target.value)}
-              placeholder="e.g., I need this to work with AWS EKS clusters, integrate with PagerDuty alerts, and run every 5 minutes..."
-              variant="outlined"
-            />
-            
-            <Alert severity="info" sx={{ mt: 2 }}>
-              This will create a GitHub issue with your request. The more details you provide, the better we can help!
-            </Alert>
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button 
-            onClick={handleCloseRequestDialog}
-            disabled={submittingRequest}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleSubmitRequest}
-            variant="contained"
-            startIcon={submittingRequest ? <CircularProgress size={16} sx={{ color: 'white' }} /> : <RequestIcon />}
-            disabled={submittingRequest}
-            sx={{
-              backgroundColor: 'primary.main',
-              color: 'white',
-              '&:hover': { 
-                backgroundColor: 'primary.dark',
-                color: 'white'
-              },
-              '&.Mui-disabled': {
-                backgroundColor: 'rgba(82, 130, 241, 0.6)',
-                color: 'white'
-              }
-            }}
-          >
-            {submittingRequest ? 'Creating...' : 'Submit Request'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };

@@ -37,6 +37,10 @@ spec:
           value: "INFO"
         - name: REGISTRY_API_URL
           value: "http://cc-registry-backend:8001"  # Backend service in same namespace
+        envFrom:
+        - secretRef:
+            name: github-credentials
+            optional: true
         resources:
           requests:
             memory: "128Mi"

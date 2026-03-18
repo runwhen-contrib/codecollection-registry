@@ -3,74 +3,84 @@ import { createTheme, PaletteMode } from '@mui/material';
 export const getTheme = (mode: PaletteMode) => {
   const isLight = mode === 'light';
 
+  // Aligned with /workspaces/docs src/styles/custom.css (RunWhen Starlight theme)
+  const docsPrimary = '#2F80ED';
+  const docsPrimaryLight = '#90cdf4';
+  const docsPrimaryDark = '#1a365d';
+  const docsGray1 = isLight ? '#2d3748' : '#cbd5e1';
+  const docsGray2 = isLight ? '#4a5568' : '#94a3b8';
+  const docsGray5 = isLight ? '#e2e8f0' : '#64748b';
+  const docsGray6 = isLight ? '#f7fafc' : '#334155';
+  const docsGray7 = isLight ? '#ffffff' : '#0f172a';
+
   return createTheme({
     palette: {
       mode,
       primary: {
-        main: '#5282f1',
-        light: '#7a9ff4',
-        dark: '#3a5cb8',
+        main: docsPrimary,
+        light: docsPrimaryLight,
+        dark: docsPrimaryDark,
       },
       secondary: {
-        main: '#f8ad4b',
-        light: '#fac273',
+        main: '#faa629',
+        light: '#f6ad37',
         dark: '#e69538',
       },
       background: {
-        default: isLight ? '#ffffff' : '#121212',
-        paper: isLight ? '#ffffff' : '#1e1e1e',
+        default: docsGray7,
+        paper: isLight ? docsGray7 : '#1e293b',
       },
       text: {
-        primary: isLight ? '#3f3f3f' : '#e0e0e0',
-        secondary: isLight ? '#858484' : '#a0a0a0',
+        primary: isLight ? '#1a202c' : '#e2e8f0',
+        secondary: isLight ? docsGray2 : docsGray2,
       },
-      divider: isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)',
+      divider: isLight ? docsGray5 : 'rgba(255, 255, 255, 0.12)',
     },
     typography: {
-      fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
+      fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
       h1: {
-        fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
+        fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
         fontSize: '2.5rem',
         fontWeight: 700,
-        color: isLight ? '#858484' : '#e0e0e0',
+        color: isLight ? '#1a202c' : '#e2e8f0',
       },
       h2: {
-        fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
+        fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
         fontSize: '2rem',
         fontWeight: 600,
-        color: isLight ? '#858484' : '#e0e0e0',
+        color: isLight ? '#1a202c' : '#e2e8f0',
       },
       h3: {
-        fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
+        fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
         fontSize: '1.5rem',
         fontWeight: 600,
-        color: isLight ? '#858484' : '#e0e0e0',
+        color: isLight ? '#1a202c' : '#e2e8f0',
       },
       h4: {
-        fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
+        fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
         fontSize: '1.25rem',
         fontWeight: 600,
-        color: isLight ? '#858484' : '#e0e0e0',
+        color: isLight ? '#1a202c' : '#e2e8f0',
       },
       h5: {
-        fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
+        fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
         fontSize: '1.125rem',
         fontWeight: 600,
-        color: isLight ? '#858484' : '#e0e0e0',
+        color: isLight ? '#1a202c' : '#e2e8f0',
       },
       h6: {
-        fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
+        fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
         fontSize: '1rem',
         fontWeight: 600,
-        color: isLight ? '#858484' : '#e0e0e0',
+        color: isLight ? '#1a202c' : '#e2e8f0',
       },
       body1: {
-        fontSize: '1rem',
-        color: isLight ? '#858484' : '#c0c0c0',
+        fontSize: '0.875rem',
+        color: isLight ? docsGray2 : '#cbd5e1',
       },
       body2: {
-        fontSize: '0.875rem',
-        color: isLight ? '#858484' : '#c0c0c0',
+        fontSize: '0.8125rem',
+        color: isLight ? docsGray2 : '#94a3b8',
       },
     },
     components: {
@@ -78,7 +88,7 @@ export const getTheme = (mode: PaletteMode) => {
         styleOverrides: {
           root: {
             textTransform: 'none',
-            borderRadius: '4px',
+            borderRadius: 6,
             fontWeight: 600,
           },
         },
@@ -86,7 +96,7 @@ export const getTheme = (mode: PaletteMode) => {
       MuiCard: {
         styleOverrides: {
           root: ({ theme }) => ({
-            borderRadius: '4px',
+            borderRadius: 8,
             boxShadow: theme.palette.mode === 'light'
               ? '0 2px 4px rgba(0, 0, 0, 0.1)'
               : '0 2px 4px rgba(0, 0, 0, 0.4)',
@@ -97,7 +107,7 @@ export const getTheme = (mode: PaletteMode) => {
       MuiAppBar: {
         styleOverrides: {
           root: ({ theme }) => ({
-            backgroundColor: theme.palette.mode === 'light' ? '#5282f1' : '#1a1a2e',
+            backgroundColor: theme.palette.mode === 'light' ? theme.palette.primary.main : '#0f172a',
             color: '#ffffff',
           }),
         },
@@ -105,14 +115,14 @@ export const getTheme = (mode: PaletteMode) => {
       MuiTableCell: {
         styleOverrides: {
           root: {
-            fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
+            fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
             fontSize: '0.875rem',
-            color: isLight ? '#858484' : '#c0c0c0',
+            color: isLight ? docsGray2 : '#94a3b8',
           },
           head: {
-            fontFamily: '"Raleway", "Roboto", "Helvetica", "Arial", sans-serif',
+            fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
             fontWeight: 600,
-            color: isLight ? '#3f3f3f' : '#e0e0e0',
+            color: isLight ? '#1a202c' : '#e2e8f0',
           },
         },
       },

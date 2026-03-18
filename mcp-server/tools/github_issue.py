@@ -6,9 +6,15 @@ fails to find matching codebundles.
 
 Uses the codebundle-wanted.yaml template format from:
 https://github.com/runwhen-contrib/codecollection-registry/blob/main/.github/ISSUE_TEMPLATE/codebundle-wanted.yaml
+
+Requires GitHub App or PAT credentials -- see cc-registry-v2/README.md
+"GitHub App (Issue Creation)" section for env var details.
 """
 
+import base64
 import os
+import time
+import threading
 import httpx
 import logging
 from typing import Optional, List, Dict, Any
@@ -33,29 +39,132 @@ class CodeBundleRequest:
     contact_ok: bool = False         # Willing to be contacted?
 
 
+class _AppTokenManager:
+    """Manages GitHub App JWT -> installation token lifecycle.
+
+    Parallel implementation to backend's GitHubAuth (different service,
+    different JWT library).  Keep changes in sync.
+    """
+
+    def __init__(self, app_id: str, private_key_raw: str, installation_id: Optional[int] = None):
+        self._app_id = app_id
+        self._installation_id = installation_id
+        self._private_key = self._decode_key(private_key_raw)
+        self._token: Optional[str] = None
+        self._expires_at: float = 0
+        self._lock = threading.Lock()
+
+    @property
+    def available(self) -> bool:
+        return bool(self._private_key)
+
+    @staticmethod
+    def _decode_key(raw: str) -> Optional[str]:
+        if raw.startswith("-----BEGIN"):
+            return raw
+        try:
+            decoded = base64.b64decode(raw).decode("utf-8")
+            if "-----BEGIN" in decoded:
+                return decoded
+        except Exception:
+            pass
+        logger.error("GITHUB_APP_PRIVATE_KEY is not a valid PEM or base64-encoded PEM")
+        return None
+
+    def _make_jwt(self) -> str:
+        import jwt as pyjwt
+        now = int(time.time())
+        payload = {"iat": now - 60, "exp": now + 600, "iss": self._app_id}
+        return pyjwt.encode(payload, self._private_key, algorithm="RS256")
+
+    def _discover_installation(self, app_jwt: str) -> Optional[int]:
+        try:
+            resp = httpx.get(
+                f"{GITHUB_API_BASE}/app/installations",
+                headers={"Authorization": f"Bearer {app_jwt}", "Accept": "application/vnd.github+json"},
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                logger.error("Failed to list installations: %s %s", resp.status_code, resp.text)
+                return None
+            installs = resp.json()
+            if not installs:
+                logger.error("No installations for GitHub App %s", self._app_id)
+                return None
+            return installs[0]["id"]
+        except Exception as exc:
+            logger.error("Error discovering installation: %s", exc)
+            return None
+
+    def get_token(self) -> str:
+        if self._token and time.time() < self._expires_at:
+            return self._token
+        with self._lock:
+            if self._token and time.time() < self._expires_at:
+                return self._token
+            app_jwt = self._make_jwt()
+            if not self._installation_id:
+                self._installation_id = self._discover_installation(app_jwt)
+                if not self._installation_id:
+                    raise RuntimeError("Cannot discover GitHub App installation")
+            resp = httpx.post(
+                f"{GITHUB_API_BASE}/app/installations/{self._installation_id}/access_tokens",
+                headers={"Authorization": f"Bearer {app_jwt}", "Accept": "application/vnd.github+json"},
+                timeout=15,
+            )
+            if resp.status_code != 201:
+                raise RuntimeError(f"Failed to get installation token: {resp.status_code} {resp.text}")
+            self._token = resp.json()["token"]
+            self._expires_at = time.time() + 3500
+            return self._token
+
+
 class GitHubIssueClient:
     """
     Low-level client for GitHub issue operations.
-    
-    Requires GITHUB_TOKEN environment variable with repo scope.
+
+    Authenticates via GitHub App (GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY)
+    or falls back to GITHUB_TOKEN PAT.
     """
-    
+
     def __init__(self):
+        self._app_mgr: Optional[_AppTokenManager] = None
         self.token = os.getenv("GITHUB_TOKEN")
+
+        app_id = os.getenv("GITHUB_APP_ID")
+        app_key = os.getenv("GITHUB_APP_PRIVATE_KEY")
+        inst_id = os.getenv("GITHUB_APP_INSTALLATION_ID")
+        if app_id and app_key:
+            mgr = _AppTokenManager(app_id, app_key, int(inst_id) if inst_id else None)
+            if mgr.available:
+                self._app_mgr = mgr
+                logger.info("GitHub App authentication configured (app_id=%s)", app_id)
+
         self.client = httpx.Client(
             base_url=GITHUB_API_BASE,
             headers={
                 "Accept": "application/vnd.github+json",
                 "X-GitHub-Api-Version": "2022-11-28",
             },
-            timeout=30.0
+            timeout=30.0,
         )
+        self._refresh_auth()
+
+    def _refresh_auth(self):
+        """Set the Authorization header using the best available credential."""
+        if self._app_mgr:
+            try:
+                token = self._app_mgr.get_token()
+                self.client.headers["Authorization"] = f"Bearer {token}"
+                return
+            except Exception as exc:
+                logger.warning("App token refresh failed, falling back to PAT: %s", exc)
         if self.token:
             self.client.headers["Authorization"] = f"Bearer {self.token}"
-    
+
     def is_configured(self) -> bool:
-        """Check if GitHub token is configured."""
-        return bool(self.token)
+        """Check if any GitHub credential is available."""
+        return bool(self._app_mgr and self._app_mgr.available) or bool(self.token)
     
     def _format_tasks(self, tasks: List[str]) -> str:
         """Format tasks as a numbered list."""
@@ -108,9 +217,10 @@ class GitHubIssueClient:
         if not self.is_configured():
             return {
                 "success": False,
-                "error": "GitHub token not configured. Set GITHUB_TOKEN environment variable."
+                "error": "GitHub not configured. Set GITHUB_APP_ID/GITHUB_APP_PRIVATE_KEY or GITHUB_TOKEN."
             }
         
+        self._refresh_auth()
         title = self._generate_title(request)
         body = self._build_issue_body(request)
         
@@ -160,8 +270,8 @@ class GitHubIssueClient:
         
         Returns list of potentially related open issues.
         """
+        self._refresh_auth()
         try:
-            # Search for open issues with the search term
             query = f"repo:{REPO_OWNER}/{REPO_NAME} is:issue is:open {search_term}"
             response = self.client.get(
                 "/search/issues",

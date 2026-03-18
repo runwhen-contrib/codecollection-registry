@@ -99,7 +99,7 @@ async def health_check():
     }
 
 # Include routers
-from app.routers import admin, tasks, raw_data, admin_crud, task_execution_admin, versions, task_management, admin_inventory, helm_charts, mcp_chat, chat_debug, github_issues, schedule_config, analytics, vector_search
+from app.routers import admin, tasks, raw_data, admin_crud, task_execution_admin, versions, task_management, admin_inventory, helm_charts, mcp_chat, chat_debug, github_issues, schedule_config, analytics, vector_search, intake
 app.include_router(admin.router)
 app.include_router(tasks.router)
 app.include_router(raw_data.router)
@@ -115,6 +115,7 @@ app.include_router(chat_debug.router)
 app.include_router(github_issues.router, prefix="/api/v1")
 app.include_router(analytics.router)
 app.include_router(vector_search.router)
+app.include_router(intake.router)
 
 @app.get("/api/v1/registry/collections")
 async def list_collections():

@@ -9,6 +9,7 @@ import {
   Menu,
   MenuItem,
   Divider,
+  Tooltip,
 } from '@mui/material';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -17,6 +18,7 @@ import {
   MoreVert as MoreVertIcon,
   DarkMode as DarkModeIcon,
   LightMode as LightModeIcon,
+  ChatBubbleOutline as ChatIcon,
 } from '@mui/icons-material';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -121,12 +123,27 @@ const Header: React.FC = () => {
               fontWeight: 'bold',
             }}
           >
-            CodeCollection Registry
+            Registry
           </Typography>
         </Box>
         
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginLeft: 'auto' }}>
-          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1, alignItems: 'center' }}>
+            <Tooltip title="Chat with the Registry AI assistant" arrow placement="bottom">
+              <Button
+                component={Link}
+                to="/chat"
+                color="inherit"
+                startIcon={<ChatIcon sx={{ fontSize: 20 }} />}
+                sx={{
+                  color: 'white',
+                  fontWeight: location.pathname === '/chat' ? 'bold' : 'normal',
+                }}
+              >
+                Chat
+              </Button>
+            </Tooltip>
+
             {/* Browse Dropdown */}
             <Button
               color="inherit"
@@ -218,14 +235,14 @@ const Header: React.FC = () => {
 
             <Button
               component={Link}
-              to="/chat"
+              to="/intake"
               color="inherit"
               sx={{
                 color: 'white',
-                fontWeight: location.pathname === '/chat' ? 'bold' : 'normal',
+                fontWeight: location.pathname === '/intake' ? 'bold' : 'normal',
               }}
             >
-              Registry Chat
+              Request
             </Button>
 
             <Box sx={{ borderLeft: '1px solid rgba(255,255,255,0.3)', height: 20, mx: 1, alignSelf: 'center' }} />

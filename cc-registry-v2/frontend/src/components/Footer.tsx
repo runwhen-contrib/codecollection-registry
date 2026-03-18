@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Link, Container, SvgIcon } from '@mui/material';
+import { Box, Typography, Link, Container, SvgIcon, useTheme } from '@mui/material';
 import GitHubIcon from '@mui/icons-material/GitHub';
 
 // Custom Slack icon using official Slack logo SVG path
@@ -10,10 +10,11 @@ const SlackIcon: React.FC<{ fontSize?: 'small' | 'medium' | 'large' | 'inherit' 
 );
 
 const Footer: React.FC = () => {
+  const theme = useTheme();
   return (
     <Box
       sx={{
-        backgroundColor: (theme) => theme.palette.mode === 'light' ? '#2f80ed' : '#1a1a2e',
+        backgroundColor: theme.palette.mode === 'light' ? theme.palette.primary.main : '#0f172a',
         color: 'white',
         padding: 3,
         marginTop: 'auto',

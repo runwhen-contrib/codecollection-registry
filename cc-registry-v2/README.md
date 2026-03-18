@@ -240,6 +240,28 @@ The application requires Azure OpenAI credentials for two purposes:
 
 **See [AZURE_OPENAI_SETUP.md](AZURE_OPENAI_SETUP.md) for configuration details.**
 
+### GitHub App (Issue Creation)
+
+The registry can create GitHub issues (intake requests, codebundle requests) using either a GitHub App (preferred) or a personal access token.
+
+**GitHub App (preferred)** -- provides short-lived installation tokens, no long-lived secrets:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GITHUB_APP_ID` | Yes | Numeric App ID (Settings > General > App ID) |
+| `GITHUB_APP_PRIVATE_KEY` | Yes | PEM private key -- raw PEM text or base64-encoded PEM. Generate under the App's Settings > Private keys |
+| `GITHUB_APP_INSTALLATION_ID` | No | Installation ID. If omitted, the first installation returned by the API is used. Useful when the App is installed on multiple orgs |
+
+**Personal Access Token fallback:**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GITHUB_TOKEN` | Yes | Classic or fine-grained PAT with `repo` (or Issues read/write) scope on the target repository |
+
+At least one of the above groups must be set, otherwise issue creation is disabled at runtime.
+
+Both the backend (`app/services/github_auth.py`) and the MCP server (`mcp-server/tools/github_issue.py`) use these variables.
+
 ### Secrets Configuration
 
 All secrets are managed via Kubernetes secrets. See [k8s/secrets-example.yaml](k8s/secrets-example.yaml) for examples.
