@@ -99,7 +99,7 @@ async def health_check():
     }
 
 # Include routers
-from app.routers import admin, tasks, raw_data, admin_crud, task_execution_admin, versions, task_management, admin_inventory, helm_charts, mcp_chat, chat_debug, github_issues, schedule_config, analytics, vector_search, intake
+from app.routers import admin, tasks, raw_data, admin_crud, task_execution_admin, versions, task_management, admin_inventory, helm_charts, mcp_chat, chat_debug, github_issues, schedule_config, analytics, vector_search, intake, cc_catalog
 app.include_router(admin.router)
 app.include_router(tasks.router)
 app.include_router(raw_data.router)
@@ -116,6 +116,9 @@ app.include_router(github_issues.router, prefix="/api/v1")
 app.include_router(analytics.router)
 app.include_router(vector_search.router)
 app.include_router(intake.router)
+# CodeCollection catalog (PAPI-facing). Sees both public AND hidden CCs by
+# design — PAPI needs to resolve image refs even for hidden collections.
+app.include_router(cc_catalog.router)
 
 @app.get("/api/v1/registry/collections")
 async def list_collections():
@@ -127,8 +130,11 @@ async def list_collections():
         
         db = SessionLocal()
         try:
-            collections = db.query(CodeCollection).filter(CodeCollection.is_active == True).all()
-            
+            from app.core.visibility import public_only
+            collections = public_only(
+                db.query(CodeCollection).filter(CodeCollection.is_active == True)
+            ).all()
+
             result = []
             for collection in collections:
                 # Calculate statistics for each collection
@@ -181,12 +187,16 @@ async def get_collection_by_slug(collection_slug: str):
         
         db = SessionLocal()
         try:
-            # Find the collection
-            collection = db.query(CodeCollection).filter(
-                CodeCollection.slug == collection_slug,
-                CodeCollection.is_active == True
+            from app.core.visibility import public_only
+            # Find the collection — hidden CCs are treated as 404 on the
+            # public website even though PAPI can still see them via /catalog.
+            collection = public_only(
+                db.query(CodeCollection).filter(
+                    CodeCollection.slug == collection_slug,
+                    CodeCollection.is_active == True,
+                )
             ).first()
-            
+
             if not collection:
                 return JSONResponse(
                     status_code=404,
@@ -252,12 +262,20 @@ async def get_all_tasks(
         
         db = SessionLocal()
         try:
-            # Build the query
-            query = db.query(Codebundle).filter(Codebundle.is_active == True)
-            
+            from app.core.visibility import public_only
+            # Build the query — always join CodeCollection so we can scope to
+            # public-visibility collections (hidden CCs and their codebundles
+            # do not appear on the public registry website).
+            query = (
+                db.query(Codebundle)
+                .join(CodeCollection, Codebundle.codecollection_id == CodeCollection.id)
+                .filter(Codebundle.is_active == True)
+            )
+            query = public_only(query)
+
             # Filter by collection if specified
             if collection_slug:
-                query = query.join(CodeCollection).filter(CodeCollection.slug == collection_slug)
+                query = query.filter(CodeCollection.slug == collection_slug)
             
             # Filter by support tags if specified (multiple tags)
             if support_tags:
@@ -426,9 +444,16 @@ async def list_codebundles(
         
         db = SessionLocal()
         try:
-            # Build base query
-            query = db.query(Codebundle).filter(Codebundle.is_active == True)
-            
+            from app.core.visibility import public_only
+            # Build base query — join the parent CC so we can scope to
+            # public-visibility collections.
+            query = (
+                db.query(Codebundle)
+                .join(CodeCollection, Codebundle.codecollection_id == CodeCollection.id)
+                .filter(Codebundle.is_active == True)
+            )
+            query = public_only(query)
+
             # Apply search filter — supports natural language queries
             # by splitting into keywords and matching word-by-word
             if search:
@@ -627,12 +652,16 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
         
         db = SessionLocal()
         try:
-            # First find the collection
-            collection = db.query(CodeCollection).filter(
-                CodeCollection.slug == collection_slug,
-                CodeCollection.is_active == True
+            from app.core.visibility import public_only
+            # First find the collection. Hidden CCs are treated as 404 from
+            # the public website even though PAPI can still resolve them.
+            collection = public_only(
+                db.query(CodeCollection).filter(
+                    CodeCollection.slug == collection_slug,
+                    CodeCollection.is_active == True,
+                )
             ).first()
-            
+
             if not collection:
                 return JSONResponse(
                     status_code=404,
@@ -720,13 +749,17 @@ async def get_recent_codebundles():
         
         db = SessionLocal()
         try:
-            # Get recent codebundles ordered by git_updated_at only, excluding rw-generic-codecollection
-            codebundles = db.query(Codebundle).join(
-                CodeCollection, Codebundle.codecollection_id == CodeCollection.id
-            ).filter(
-                Codebundle.is_active == True,
-                Codebundle.git_updated_at.isnot(None),  # Only codebundles with git dates
-                CodeCollection.slug != 'rw-generic-codecollection'  # Exclude generics
+            from app.core.visibility import public_only
+            # Get recent codebundles ordered by git_updated_at only,
+            # excluding rw-generic-codecollection and any hidden CCs.
+            codebundles = public_only(
+                db.query(Codebundle).join(
+                    CodeCollection, Codebundle.codecollection_id == CodeCollection.id
+                ).filter(
+                    Codebundle.is_active == True,
+                    Codebundle.git_updated_at.isnot(None),
+                    CodeCollection.slug != 'rw-generic-codecollection',
+                )
             ).order_by(
                 desc(Codebundle.git_updated_at)
             ).limit(20).all()
@@ -769,17 +802,21 @@ async def get_recent_tasks():
         
         db = SessionLocal()
         try:
-            # Get codebundles with tasks, ordered by git_updated_at, excluding rw-generic-codecollection
-            codebundles = db.query(Codebundle).join(
-                CodeCollection, Codebundle.codecollection_id == CodeCollection.id
-            ).filter(
-                Codebundle.is_active == True,
-                Codebundle.git_updated_at.isnot(None),
-                Codebundle.tasks.isnot(None),
-                CodeCollection.slug != 'rw-generic-codecollection'  # Exclude generics
+            from app.core.visibility import public_only
+            # Get codebundles with tasks, ordered by git_updated_at,
+            # excluding rw-generic-codecollection and hidden CCs.
+            codebundles = public_only(
+                db.query(Codebundle).join(
+                    CodeCollection, Codebundle.codecollection_id == CodeCollection.id
+                ).filter(
+                    Codebundle.is_active == True,
+                    Codebundle.git_updated_at.isnot(None),
+                    Codebundle.tasks.isnot(None),
+                    CodeCollection.slug != 'rw-generic-codecollection',
+                )
             ).order_by(
                 desc(Codebundle.git_updated_at)
-            ).limit(100).all()  # Get more codebundles to extract tasks from
+            ).limit(100).all()
             
             result = []
             for cb in codebundles:
@@ -882,20 +919,32 @@ async def get_registry_stats():
         
         db = SessionLocal()
         try:
-            # Count collections
-            collections_count = db.query(CodeCollection).filter(CodeCollection.is_active == True).count()
-            
-            # Count codebundles
-            codebundles_count = db.query(Codebundle).filter(Codebundle.is_active == True).count()
-            
-            # Count tasks and SLIs using the authoritative integer fields (task_count, sli_count)
-            # set by the canonical parser. This is both more efficient (SQL SUM vs loading all
-            # records) and more reliable than counting JSON array lengths, which could drift
-            # if a competing code path updates the arrays without updating the counts.
-            stats = db.query(
-                func.coalesce(func.sum(Codebundle.task_count), 0).label('total_tasks'),
-                func.coalesce(func.sum(Codebundle.sli_count), 0).label('total_slis')
-            ).filter(Codebundle.is_active == True).first()
+            from app.core.visibility import public_only
+            # Count public collections only — homepage stats shouldn't expose
+            # the existence of hidden CCs.
+            collections_count = public_only(
+                db.query(CodeCollection).filter(CodeCollection.is_active == True)
+            ).count()
+
+            # Count codebundles belonging to public collections.
+            cb_query = (
+                db.query(Codebundle)
+                .join(CodeCollection, Codebundle.codecollection_id == CodeCollection.id)
+                .filter(Codebundle.is_active == True)
+            )
+            codebundles_count = public_only(cb_query).count()
+
+            # Count tasks and SLIs using the authoritative integer fields
+            # (task_count, sli_count) set by the canonical parser. Scoped to
+            # public CCs so the homepage stays consistent.
+            stats = public_only(
+                db.query(
+                    func.coalesce(func.sum(Codebundle.task_count), 0).label('total_tasks'),
+                    func.coalesce(func.sum(Codebundle.sli_count), 0).label('total_slis')
+                )
+                .join(CodeCollection, Codebundle.codecollection_id == CodeCollection.id)
+                .filter(Codebundle.is_active == True)
+            ).first()
             
             total_tasks = int(stats.total_tasks)
             total_slis = int(stats.total_slis)

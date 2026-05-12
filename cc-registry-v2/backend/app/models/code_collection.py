@@ -18,6 +18,12 @@ class CodeCollection(Base):
     git_ref = Column(String(50), default="main")
     last_synced = Column(DateTime)
     is_active = Column(Boolean, default=True)
+    # 'public'  – shown on registry website, MCP, AI search, etc.
+    # 'hidden'  – CC is still synced & its images tracked for PAPI consumption,
+    #             but it is excluded from all public-facing registry endpoints.
+    # NOTE: 'hidden' is a UX/discovery toggle, NOT a security boundary. The
+    # OCI registry remains the source of truth for image access control.
+    visibility = Column(String(20), nullable=False, default="public", index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
