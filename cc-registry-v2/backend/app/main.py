@@ -17,13 +17,20 @@ from app.models import *
 # Database tables are now managed via Alembic migrations
 # Migrations run automatically on container startup via run_migrations.py
 
-# Create FastAPI app
+# Create FastAPI app.
+#
+# IMPORTANT: docs / redoc / openapi.json are mounted under /api/ so they
+# are reachable through the production ingress, which only routes /api/*
+# to the backend (everything else falls through to the frontend SPA).
+# Changing these paths is a breaking change for anyone who has bookmarked
+# /docs against a local-only backend; update bookmarks to /api/docs.
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Interactive CodeCollection Registry API — see /openapi.yaml for the full spec.",
+    description="Interactive CodeCollection Registry API — see /api/openapi.yaml for the full spec.",
     version="2.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
 )
 
 # Add middleware
@@ -53,7 +60,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal server error"}
     )
 
-@app.get("/openapi.yaml", include_in_schema=False)
+@app.get("/api/openapi.yaml", include_in_schema=False)
 async def openapi_yaml():
     """Serve the hand-written OpenAPI spec as YAML."""
     from pathlib import Path
@@ -64,15 +71,19 @@ async def openapi_yaml():
     raise HTTPException(status_code=404, detail="openapi.yaml not found")
 
 
-@app.get("/")
+# / is owned by the frontend SPA in production; this handler is mostly a
+# convenience for direct backend access during local development.
+@app.get("/", include_in_schema=False)
+@app.get("/api", include_in_schema=False)
 async def root():
     """Root endpoint"""
     return {
         "message": "CodeCollection Registry API",
         "version": "2.0.0",
-        "docs": "/docs",
-        "redoc": "/redoc",
-        "openapi_yaml": "/openapi.yaml",
+        "docs": "/api/docs",
+        "redoc": "/api/redoc",
+        "openapi_json": "/api/openapi.json",
+        "openapi_yaml": "/api/openapi.yaml",
         "health": "/api/v1/health"
     }
 

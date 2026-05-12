@@ -128,6 +128,36 @@ async def trigger_sync_single_collection(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/sync-image-tags", response_model=TaskResponse)
+async def trigger_sync_image_tags(
+    _: dict = Depends(verify_admin_token)
+):
+    """SYNC: Refresh the CCV image catalog by polling each CC's image_source.
+
+    Reads codecollections.yaml, runs the configured ImageSource plugin
+    (e.g. OCI) per CC, and upserts CodeCollectionVersion rows with the
+    discovered image_tag / image_registry / commit_hash / rt_revision.
+
+    Idempotent. Safe to call on demand from the admin UI when waiting on
+    the 5-minute beat schedule is too slow, or when debugging why
+    /api/v1/catalog is missing image data.
+
+    See docs/CCV.md for the full pipeline.
+    """
+    try:
+        from app.tasks.image_sync_tasks import sync_image_tags_task
+
+        task = sync_image_tags_task.apply_async()
+
+        return TaskResponse(
+            task_id=task.id,
+            status="started",
+            message="Image-tag catalog sync started",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/parse-codebundles", response_model=TaskResponse)
 async def trigger_parse_codebundles(
     _: dict = Depends(verify_admin_token)

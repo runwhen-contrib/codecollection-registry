@@ -127,6 +127,13 @@ After tags are parsed, two pointers are resolved per CC:
 Base path: `/api/v1/catalog`. All endpoints are GET-only and unauthenticated.
 Responses are JSON. Pretty-print is up to the caller.
 
+> **Interactive Swagger UI:** `https://<host>/api/docs` (e.g.
+> `https://registry-test.shared.runwhen.com/api/docs`). The OpenAPI JSON
+> schema lives at `/api/openapi.json` and the hand-written YAML mirror at
+> `/api/openapi.yaml`. Note the `/api/` prefix — the frontend SPA owns `/`
+> at the public hostname, so the backend's docs UI is intentionally mounted
+> under `/api/`.
+
 ### `GET /codecollections`
 
 List every tracked CC plus its currently-resolved pointers.
@@ -274,13 +281,30 @@ included in the task's return summary.
 
 ### Manually triggering a sync
 
-From inside the backend container:
+**Over HTTP** (requires the admin bearer token — any value starting with
+`admin-` per `verify_admin_token`):
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer admin-<your-token>" \
+  https://registry-test.shared.runwhen.com/api/v1/tasks/sync-image-tags
+```
+
+Response is a Celery task id you can poll at
+`GET /api/v1/tasks/status/{task_id}`.
+
+**From inside the backend container** (no auth needed):
 
 ```bash
 docker compose exec backend python -c "from app.tasks.image_sync_tasks import sync_image_tags_task; print(sync_image_tags_task.delay())"
 ```
 
-Or via the admin task-runner UI in the registry frontend (Admin → Tasks).
+**From the admin UI:** Admin → Tasks → "Sync Image Tags" (same endpoint
+under the hood).
+
+Use the HTTP path when the 5-minute beat schedule is too slow, or when
+debugging why `/api/v1/catalog` is missing image data after a fresh
+deploy.
 
 ---
 
