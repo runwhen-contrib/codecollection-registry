@@ -46,6 +46,7 @@ See [mcp-server/README.md](mcp-server/README.md) for details.
 | Topic | Location |
 |---|---|
 | Architecture | [cc-registry-v2/docs/ARCHITECTURE.md](cc-registry-v2/docs/ARCHITECTURE.md) |
+| CCV catalog (image tracking + PAPI API) | [cc-registry-v2/docs/CCV.md](cc-registry-v2/docs/CCV.md) |
 | Configuration | [cc-registry-v2/docs/CONFIGURATION.md](cc-registry-v2/docs/CONFIGURATION.md) |
 | Indexing pipeline | [cc-registry-v2/docs/MCP_WORKFLOW.md](cc-registry-v2/docs/MCP_WORKFLOW.md) |
 | Deployment | [cc-registry-v2/docs/DEPLOYMENT_GUIDE.md](cc-registry-v2/docs/DEPLOYMENT_GUIDE.md) |
