@@ -14,31 +14,45 @@ import logging
 logger = logging.getLogger(__name__)
 
 def _configure_broker_url():
-    """Configure broker URL for Redis or Redis Sentinel"""
-    if settings.REDIS_SENTINEL_HOSTS and not (settings.REDIS_URL and settings.REDIS_URL.startswith('redis://')):
-        # For Sentinel, we use sentinel:// URL which Kombu/redis-py supports
-        # Format: sentinel://[:password@]host1:port1;host2:port2;host3:port3
-        # Then master_name and db are passed via transport_options
-        
-        # Parse and convert to semicolon-separated (Kombu format)
-        sentinel_hosts = []
-        for host_port in settings.REDIS_SENTINEL_HOSTS.split(','):
-            sentinel_hosts.append(host_port.strip())
-        
+    """Configure broker URL for Redis or Redis Sentinel.
+
+    Precedence rules:
+      1. If REDIS_SENTINEL_HOSTS is set, always use the sentinel:// scheme
+         with proper transport_options. This wins even when REDIS_URL is
+         also set, because Helm charts commonly set both and silently
+         speaking Redis protocol to a Sentinel endpoint (port 26379) is a
+         fail-closed nightmare: Sentinel rejects every non-HELLO command,
+         which makes the entire Celery beat/worker fan unable to dispatch.
+      2. Otherwise fall back to REDIS_URL.
+
+    Guardrail: if REDIS_URL targets port 26379 (the standard Sentinel
+    port) and REDIS_SENTINEL_HOSTS is *not* set, refuse to start with a
+    clear error — we'd rather crash fast than connect, fail every
+    command, and pretend everything is fine.
+    """
+    if settings.REDIS_SENTINEL_HOSTS:
+        if settings.REDIS_URL:
+            logger.info(
+                "Both REDIS_SENTINEL_HOSTS and REDIS_URL are set; "
+                "preferring Sentinel. (Remove REDIS_URL from the deployment "
+                "to silence this notice.)"
+            )
+
+        # Parse and convert to semicolon-separated (Kombu format).
+        sentinel_hosts = [hp.strip() for hp in settings.REDIS_SENTINEL_HOSTS.split(',')]
         sentinel_hosts_str = ';'.join(sentinel_hosts)
         password_part = f":{settings.REDIS_PASSWORD}@" if settings.REDIS_PASSWORD else ""
-        
-        # sentinel:// URL with master_name and db in transport_options
+
+        # sentinel:// URL with master_name and db in transport_options.
         broker_url = f"sentinel://{password_part}{sentinel_hosts_str}"
-        
-        # Transport options tell Kombu which master and db to use
-        # Ensure REDIS_DB is properly converted to int, handling string inputs
+
+        # Ensure REDIS_DB is an int; tolerate stringy env-var inputs.
         try:
             redis_db = int(settings.REDIS_DB) if isinstance(settings.REDIS_DB, (str, int)) else 0
         except (ValueError, TypeError):
             logger.warning(f"Invalid REDIS_DB value '{settings.REDIS_DB}', defaulting to 0")
             redis_db = 0
-        
+
         transport_options = {
             'master_name': settings.REDIS_SENTINEL_MASTER,
             'db': redis_db,
@@ -48,11 +62,22 @@ def _configure_broker_url():
                 'password': settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
             },
         }
-        
         return broker_url, transport_options
-    else:
-        # Use regular Redis URL
-        return settings.REDIS_URL, {}
+
+    # Guardrail: catch REDIS_URL=redis://...:26379/... when Sentinel
+    # hosts are unset. That's the misconfiguration that causes "Only
+    # HELLO messages are accepted by Sentinel instances" in worker logs.
+    if settings.REDIS_URL and ':26379/' in settings.REDIS_URL:
+        raise RuntimeError(
+            "REDIS_URL points at port 26379 (standard Sentinel port) but "
+            "REDIS_SENTINEL_HOSTS is not set. Either set REDIS_SENTINEL_HOSTS "
+            "(recommended — the broker will speak Sentinel protocol properly), "
+            "or change REDIS_URL to target the actual Redis master/replica "
+            "on its data-plane port (typically 6379). Refusing to start to "
+            "avoid silently producing broker errors on every task dispatch."
+        )
+
+    return settings.REDIS_URL, {}
 
 broker_url, transport_options = _configure_broker_url()
 

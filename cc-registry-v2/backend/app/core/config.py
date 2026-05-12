@@ -84,20 +84,32 @@ class Settings(BaseSettings):
                 # Fallback to default for development
                 self.DATABASE_URL = "postgresql://user:password@database:5432/codecollection_registry"
         
-        # Build REDIS_URL from Sentinel config or components if not provided
-        if not self.REDIS_URL:
-            if self.REDIS_SENTINEL_HOSTS:
-                # For Redis Sentinel, we'll use a sentinel:// URL format
-                # Format: sentinel://[:password@]host1:port1,host2:port2/service_name/db_number
-                auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
-                self.REDIS_URL = f"sentinel://{auth}{self.REDIS_SENTINEL_HOSTS}/{self.REDIS_SENTINEL_MASTER}/{self.REDIS_DB}"
-                
-                # Important: Don't let REDIS_URL override our explicit REDIS_DB setting
-                # When using Sentinel, REDIS_DB must remain as the integer/string we set explicitly
-                logger.info(f"Constructed Sentinel URL. REDIS_DB remains: {self.REDIS_DB} (type: {type(self.REDIS_DB)})")
-            else:
-                # Fallback to default for development
-                self.REDIS_URL = "redis://redis:6379/0"
+        # Build REDIS_URL. Sentinel ALWAYS wins when REDIS_SENTINEL_HOSTS
+        # is set, even if a REDIS_URL was also provided via env. Helm
+        # charts commonly set both, and pointing a Redis client at a
+        # Sentinel data-plane port (26379) results in "Only HELLO
+        # messages are accepted" errors on every command. See
+        # tasks/celery_app.py::_configure_broker_url for the matching
+        # Celery-side precedence rule.
+        if self.REDIS_SENTINEL_HOSTS:
+            if self.REDIS_URL:
+                logger.info(
+                    "Both REDIS_SENTINEL_HOSTS and REDIS_URL are set; "
+                    "preferring Sentinel. Remove REDIS_URL from the deployment "
+                    "to silence this notice."
+                )
+            # Format: sentinel://[:password@]host1:port1,host2:port2/service_name/db_number
+            auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
+            self.REDIS_URL = (
+                f"sentinel://{auth}{self.REDIS_SENTINEL_HOSTS}/"
+                f"{self.REDIS_SENTINEL_MASTER}/{self.REDIS_DB}"
+            )
+            logger.info(
+                f"Constructed Sentinel URL. REDIS_DB remains: {self.REDIS_DB} "
+                f"(type: {type(self.REDIS_DB)})"
+            )
+        elif not self.REDIS_URL:
+            self.REDIS_URL = "redis://redis:6379/0"
         
         # Validate REDIS_DB is correct type
         if self.REDIS_SENTINEL_HOSTS:
