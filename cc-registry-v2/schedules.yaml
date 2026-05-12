@@ -105,16 +105,6 @@ schedules:
       minute: 0
     enabled: false
 
-  # Statistics Update - Update collection statistics every hour
-  - name: update-statistics-hourly
-    task: app.tasks.data_population_tasks.update_collection_statistics_task
-    description: Update collection statistics
-    schedule_type: crontab
-    crontab:
-      hour: null  # null = every hour
-      minute: 0
-    enabled: true
-
   # =============================================================================
   # HEALTH CHECKS & CLEANUP
   # =============================================================================

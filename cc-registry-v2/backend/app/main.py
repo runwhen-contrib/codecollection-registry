@@ -959,36 +959,27 @@ async def get_registry_stats():
             total_tasks = int(stats.total_tasks)
             total_slis = int(stats.total_slis)
             total_items = total_tasks + total_slis
-            
-            # Get tasks over time (by collection for now - simulated growth data)
-            # In production, you'd track this in a separate table
-            tasks_over_time = [
-                {"month": "Jan 2024", "tasks": int(total_items * 0.4)},
-                {"month": "Feb 2024", "tasks": int(total_items * 0.5)},
-                {"month": "Mar 2024", "tasks": int(total_items * 0.6)},
-                {"month": "Apr 2024", "tasks": int(total_items * 0.7)},
-                {"month": "May 2024", "tasks": int(total_items * 0.75)},
-                {"month": "Jun 2024", "tasks": int(total_items * 0.8)},
-                {"month": "Jul 2024", "tasks": int(total_items * 0.85)},
-                {"month": "Aug 2024", "tasks": int(total_items * 0.9)},
-                {"month": "Sep 2024", "tasks": int(total_items * 0.92)},
-                {"month": "Oct 2024", "tasks": int(total_items * 0.95)},
-                {"month": "Nov 2024", "tasks": int(total_items * 0.98)},
-                {"month": "Dec 2024", "tasks": int(total_items)},
-            ]
-            
+
+            # NOTE: This endpoint intentionally does NOT return a
+            # `tasks_over_time` field. Historical task growth is served
+            # by /api/v1/analytics/tasks-by-week(-cached), backed by the
+            # `compute_task_growth_analytics` Celery task which derives
+            # real first-commit dates from each CC's git history. The
+            # homepage's TaskGrowthChart consumes that endpoint directly.
+            # The old `tasks_over_time` array here was a synthetic
+            # 0.4×/0.5×/0.6× ramp left over from scaffolding and was
+            # never displayed in the UI.
             return {
                 "collections": collections_count,
                 "codebundles": codebundles_count,
                 "tasks": total_items,
                 "slis": total_slis,
-                "tasks_over_time": tasks_over_time
             }
         finally:
             db.close()
     except Exception as e:
         logger.error(f"Error getting stats: {e}")
-        return {"collections": 0, "codebundles": 0, "tasks": 0, "slis": 0, "tasks_over_time": []}
+        return {"collections": 0, "codebundles": 0, "tasks": 0, "slis": 0}
 
 
 if __name__ == "__main__":

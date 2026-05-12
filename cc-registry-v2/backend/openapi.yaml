@@ -319,9 +319,6 @@ paths:
                   codebundles: { type: integer }
                   tasks: { type: integer }
                   slis: { type: integer }
-                  tasks_over_time:
-                    type: array
-                    items: { type: object }
 
   # =========================================================================
   # Chat

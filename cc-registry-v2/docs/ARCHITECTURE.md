@@ -223,7 +223,6 @@ The server is **stateless**. `server_http.py` runs as a FastAPI app, registers M
 | `registry_tasks` | `sync_all_collections_task`, `parse_all_codebundles_task` | Steps 1-2 of the pipeline |
 | `ai_enhancement_tasks` | `enhance_pending_codebundles_task` | Step 3: AI metadata enhancement |
 | `indexing_tasks` | `index_codebundles_task`, `index_documentation_task`, `reindex_all_task` | Step 4: embedding generation + pgvector storage |
-| `data_population_tasks` | `update_collection_statistics_task` | Hourly stats refresh |
 | `analytics_tasks` | `compute_task_growth_analytics` | Daily analytics |
 | `task_monitoring` | `cleanup_old_tasks_task`, `health_check_tasks_task` | Maintenance |
 | `mcp_tasks` | *(deprecated stubs)* | Redirect to `indexing_tasks` |
@@ -237,7 +236,6 @@ All schedules are defined in `schedules.yaml` and loaded by Celery Beat.
 | `scheduled-sync` | Every 6 hours | Full pipeline: sync → parse → enhance → embed |
 | `index-documentation-daily` | Daily 3 AM | Crawl documentation URLs, generate embeddings |
 | `reindex-vectors-weekly` | Sunday 2 AM | Full rebuild of all vector embeddings |
-| `update-statistics-hourly` | Hourly | Refresh collection statistics |
 | `compute-task-growth-analytics` | Daily 2:30 AM | Git history analysis for task growth |
 | `health-check` | Every 5 min | System health check |
 | `cleanup-old-tasks` | Daily 12:30 AM | Purge old task execution records |

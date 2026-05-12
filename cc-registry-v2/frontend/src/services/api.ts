@@ -309,12 +309,14 @@ export const apiService = {
   },
 
   // Registry Stats
+  // NOTE: historical task growth is served separately by
+  // /api/v1/analytics/tasks-by-week (see getTasksByWeek below), backed
+  // by real git-history analysis. This endpoint is just live counts.
   async getRegistryStats(): Promise<{
     collections: number;
     codebundles: number;
     tasks: number;
     slis: number;
-    tasks_over_time: Array<{ month: string; tasks: number }>;
   }> {
     const response = await api.get('/registry/stats');
     return response.data;

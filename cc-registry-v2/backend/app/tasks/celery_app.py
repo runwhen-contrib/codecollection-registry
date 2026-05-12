@@ -91,7 +91,6 @@ celery_app = Celery(
         "app.tasks.sync_tasks", 
         "app.tasks.registry_tasks",
         "app.tasks.ai_enhancement_tasks",
-        "app.tasks.data_population_tasks",
         "app.tasks.task_monitoring",
         "app.tasks.workflow_tasks",
         "app.tasks.analytics_tasks",

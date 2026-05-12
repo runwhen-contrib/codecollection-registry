@@ -80,15 +80,6 @@ data:
           minute: 0
         enabled: false
 
-      - name: update-statistics-hourly
-        task: app.tasks.data_population_tasks.update_collection_statistics_task
-        description: Update collection statistics
-        schedule_type: crontab
-        crontab:
-          hour: null
-          minute: 0
-        enabled: true
-
       # =============================================================================
       # HEALTH CHECKS & CLEANUP
       # =============================================================================

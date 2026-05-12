@@ -165,6 +165,13 @@ def sync_all_collections_task(self):
                     )
                     visibility = 'public'
 
+                # `last_synced` is OWNED by this task. It means
+                # "when was this CC last (re-)ingested from
+                # codecollections.yaml". Per-version image refreshes
+                # (sync_image_tags_task, every 5 min) and stats reads
+                # do NOT bump it — only an actual YAML→DB sync does.
+                now = datetime.utcnow()
+
                 if not collection:
                     collection = CodeCollection(
                         name=collection_data.get('name', collection_slug),
@@ -176,7 +183,8 @@ def sync_all_collections_task(self):
                         owner_icon=collection_data.get('owner_icon', ''),
                         git_ref=collection_data.get('git_ref', 'main'),
                         visibility=visibility,
-                        is_active=True
+                        is_active=True,
+                        last_synced=now,
                     )
                     db.add(collection)
                     logger.info(f"Created collection: {collection_slug} (visibility={visibility})")
@@ -186,6 +194,7 @@ def sync_all_collections_task(self):
                     collection.description = collection_data.get('description', '')
                     collection.visibility = visibility
                     collection.is_active = True
+                    collection.last_synced = now
                     logger.info(f"Updated collection: {collection_slug} (visibility={visibility})")
                 
                 db.commit()
