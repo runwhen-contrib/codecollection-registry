@@ -82,6 +82,16 @@ def sync_all_collections_task(self):
                     CodeCollection.slug == collection_slug
                 ).first()
                 
+                # Visibility defaults to 'public' if omitted; only ever
+                # take on the values declared in YAML so a CC can be
+                # toggled hidden/public by re-deploying config alone.
+                visibility = collection_data.get('visibility', 'public')
+                if visibility not in ('public', 'hidden'):
+                    logger.warning(
+                        f"Unknown visibility {visibility!r} for {collection_slug}, defaulting to 'public'"
+                    )
+                    visibility = 'public'
+
                 if not collection:
                     collection = CodeCollection(
                         name=collection_data.get('name', collection_slug),
@@ -92,16 +102,18 @@ def sync_all_collections_task(self):
                         owner_email=collection_data.get('owner_email', ''),
                         owner_icon=collection_data.get('owner_icon', ''),
                         git_ref=collection_data.get('git_ref', 'main'),
+                        visibility=visibility,
                         is_active=True
                     )
                     db.add(collection)
-                    logger.info(f"Created collection: {collection_slug}")
+                    logger.info(f"Created collection: {collection_slug} (visibility={visibility})")
                 else:
                     collection.name = collection_data.get('name', collection_slug)
                     collection.git_url = git_url
                     collection.description = collection_data.get('description', '')
+                    collection.visibility = visibility
                     collection.is_active = True
-                    logger.info(f"Updated collection: {collection_slug}")
+                    logger.info(f"Updated collection: {collection_slug} (visibility={visibility})")
                 
                 db.commit()
                 collections_synced += 1

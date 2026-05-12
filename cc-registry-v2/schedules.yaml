@@ -74,6 +74,23 @@ schedules:
     enabled: false
 
   # =============================================================================
+  # IMAGE CATALOG SYNC (PAPI-facing CodeCollection image tracking)
+  # =============================================================================
+  # Polls each CodeCollection's configured `image_source` (e.g. its OCI
+  # registry) and mirrors the discovered image tags into
+  # codecollection_versions. PAPI reads from this catalog instead of
+  # running the corestate-operator. The task is idempotent and fast (one
+  # HTTP listing per CC), so we run it frequently.
+
+  - name: sync-image-tags
+    task: app.tasks.image_sync_tasks.sync_image_tags_task
+    description: "Poll OCI registries for each CC and refresh the image catalog"
+    schedule_type: interval
+    interval:
+      minutes: 5
+    enabled: true
+
+  # =============================================================================
   # METRICS & STATISTICS
   # =============================================================================
 

@@ -30,7 +30,23 @@ class CodeCollectionVersion(Base):
     # Sync metadata
     synced_at = Column(DateTime)                    # When this version was last synced
     is_active = Column(Boolean, default=True)      # Whether this version is available
-    
+
+    # ------------------------------------------------------------------
+    # Image catalog metadata (populated by image_sync_tasks)
+    # ------------------------------------------------------------------
+    # Where the built image lives, e.g. "ghcr.io/runwhen-contrib/rw-cli-codecollection"
+    image_registry = Column(String(500))
+    # Concrete pullable tag, e.g. "main-c1a2b3d-e4f5a6b" (PAPI uses this verbatim).
+    image_tag = Column(String(200), index=True)
+    # Optional content-addressable digest for stronger pinning.
+    image_digest = Column(String(80))
+    # Full commit sha this image was built from (codecollection repo).
+    commit_hash = Column(String(40))
+    # platform-robot-runtime sha embedded at build time (encoded in tag suffix).
+    rt_revision = Column(String(40))
+    # When the build pushed this image, parsed from OCI manifest where available.
+    image_built_at = Column(DateTime)
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

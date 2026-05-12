@@ -71,6 +71,7 @@ celery_app = Celery(
         "app.tasks.workflow_tasks",
         "app.tasks.analytics_tasks",
         "app.tasks.indexing_tasks",
+        "app.tasks.image_sync_tasks",
     ]
 )
 
