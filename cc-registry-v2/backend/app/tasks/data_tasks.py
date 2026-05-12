@@ -6,6 +6,7 @@ import json
 from typing import Dict, Any, List
 from celery import current_task
 from app.tasks.celery_app import celery_app
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models import RawYamlData, RawRepositoryData, CodeCollection, Codebundle
 from app.services.robot_parser import parse_all_robot_files
@@ -24,7 +25,7 @@ def store_yaml_data_task(self, yaml_content: str = None):
         
         # Read codecollections.yaml if not provided
         if not yaml_content:
-            yaml_file_path = "/app/codecollections.yaml"
+            yaml_file_path = settings.CODECOLLECTIONS_FILE
             logger.info(f"Reading YAML file from: {yaml_file_path}")
             if not os.path.exists(yaml_file_path):
                 logger.error(f"YAML file not found: {yaml_file_path}")

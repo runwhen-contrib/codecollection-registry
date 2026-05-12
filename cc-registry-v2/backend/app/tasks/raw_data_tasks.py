@@ -33,7 +33,7 @@ def store_yaml_data_task(self, yaml_data: Dict[str, Any] = None):
         # FAILURE in Celery + task_executions instead of silently
         # returning SUCCESS with an error payload nobody checks.
         if not yaml_data:
-            yaml_path = "/app/codecollections.yaml"
+            yaml_path = settings.CODECOLLECTIONS_FILE
             try:
                 with open(yaml_path, 'r') as file:
                     yaml_data = yaml.safe_load(file)

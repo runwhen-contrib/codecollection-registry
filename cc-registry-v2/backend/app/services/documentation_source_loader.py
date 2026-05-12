@@ -1,8 +1,10 @@
 """
 Load documentation sources from sources.yaml and crawl their content.
 
-sources.yaml lives in cc-registry-v2/ alongside schedules.yaml and is
-mounted into the backend container at /app/sources.yaml.
+sources.yaml lives in cc-registry-v2/ alongside schedules.yaml. The path
+is configurable via settings.SOURCES_FILE (env: SOURCES_FILE) so k8s
+deployments can directory-mount the ConfigMap (no subPath) and pick up
+changes without restarting the pod.
 """
 import logging
 from pathlib import Path
@@ -10,12 +12,13 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from app.core.config import settings
 from app.services.web_crawler import WebCrawler
 
 logger = logging.getLogger(__name__)
 
 SOURCES_PATHS = [
-    Path("/app/sources.yaml"),
+    Path(settings.SOURCES_FILE),
     Path("/workspaces/codecollection-registry/cc-registry-v2/sources.yaml"),
 ]
 

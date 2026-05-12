@@ -467,80 +467,10 @@ export const apiService = {
     return response.data;
   },
 
-  // Database-driven task management endpoints
-  async triggerSeedDatabase(token: string, yamlPath: string = '/app/codecollections.yaml') {
-    const response = await api.post('/tasks/seed-database', null, {
-      params: { yaml_file_path: yamlPath },
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerValidateYaml(token: string, yamlPath: string = '/app/codecollections.yaml') {
-    const response = await api.post('/tasks/validate-yaml', null, {
-      params: { yaml_file_path: yamlPath },
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerSyncCollections(token: string) {
-    const response = await api.post('/tasks/sync-collections', {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerSyncCollection(token: string, collectionId: number) {
-    const response = await api.post(`/tasks/sync-collection/${collectionId}`, {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerParseCodebundles(token: string) {
-    const response = await api.post('/tasks/parse-codebundles', {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerParseCollection(token: string, collectionId: number) {
-    const response = await api.post(`/tasks/parse-collection/${collectionId}`, {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerEnhanceCodebundles(token: string) {
-    const response = await api.post('/tasks/enhance-codebundles', {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerEnhanceCodebundle(token: string, codebundleId: number) {
-    const response = await api.post(`/tasks/enhance-codebundle/${codebundleId}`, {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerGenerateMetrics(token: string) {
-    const response = await api.post('/tasks/generate-metrics', {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Old getTaskStatus method removed - now using task management endpoint
-
-  async getTaskHealth(token: string) {
-    const response = await api.get('/tasks/health', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
+  // NOTE: The legacy /api/v1/tasks/* trigger surface was removed.
+  // All task triggers now flow through /api/v1/schedules/{name}/trigger
+  // (configured in schedules.yaml + exposed by the Schedules admin tab).
+  // For task observability use /api/v1/task-management/tasks/{running,history}.
 
   // Admin CRUD endpoints
   async getCollections(token: string, includeInactive: boolean = false) {

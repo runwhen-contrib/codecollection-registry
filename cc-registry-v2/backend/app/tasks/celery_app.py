@@ -132,14 +132,21 @@ celery_app.conf.update(**celery_config)
 
 # Load schedules from YAML file
 def load_schedules_from_yaml():
-    """Load schedule configuration from schedules.yaml"""
-    # Try multiple possible locations for the YAML file
+    """Load schedule configuration from schedules.yaml.
+
+    Path resolution:
+      1. settings.SCHEDULES_FILE — usually /app/schedules.yaml in containers
+         (set via env var SCHEDULES_FILE in k8s to point at a directory-mounted
+         ConfigMap path like /etc/cc-registry/schedules/schedules.yaml).
+      2. Relative fallback for running directly from a source checkout.
+      3. /workspaces dev fallback for the in-tree dev container.
+    """
     possible_paths = [
-        '/app/schedules.yaml',  # Docker container path
-        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'schedules.yaml'),  # Relative to backend/app/tasks
-        '/workspaces/codecollection-registry/cc-registry-v2/schedules.yaml',  # Development path
+        settings.SCHEDULES_FILE,
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'schedules.yaml'),
+        '/workspaces/codecollection-registry/cc-registry-v2/schedules.yaml',
     ]
-    
+
     schedules_file = None
     for path in possible_paths:
         if os.path.exists(path):

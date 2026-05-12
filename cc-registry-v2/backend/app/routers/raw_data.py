@@ -34,7 +34,7 @@ async def store_yaml_data(db: Session = Depends(get_db)):
         logger.info("Starting store_yaml_data endpoint")
         
         # Load YAML data
-        yaml_path = "/app/codecollections.yaml"
+        yaml_path = settings.CODECOLLECTIONS_FILE
         logger.info(f"Reading YAML file from: {yaml_path}")
         
         if not os.path.exists(yaml_path):

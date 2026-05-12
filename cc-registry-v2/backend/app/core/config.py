@@ -69,7 +69,35 @@ class Settings(BaseSettings):
     # API Settings
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "CodeCollection Registry"
-    
+
+    # Config-file paths (codecollections.yaml, schedules.yaml, sources.yaml).
+    #
+    # Historically these were hardcoded to /app/<file>.yaml and mounted from
+    # ConfigMaps using `subPath`, which has a critical limitation: subPath
+    # mounts do NOT receive ConfigMap updates from the kubelet, so any
+    # change to the ConfigMap requires a pod restart to take effect. This
+    # is the bug that made the stewartshea typo "stick" in registry-test
+    # even after the ConfigMap was fixed.
+    #
+    # By exposing these as env-driven settings, k8s deployments can mount
+    # each ConfigMap as a *directory* (no subPath) and point the env vars
+    # at the resulting paths (e.g. /etc/cc-registry/codecollections/codecollections.yaml).
+    # Directory mounts auto-update; subPath mounts don't.
+    #
+    # Defaults preserve the legacy /app/<file>.yaml behavior so local dev
+    # (docker-compose bind-mounts) and existing deployments continue to
+    # work unchanged.
+    #
+    # CAVEAT: `schedules.yaml` is only loaded at Celery beat startup
+    # (see app/tasks/celery_app.py::load_schedules_from_yaml). Hot-reload
+    # via directory mount avoids the *deploy* step but you still need to
+    # restart the scheduler pod for new schedules to take effect.
+    # `codecollections.yaml` and `sources.yaml` are re-read on every task
+    # invocation and pick up changes within ~60s of a ConfigMap edit.
+    CODECOLLECTIONS_FILE: str = "/app/codecollections.yaml"
+    SCHEDULES_FILE: str = "/app/schedules.yaml"
+    SOURCES_FILE: str = "/app/sources.yaml"
+
     @model_validator(mode='after')
     def construct_urls(self):
         """Construct DATABASE_URL and REDIS_URL from components if not provided"""

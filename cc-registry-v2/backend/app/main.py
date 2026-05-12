@@ -110,9 +110,8 @@ async def health_check():
     }
 
 # Include routers
-from app.routers import admin, tasks, raw_data, admin_crud, task_execution_admin, versions, task_management, admin_inventory, helm_charts, mcp_chat, chat_debug, github_issues, schedule_config, analytics, vector_search, intake, cc_catalog
+from app.routers import admin, raw_data, admin_crud, task_execution_admin, versions, task_management, admin_inventory, helm_charts, mcp_chat, chat_debug, github_issues, schedule_config, analytics, vector_search, intake, cc_catalog
 app.include_router(admin.router)
-app.include_router(tasks.router)
 app.include_router(raw_data.router)
 app.include_router(admin_crud.router)
 app.include_router(task_execution_admin.router, prefix="/api/v1")

@@ -12,7 +12,6 @@ import VersionDetail from './pages/VersionDetail';
 import AllTasks from './pages/AllTasks';
 import TestAPI from './pages/TestAPI';
 import Admin from './pages/Admin';
-import TaskManager from './pages/TaskManager';
 import Login from './pages/Login';
 import ConfigBuilder from './pages/ConfigBuilder';
 import Chat from './pages/Chat';
@@ -57,14 +56,6 @@ function AppContent() {
             element={
               <ProtectedRoute requiredRole="admin">
                 <Admin />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/tasks" 
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <TaskManager />
               </ProtectedRoute>
             } 
           />

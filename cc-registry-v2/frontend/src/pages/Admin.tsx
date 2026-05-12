@@ -17,6 +17,7 @@ import {
 import { apiService } from '../services/api';
 import AdminInventory from './AdminInventory';
 import AdminCCVersions from './AdminCCVersions';
+import AdminTaskOperations from './AdminTaskOperations';
 
 const Admin: React.FC = () => {
   const [token, setToken] = useState('admin-dev-token');
@@ -144,31 +145,22 @@ const Admin: React.FC = () => {
         Admin Panel
       </Typography>
 
-      {/* Quick Navigation */}
+      {/* Quick Navigation — Task Manager removed; task triggering lives in the
+          "Schedules" tab below, observability lives in the "Operations" tab. */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>
             Quick Navigation
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <Button 
-              variant="outlined" 
-              onClick={() => window.open('/tasks', '_blank')}
-              sx={{ minWidth: 200 }}
-            >
-              📋 Task Manager
-            </Button>
-            <Button 
-              variant="outlined" 
+            <Button
+              variant="outlined"
               onClick={() => window.open('/chat-debug', '_blank')}
               sx={{ minWidth: 200 }}
             >
               🐛 Chat Debug Console
             </Button>
           </Box>
-          <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
-            Access specialized admin interfaces for task management and chat quality debugging
-          </Typography>
         </CardContent>
       </Card>
 
@@ -177,6 +169,7 @@ const Admin: React.FC = () => {
         <Tab label="Database Inventory" />
         <Tab label="Schedules" />
         <Tab label="Image Catalog" />
+        <Tab label="Operations" />
       </Tabs>
 
       {currentTab === 0 && (
@@ -497,6 +490,10 @@ const Admin: React.FC = () => {
 
       {currentTab === 3 && (
         <AdminCCVersions />
+      )}
+
+      {currentTab === 4 && (
+        <AdminTaskOperations />
       )}
     </Container>
   );

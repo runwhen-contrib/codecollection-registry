@@ -26,6 +26,7 @@ from typing import Optional
 
 import yaml
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models import CodeCollection
 from app.models.version import CodeCollectionVersion
@@ -36,9 +37,13 @@ logger = logging.getLogger(__name__)
 
 
 def _load_codecollections_yaml() -> list[dict]:
-    """Locate codecollections.yaml in the same order other tasks do."""
+    """Locate codecollections.yaml.
+
+    Primary path is `settings.CODECOLLECTIONS_FILE` (env-overridable);
+    fallbacks cover source-checkout and devcontainer layouts.
+    """
     candidate_paths = [
-        "/app/codecollections.yaml",
+        settings.CODECOLLECTIONS_FILE,
         os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             "..",
