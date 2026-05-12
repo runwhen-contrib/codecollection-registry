@@ -154,11 +154,27 @@ def load_schedules_from_yaml():
     try:
         with open(schedules_file, 'r') as f:
             config = yaml.safe_load(f)
-        
+
+        # `yaml.safe_load` returns None for empty files or files containing
+        # only comments. Treat that as "no schedules" instead of crashing
+        # with `'NoneType' object has no attribute 'get'` (which would
+        # leave the scheduler running with a silent empty beat schedule).
+        if config is None:
+            logger.warning(
+                f"{schedules_file} is empty or contains only comments; "
+                f"using empty beat schedule"
+            )
+            return {}
+
         logger.info(f"Loaded schedules from {schedules_file}")
-        
+
         beat_schedule = {}
-        for schedule_config in config.get('schedules', []):
+        # Tolerate both a missing `schedules:` key and an explicit `schedules: null`.
+        schedules_list = config.get('schedules') or []
+        for schedule_config in schedules_list:
+            # Skip empty list items (e.g. a `- ` with nothing after it).
+            if not schedule_config:
+                continue
             if not schedule_config.get('enabled', True):
                 logger.info(f"Skipping disabled schedule: {schedule_config['name']}")
                 continue
