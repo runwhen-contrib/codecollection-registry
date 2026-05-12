@@ -53,12 +53,15 @@ def sync_all_collections_task(self):
     """
     try:
         logger.info(f"Starting sync_all_collections_task {self.request.id}")
-        
-        # Load YAML
+
+        # Load YAML. Missing config is a hard failure — raise so the task
+        # is recorded as FAILURE in Celery + task_executions, rather than
+        # silently returning SUCCESS with an error payload that nobody
+        # checks. See AGENTS.md "task error handling".
         yaml_path = "/app/codecollections.yaml"
         if not os.path.exists(yaml_path):
-            return {"status": "error", "message": f"YAML file not found: {yaml_path}"}
-        
+            raise FileNotFoundError(f"codecollections.yaml not found at {yaml_path}")
+
         with open(yaml_path, 'r') as file:
             yaml_data = yaml.safe_load(file)
         
@@ -120,13 +123,18 @@ def sync_all_collections_task(self):
             
             logger.info(f"Synced {collections_synced} collections")
             return {"status": "success", "collections_synced": collections_synced}
-            
+
         finally:
             db.close()
-            
-    except Exception as e:
-        logger.error(f"sync_all_collections_task failed: {e}")
-        return {"status": "error", "message": str(e)}
+
+    except Exception:
+        # logger.exception captures the full traceback into the log.
+        # The bare `raise` re-throws the original exception so Celery
+        # marks the task FAILURE (which task_failure_handler in
+        # celery_app.py persists to task_executions.error_message +
+        # task_executions.traceback via task_monitor.update_task_status).
+        logger.exception("sync_all_collections_task failed")
+        raise
 
 @celery_app.task(bind=True)
 def parse_all_codebundles_task(self):
@@ -284,13 +292,13 @@ def parse_all_codebundles_task(self):
                 "codebundles_created": codebundles_created,
                 "codebundles_updated": codebundles_updated
             }
-            
+
         finally:
             db.close()
-            
-    except Exception as e:
-        logger.error(f"parse_all_codebundles_task failed: {e}")
-        return {"status": "error", "message": str(e)}
+
+    except Exception:
+        logger.exception("parse_all_codebundles_task failed")
+        raise
 
 def _get_git_last_commit_date(repo_path: str, folder_path: str) -> Optional[datetime]:
     """Get the last commit date for files in a folder, excluding meta.yml"""

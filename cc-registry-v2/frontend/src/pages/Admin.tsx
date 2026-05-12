@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { apiService } from '../services/api';
 import AdminInventory from './AdminInventory';
+import AdminCCVersions from './AdminCCVersions';
 
 const Admin: React.FC = () => {
   const [token, setToken] = useState('admin-dev-token');
@@ -175,6 +176,7 @@ const Admin: React.FC = () => {
         <Tab label="Data Management" />
         <Tab label="Database Inventory" />
         <Tab label="Schedules" />
+        <Tab label="Image Catalog" />
       </Tabs>
 
       {currentTab === 0 && (
@@ -491,6 +493,10 @@ const Admin: React.FC = () => {
             </>
           )}
         </Box>
+      )}
+
+      {currentTab === 3 && (
+        <AdminCCVersions />
       )}
     </Container>
   );

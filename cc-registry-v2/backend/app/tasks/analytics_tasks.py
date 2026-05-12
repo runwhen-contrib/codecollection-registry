@@ -216,12 +216,13 @@ def compute_task_growth_analytics(self):
             "months_generated": len(months)
         }
         
-    except Exception as e:
-        logger.error(f"Error computing task growth analytics: {e}", exc_info=True)
+    except Exception:
+        # logger.exception captures the full traceback. Bare `raise`
+        # re-throws so Celery marks the task FAILURE — task_executions
+        # then records error_message + traceback via task_monitor (see
+        # task_failure_handler in celery_app.py).
+        logger.exception("Error computing task growth analytics")
         db.rollback()
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+        raise
     finally:
         db.close()

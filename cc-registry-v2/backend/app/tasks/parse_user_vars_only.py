@@ -92,12 +92,13 @@ def parse_user_variables_task(self):
             'message': f'Successfully parsed user variables from {processed} files, updated {updated} codebundles'
         }
         
-    except Exception as e:
-        logger.error(f"Failed to parse user variables: {e}", exc_info=True)
+    except Exception:
+        # logger.exception captures the full traceback. Bare `raise`
+        # re-throws so Celery marks the task FAILURE instead of
+        # SUCCESS-with-error-payload (which task_executions and the
+        # Admin UI both interpret as a successful run).
+        logger.exception("Failed to parse user variables")
         db.rollback()
-        return {
-            'status': 'error',
-            'message': str(e)
-        }
+        raise
     finally:
         db.close()

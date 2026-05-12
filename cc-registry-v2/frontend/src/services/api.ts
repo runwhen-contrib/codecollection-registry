@@ -622,6 +622,22 @@ export const apiService = {
     return response.data;
   },
 
+  // CodeCollection Image Catalog (PAPI-facing, public/unauthenticated).
+  // These mirror app/routers/cc_catalog.py — read-only views of what
+  // the image-sync task has discovered in each CC's OCI registry.
+  async getCatalogList(params: {
+    visibility?: 'public' | 'hidden';
+    only_with_image?: boolean;
+  } = {}) {
+    const response = await api.get('/catalog/codecollections', { params });
+    return response.data;
+  },
+
+  async getCatalogDetail(slug: string) {
+    const response = await api.get(`/catalog/codecollections/${slug}`);
+    return response.data;
+  },
+
   // Version management endpoints
   async triggerSyncAllVersions(token: string) {
     const response = await api.post('/admin/sync-all-versions', {}, {
