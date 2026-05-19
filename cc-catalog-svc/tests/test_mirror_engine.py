@@ -276,3 +276,108 @@ def test_admin_trigger_with_token_enqueues(client, cfg_for_mirror):
     body = resp.json()
     assert body["destination"] == "acme-jfrog"
     assert body["jobs_enqueued"] == 2
+
+
+class DigestPinnedFakeSource(ImageSource):
+    """Returns refs WITH `image_digest` set so `_compose_source_ref`
+    produces a `@sha256:...` digest-pinned source ref. Required to
+    reproduce the enqueue/finish natural-key mismatch."""
+
+    name = "digest-fake"
+
+    def discover_refs(self, cc):
+        return [
+            DiscoveredImageRef(
+                ref="main",
+                ref_type="branch",
+                commit="c1a2b3d",
+                rt_revision="e4f5a6b",
+                image_tag="main-c1a2b3d-e4f5a6b",
+                image_digest="sha256:deadbeefcafef00d" * 4,
+                built_at=datetime(2026, 5, 12, 10, 0, 0),
+            ),
+        ]
+
+    def resolve_latest(self, cc, refs):
+        return "main-c1a2b3d-e4f5a6b"
+
+    def resolve_stable(self, cc, refs):
+        return None
+
+
+@pytest.fixture
+def cfg_digest_pinned(engine, monkeypatch):
+    src = DigestPinnedFakeSource()
+    dst = FakeJFrog()
+    monkeypatch.setitem(src_registry.SOURCE_REGISTRY, src.name, src)
+    monkeypatch.setitem(dest_registry.DESTINATION_REGISTRY, dst.name, dst)
+    cfg = AppConfig(
+        scheduler=SchedulerConfig(mirror_workers=1, per_job_timeout_seconds=10),
+        sources=[
+            SourceConfig(
+                name="digest-src",
+                type="digest-fake",
+                codecollections=[
+                    CodeCollectionConfig(
+                        slug="rw-cli-codecollection",
+                        name="rw-cli",
+                        image_registry="ghcr.io/runwhen-contrib/rw-cli-codecollection",
+                    )
+                ],
+            )
+        ],
+        destinations=[
+            DestinationConfig(
+                name="acme-jfrog",
+                type="jfrog",
+                base_url="https://acme.jfrog.io",
+                repo_key="runwhen-virtual",
+                auth=JFrogAuth(token_env="JFROG_NOT_REAL"),
+                mirror=MirrorFilter(
+                    codecollections=["*"],
+                    include_pointers=["latest"],
+                    include_branches=[],
+                    include_semver_tags=False,
+                    include_pr_refs=False,
+                ),
+            )
+        ],
+    )
+    config_mod._CONFIG_CACHE = cfg
+    return cfg, dst
+
+
+def test_digest_pinned_source_does_not_reenqueue_after_success(cfg_digest_pinned):
+    """Regression: when a discovered ref carries an `image_digest`,
+    `_compose_source_ref` produces a `@sha256:...` digest-pinned source
+    ref. The job-finish path used to derive `source_image_tag` from that
+    digest-pinned string, storing `sha256:...` in `MirrorTarget`. The
+    enqueue check looks for `MirrorTarget.source_image_tag == ref.image_tag`
+    (the OCI tag name, e.g. `main-c1a2b3d-e4f5a6b`), so the lookup would
+    never match and every poll would re-enqueue the same image forever.
+
+    This test runs poll → enqueue → drain, then re-enqueues and asserts
+    the second pass produces zero new jobs.
+    """
+    cfg, dst = cfg_digest_pinned
+    run_catalog_poll(cfg)
+    first = enqueue_mirror_jobs(cfg)
+    assert first["jobs_enqueued"] == 1
+
+    drain = drain_mirror_jobs(cfg)
+    assert drain["jobs_succeeded"] == 1
+
+    # Verify the MirrorTarget row stores the OCI tag, NOT the digest.
+    from app.db import session_scope
+    from app.models import MirrorTarget
+    from sqlalchemy import select
+
+    with session_scope() as s:
+        target = s.execute(select(MirrorTarget)).scalar_one()
+        assert target.source_image_tag == "main-c1a2b3d-e4f5a6b"
+        assert not target.source_image_tag.startswith("sha256:")
+
+    # Second enqueue must see the MirrorTarget and skip the job.
+    second = enqueue_mirror_jobs(cfg)
+    assert second["jobs_enqueued"] == 0
+    assert second["refs_already_mirrored"] == 1

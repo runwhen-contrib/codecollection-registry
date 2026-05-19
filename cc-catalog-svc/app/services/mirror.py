@@ -331,7 +331,27 @@ def drain_mirror_jobs(
                     "destination_config": dest_row.config_json or {},
                     "source_image_ref": j.source_image_ref,
                     "target_image_ref": j.target_image_ref,
-                    "source_image_tag": _tag_from_ref(j.source_image_ref),
+                    # Derive the canonical source tag from the *target* ref:
+                    # `source_image_ref` may be digest-pinned (`...@sha256:...`)
+                    # when the discovered ref had an image_digest, which would
+                    # cause `_tag_from_ref` to extract the digest instead of
+                    # the tag name. The natural key on MirrorTarget is the
+                    # tag, and `_enqueue_for_destination` looks it up with
+                    # `MirrorTarget.source_image_tag == ref.image_tag`, so a
+                    # digest stored here would never match → infinite re-
+                    # enqueue. `target_image_ref` is always tag-based (every
+                    # destination plugin constructs it from `image_tag`).
+                    # Derive the canonical source tag from the *target* ref:
+                    # `source_image_ref` may be digest-pinned (`...@sha256:...`)
+                    # when the discovered ref had an image_digest, which would
+                    # cause `_tag_from_ref` to extract the digest instead of
+                    # the tag name. The natural key on MirrorTarget is the
+                    # tag, and `_enqueue_for_destination` looks it up with
+                    # `MirrorTarget.source_image_tag == ref.image_tag`, so a
+                    # digest stored here would never match → infinite re-
+                    # enqueue. `target_image_ref` is always tag-based (every
+                    # destination plugin constructs it from `image_tag`).
+                    "source_image_tag": _tag_from_ref(j.target_image_ref),
                     "max_attempts": j.max_attempts,
                     "current_attempt": j.attempts,
                 }
