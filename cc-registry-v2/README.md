@@ -78,7 +78,7 @@ For full architecture details, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 3. **Access the application**
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8001
-   - API Documentation: http://localhost:8001/docs
+   - API Documentation: http://localhost:8001/api/docs
    - Task Monitor (Flower): http://localhost:5555
    - MCP Server: http://localhost:8000 (optional - see [MCP Server Integration](MCP_SERVER_INTEGRATION.md))
 
@@ -213,7 +213,10 @@ codecollection-registry/
 
 ## API Documentation
 
-Visit http://localhost:8001/docs for interactive API documentation.
+Visit http://localhost:8001/api/docs for interactive API documentation. In
+production the same path is exposed through the ingress at
+`https://<host>/api/docs` (the frontend SPA owns `/`, so the backend's
+Swagger UI is intentionally mounted under `/api/`).
 
 ## Configuration
 

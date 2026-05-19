@@ -106,7 +106,6 @@ crontab:
 | validate-yaml-seed-daily | Daily at 01:00 | Validates YAML consistency |
 | generate-metrics-daily | Daily at 05:00 | Generates system metrics |
 | scheduled-sync | Daily at 06:00 | Legacy full sync |
-| update-statistics-hourly | Every hour | Updates collection statistics |
 | health-check | Every 5 minutes | System health check |
 | cleanup-old-tasks | Daily at 00:30 | Cleans old task records |
 | health-check-tasks | Every 10 minutes | Task queue health check |

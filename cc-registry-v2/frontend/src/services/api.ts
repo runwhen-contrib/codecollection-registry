@@ -309,12 +309,14 @@ export const apiService = {
   },
 
   // Registry Stats
+  // NOTE: historical task growth is served separately by
+  // /api/v1/analytics/tasks-by-week (see getTasksByWeek below), backed
+  // by real git-history analysis. This endpoint is just live counts.
   async getRegistryStats(): Promise<{
     collections: number;
     codebundles: number;
     tasks: number;
     slis: number;
-    tasks_over_time: Array<{ month: string; tasks: number }>;
   }> {
     const response = await api.get('/registry/stats');
     return response.data;
@@ -467,80 +469,10 @@ export const apiService = {
     return response.data;
   },
 
-  // Database-driven task management endpoints
-  async triggerSeedDatabase(token: string, yamlPath: string = '/app/codecollections.yaml') {
-    const response = await api.post('/tasks/seed-database', null, {
-      params: { yaml_file_path: yamlPath },
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerValidateYaml(token: string, yamlPath: string = '/app/codecollections.yaml') {
-    const response = await api.post('/tasks/validate-yaml', null, {
-      params: { yaml_file_path: yamlPath },
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerSyncCollections(token: string) {
-    const response = await api.post('/tasks/sync-collections', {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerSyncCollection(token: string, collectionId: number) {
-    const response = await api.post(`/tasks/sync-collection/${collectionId}`, {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerParseCodebundles(token: string) {
-    const response = await api.post('/tasks/parse-codebundles', {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerParseCollection(token: string, collectionId: number) {
-    const response = await api.post(`/tasks/parse-collection/${collectionId}`, {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerEnhanceCodebundles(token: string) {
-    const response = await api.post('/tasks/enhance-codebundles', {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerEnhanceCodebundle(token: string, codebundleId: number) {
-    const response = await api.post(`/tasks/enhance-codebundle/${codebundleId}`, {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  async triggerGenerateMetrics(token: string) {
-    const response = await api.post('/tasks/generate-metrics', {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Old getTaskStatus method removed - now using task management endpoint
-
-  async getTaskHealth(token: string) {
-    const response = await api.get('/tasks/health', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
+  // NOTE: The legacy /api/v1/tasks/* trigger surface was removed.
+  // All task triggers now flow through /api/v1/schedules/{name}/trigger
+  // (configured in schedules.yaml + exposed by the Schedules admin tab).
+  // For task observability use /api/v1/task-management/tasks/{running,history}.
 
   // Admin CRUD endpoints
   async getCollections(token: string, includeInactive: boolean = false) {
@@ -619,6 +551,22 @@ export const apiService = {
     const response = await api.get(`/admin/inventory/codebundles/${codebundleId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
+    return response.data;
+  },
+
+  // CodeCollection Image Catalog (PAPI-facing, public/unauthenticated).
+  // These mirror app/routers/cc_catalog.py — read-only views of what
+  // the image-sync task has discovered in each CC's OCI registry.
+  async getCatalogList(params: {
+    visibility?: 'public' | 'hidden';
+    only_with_image?: boolean;
+  } = {}) {
+    const response = await api.get('/catalog/codecollections', { params });
+    return response.data;
+  },
+
+  async getCatalogDetail(slug: string) {
+    const response = await api.get(`/catalog/codecollections/${slug}`);
     return response.data;
   },
 

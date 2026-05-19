@@ -62,6 +62,13 @@ spec:
           value: "azure-openai"
         - name: AI_ENHANCEMENT_ENABLED
           value: "true"
+        # Directory-mounted ConfigMap paths (no subPath) so the kubelet
+        # auto-propagates ConfigMap updates without a pod restart. See
+        # scheduler-deployment.yaml for full rationale.
+        - name: SCHEDULES_FILE
+          value: /etc/cc-registry/schedules/schedules.yaml
+        - name: SOURCES_FILE
+          value: /etc/cc-registry/sources/sources.yaml
         envFrom:
         - secretRef:
             name: azure-openai-credentials
@@ -70,12 +77,10 @@ spec:
             optional: true
         volumeMounts:
         - name: schedules-config
-          mountPath: /app/schedules.yaml
-          subPath: schedules.yaml
+          mountPath: /etc/cc-registry/schedules
           readOnly: true
         - name: documentation-sources
-          mountPath: /app/sources.yaml
-          subPath: sources.yaml
+          mountPath: /etc/cc-registry/sources
           readOnly: true
         # - name: tag-icons
         #   mountPath: /app/map-tag-icons.yaml

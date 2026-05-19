@@ -1,0 +1,70 @@
+# Local dev for cc-catalog-svc.
+#
+# One service. SQLite. APScheduler runs in-process. A config file is
+# mounted in read-only and you can `curl` the catalog API on :8080
+# immediately.
+#
+# Switching configs — set CC_CATALOG_CONFIG_FILE on the HOST shell to
+# point at any file under config-examples/ (or your own) and recompose:
+#
+#   export CC_CATALOG_CONFIG_FILE=./config-examples/config.jfrog-remote.yaml
+#   docker compose down -v && docker compose up --force-recreate
+#
+# Note: the name CC_CATALOG_CONFIG_FILE is reused on purpose. On the
+# host shell it tells compose which host file to bind-mount; inside the
+# container it's pinned to /app/config.yaml (the mount target) so the
+# app always finds the file at the same path regardless of which host
+# file was mounted in. Both meanings produce the result you want.
+#
+# Credentials — every secret env var the example configs reference is
+# forwarded through verbatim. Set whichever ones your active config
+# needs in your shell or a `.env` file next to this compose file:
+#
+#   echo "JFROG_ACCESS_TOKEN=eyJ..." > .env       # bearer-token auth
+#   echo "JFROG_USER=alice"         >> .env       # basic-auth user
+#   echo "JFROG_PASS=s3cr3t!"       >> .env       # basic-auth pass
+#
+# If your config references env var names other than these, either
+# rename in the config or add them under `environment:` below.
+
+services:
+  cc-catalog-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cc-catalog-svc:dev
+    container_name: cc-catalog-svc
+    ports:
+      - "8080:8080"
+    environment:
+      # In-container path the app reads. This is pinned to the mount
+      # target below; the host shell's CC_CATALOG_CONFIG_FILE (used to
+      # pick the host file) does NOT leak in here.
+      CC_CATALOG_CONFIG_FILE: /app/config.yaml
+      CC_CATALOG_DB_URL: sqlite:////data/catalog.db
+      CC_CATALOG_LOG_LEVEL: INFO
+      # Set CC_CATALOG_ADMIN_TOKEN to enable POST endpoints.
+      CC_CATALOG_ADMIN_TOKEN: ${CC_CATALOG_ADMIN_TOKEN:-}
+      # Credentials for the OCI source / JFrog destination plugins.
+      # These are only the env var names the configs in config-examples/
+      # reference; harmless when empty. Add more here if your own config
+      # uses different names.
+      JFROG_ACCESS_TOKEN: ${JFROG_ACCESS_TOKEN:-}
+      JFROG_USER:         ${JFROG_USER:-}
+      JFROG_PASS:         ${JFROG_PASS:-}
+    volumes:
+      # Compose-time substitution: the HOST shell's CC_CATALOG_CONFIG_FILE
+      # picks which file to bind-mount. Falls back to the default example
+      # when unset.
+      - ${CC_CATALOG_CONFIG_FILE:-./config-examples/config.example.yaml}:/app/config.yaml:ro
+      - cc-catalog-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  cc-catalog-data:

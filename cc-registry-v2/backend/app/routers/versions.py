@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc
 
 from app.core.database import get_db
+from app.core.visibility import public_only
 from app.models.code_collection import CodeCollection
 from app.models.version import CodeCollectionVersion, VersionCodebundle
 
@@ -22,10 +23,13 @@ async def get_collections_with_versions(
     Get all CodeCollections with their versions (tags and branches).
     """
     try:
-        query = db.query(CodeCollection).options(
-            joinedload(CodeCollection.versions)
+        # Public website endpoint -- hidden CCs are excluded.
+        query = public_only(
+            db.query(CodeCollection).options(
+                joinedload(CodeCollection.versions)
+            )
         ).order_by(CodeCollection.name)
-        
+
         if limit:
             query = query.offset(offset).limit(limit)
         
@@ -85,8 +89,8 @@ async def get_collection_versions(
     """
     Get all versions for a specific CodeCollection.
     """
-    collection = db.query(CodeCollection).filter(
-        CodeCollection.slug == collection_slug
+    collection = public_only(
+        db.query(CodeCollection).filter(CodeCollection.slug == collection_slug)
     ).first()
     
     if not collection:
@@ -133,8 +137,8 @@ async def get_version_by_name(
     """
     Get a specific version by collection slug and version name.
     """
-    collection = db.query(CodeCollection).filter(
-        CodeCollection.slug == collection_slug
+    collection = public_only(
+        db.query(CodeCollection).filter(CodeCollection.slug == collection_slug)
     ).first()
     
     if not collection:
@@ -178,8 +182,8 @@ async def get_latest_version(
     """
     Get the latest version for a CodeCollection.
     """
-    collection = db.query(CodeCollection).filter(
-        CodeCollection.slug == collection_slug
+    collection = public_only(
+        db.query(CodeCollection).filter(CodeCollection.slug == collection_slug)
     ).first()
     
     if not collection:
@@ -229,8 +233,8 @@ async def get_version_codebundles(
     """
     Get all codebundles for a specific version.
     """
-    collection = db.query(CodeCollection).filter(
-        CodeCollection.slug == collection_slug
+    collection = public_only(
+        db.query(CodeCollection).filter(CodeCollection.slug == collection_slug)
     ).first()
     
     if not collection:

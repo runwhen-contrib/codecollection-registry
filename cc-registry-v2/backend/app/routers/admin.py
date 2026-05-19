@@ -66,7 +66,7 @@ async def trigger_data_population(token: str = Depends(verify_admin_token)):
         logger.info("Starting data population triggered by admin")
         
         # Step 1: Load YAML data
-        yaml_path = "/app/codecollections.yaml"
+        yaml_path = settings.CODECOLLECTIONS_FILE
         if not os.path.exists(yaml_path):
             raise HTTPException(status_code=404, detail=f"YAML file not found: {yaml_path}")
             

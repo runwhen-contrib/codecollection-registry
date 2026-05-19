@@ -310,9 +310,6 @@ const Header: React.FC = () => {
                 <MenuItem onClick={() => handleMenuNavigate('/chat-debug')}>
                   Chat Debug
                 </MenuItem>
-                <MenuItem onClick={() => handleMenuNavigate('/tasks')}>
-                  Task Manager
-                </MenuItem>
               </>
             )}
             <Divider />

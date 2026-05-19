@@ -1,0 +1,96 @@
+# cc-catalog-svc — JFrog Remote (pull-only, no mirror) example.
+#
+# Use this shape when JFrog Artifactory already proxies the upstream
+# container registry for you via a "Remote" Docker repo. The catalog's
+# only job here is to surface what JFrog can serve — it doesn't push
+# anything anywhere.
+#
+# Air-gap-friendly: the catalog process only ever talks to your JFrog
+# host. No egress to ghcr.io, no `crane copy`, no destination plugin
+# running. Customers verifying this end-to-end need to confirm only one
+# thing on the JFrog side: that "List Remote Folder Content" is enabled
+# on the Remote Docker repo so that `/v2/<repo>/<image>/tags/list`
+# returns the full upstream tag list (otherwise the catalog only sees
+# tags that have already been pulled through and cached).
+#
+# Secrets live in env vars, NEVER in this file. Only env var NAMES
+# appear here; the actual JFrog credentials are injected via your
+# deployment's Secret / .env / vault.
+
+storage:
+  # Leave commented to use CC_CATALOG_DB_URL env var (recommended).
+  # url: postgresql+psycopg2://catalog:secret@catalog-db:5432/catalog
+
+catalog_api:
+  prefix: /api/v1/catalog
+
+scheduler:
+  catalog_poll_minutes: 5
+  # Mirror knobs are omitted on purpose: with no `destinations:` below,
+  # the mirror loop has nothing to do. It still runs (cheap no-op) at
+  # whatever the schema defaults are; we don't need to tune it.
+
+# ------------------------------------------------------------------------
+# Sources — JFrog Remote, queried directly via the OCI Distribution v2
+# API. Each `image_registry` is the JFrog-side path (host + repo key +
+# upstream path). The catalog HTTPs GET against
+# https://<host>/v2/<repo_key>/<image_path>/tags/list and JFrog handles
+# the upstream proxy/cache transparently.
+# ------------------------------------------------------------------------
+sources:
+  - name: jfrog-remote-runwhen
+    type: oci
+    auth:
+      # HTTP Basic against JFrog (LDAP user + password, or user + access
+      # token used as the password). Equivalent to:
+      #
+      #   curl -u "$JFROG_USER:$JFROG_PASS" \
+      #     https://artifactory.example.com/artifactory/api/docker/<repo>/v2/<image>/tags/list
+      user_env: JFROG_USER
+      pass_env: JFROG_PASS
+      # If you prefer a bearer access token instead, swap to:
+      # token_env: JFROG_ACCESS_TOKEN
+
+    codecollections:
+      # `image_registry` is the JFrog-side path consumers pull from:
+      #   <jfrog-host>/<remote-docker-repo-key>/<upstream-path>
+      # Replace `artifactory.example.com` with your JFrog hostname and
+      # `docker-ghcr` with whatever you named the Remote Docker repo.
+      - slug: rw-cli-codecollection
+        name: RunWhen CLI CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-cli-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-cli-codecollection
+
+      - slug: rw-public-codecollection
+        name: RunWhen Public CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-public-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-public-codecollection
+
+      - slug: rw-generic-codecollection
+        name: RunWhen Generic CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-generic-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-generic-codecollection
+
+      - slug: rw-workspace-utils
+        name: RunWhen Workspace Utilities CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-workspace-utils
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-workspace-utils
+
+      - slug: aws-c7n-codecollection
+        name: AWS CloudCustodian CodeCollection
+        git_url: https://github.com/runwhen-contrib/aws-c7n-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/aws-c7n-codecollection
+
+      - slug: azure-c7n-codecollection
+        name: Azure CloudCustodian CodeCollection
+        git_url: https://github.com/runwhen-contrib/azure-c7n-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/azure-c7n-codecollection
+
+# ------------------------------------------------------------------------
+# NO `destinations:` block.
+#
+# JFrog's Remote repo already pulls + caches from the upstream on demand,
+# so there is nothing for cc-catalog-svc to mirror. Consumers (PAPI,
+# runners) pull from the exact same JFrog URL the catalog publishes in
+# `image_registry` above.
+# ------------------------------------------------------------------------

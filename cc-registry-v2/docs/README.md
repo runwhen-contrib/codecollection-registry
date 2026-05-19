@@ -5,6 +5,7 @@ All project documentation, organized by topic.
 ## Architecture and Design
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture: services, data flow, PostgreSQL + pgvector, MCP server, Celery tasks
+- **[CCV.md](CCV.md)** - CodeCollection Version catalog: tag-schema contract, image-source plugins, `/api/v1/catalog` endpoints, PAPI integration
 - **[MCP_WORKFLOW.md](MCP_WORKFLOW.md)** - Document indexing pipeline, embedding generation, vector store, and search flow
 - **[CHAT.md](CHAT.md)** - Chat system architecture, dual search pipeline, LLM synthesis, follow-up detection
 

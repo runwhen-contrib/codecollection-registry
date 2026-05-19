@@ -80,15 +80,6 @@ data:
           minute: 0
         enabled: false
 
-      - name: update-statistics-hourly
-        task: app.tasks.data_population_tasks.update_collection_statistics_task
-        description: Update collection statistics
-        schedule_type: crontab
-        crontab:
-          hour: null
-          minute: 0
-        enabled: true
-
       # =============================================================================
       # HEALTH CHECKS & CLEANUP
       # =============================================================================
@@ -218,17 +209,25 @@ spec:
           value: "azure-openai"
         - name: AI_ENHANCEMENT_ENABLED
           value: "true"
+        # Point the app at directory-mounted ConfigMap paths instead of
+        # the legacy /app/<file>.yaml subPath mounts. Directory mounts
+        # auto-propagate ConfigMap updates from the kubelet (subPath
+        # mounts don't). schedules.yaml is still only re-read on Celery
+        # beat startup, but codecollections.yaml + sources.yaml are now
+        # picked up within ~60s of a `kubectl apply` with no pod restart.
+        - name: SCHEDULES_FILE
+          value: /etc/cc-registry/schedules/schedules.yaml
+        - name: SOURCES_FILE
+          value: /etc/cc-registry/sources/sources.yaml
         envFrom:
         - secretRef:
             name: azure-openai-credentials
         volumeMounts:
         - name: schedules-config
-          mountPath: /app/schedules.yaml
-          subPath: schedules.yaml
+          mountPath: /etc/cc-registry/schedules
           readOnly: true
         - name: documentation-sources
-          mountPath: /app/sources.yaml
-          subPath: sources.yaml
+          mountPath: /etc/cc-registry/sources
           readOnly: true
         - name: celerybeat-schedule
           mountPath: /tmp
@@ -298,45 +297,28 @@ spec:
     spec:
       containers:
       - name: flower
-        image: mher/flower:2.0
-        imagePullPolicy: IfNotPresent
+        # Use the backend image so Flower loads our `app.tasks.celery_app`
+        # module, which has the Sentinel-aware broker URL builder. This
+        # avoids duplicating broker config in a shell entrypoint (which
+        # historically produced `redis://...@redis-sentinel:26379/0` and
+        # spammed "Only HELLO messages are accepted by Sentinel
+        # instances" on every event capture).
+        image: us-docker.pkg.dev/runwhen-nonprod-shared/public-images/cc-registry-v2-backend:latest
+        imagePullPolicy: Always
         command:
-        - sh
-        - -c
-        - |
-          set -ex
-          
-          echo "=== Flower Sentinel Configuration ==="
-          echo "REDIS_SENTINEL_HOSTS: $REDIS_SENTINEL_HOSTS"
-          echo "REDIS_SENTINEL_MASTER: $REDIS_SENTINEL_MASTER"
-          echo "REDIS_DB: $REDIS_DB"
-          
-          # Extract first sentinel for the broker URL placeholder
-          SENTINEL_HOST=$(echo "$REDIS_SENTINEL_HOSTS" | cut -d',' -f1 | cut -d':' -f1 | tr -d ' ')
-          SENTINEL_PORT=$(echo "$REDIS_SENTINEL_HOSTS" | cut -d',' -f1 | cut -d':' -f2 | tr -d ' ')
-          SENTINEL_PORT="${SENTINEL_PORT:-26379}"
-          DB="${REDIS_DB:-0}"
-          
-          # Construct broker URL - Celery/Kombu will use transport_options for Sentinel discovery
-          if [ ! -z "$REDIS_PASSWORD" ]; then
-            BROKER_URL="redis://:$REDIS_PASSWORD@$SENTINEL_HOST:$SENTINEL_PORT/$DB"
-          else
-            BROKER_URL="redis://$SENTINEL_HOST:$SENTINEL_PORT/$DB"
-          fi
-          
-          echo "Broker URL: redis://:**@$SENTINEL_HOST:$SENTINEL_PORT/$DB"
-          
-          # Pass Sentinel configuration via environment for Celery to pick up
-          export CELERY_BROKER_TRANSPORT_OPTIONS='{"master_name":"'$REDIS_SENTINEL_MASTER'","sentinels":[["'$SENTINEL_HOST'",'$SENTINEL_PORT']],"password":"'$REDIS_PASSWORD'","db":'$DB',"socket_timeout":1.0,"socket_connect_timeout":1.0}'
-          
-          echo "Transport options configured for Sentinel"
-          
-          exec celery --broker="$BROKER_URL" flower
+        - celery
+        - -A
+        - app.tasks.celery_app
+        - flower
+        - --port=5555
         ports:
         - containerPort: 5555
           name: http
           protocol: TCP
         env:
+        # These match the scheduler/worker exactly; the Sentinel branch
+        # in _configure_broker_url() consumes them to build a proper
+        # sentinel:// URL + transport_options.
         - name: REDIS_SENTINEL_HOSTS
           value: "redis-sentinel:26379"
         - name: REDIS_SENTINEL_MASTER

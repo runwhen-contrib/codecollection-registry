@@ -4,7 +4,6 @@
 from . import (
     sync_tasks,
     registry_tasks,
-    data_population_tasks,
     ai_enhancement_tasks,
     workflow_tasks,
     task_monitoring,

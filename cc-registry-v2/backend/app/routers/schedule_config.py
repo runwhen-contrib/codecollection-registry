@@ -157,7 +157,6 @@ async def get_schedules(token: str = Depends(verify_admin_token)) -> Dict[str, A
                 'parse-codebundles-daily': 'Parse all codebundles from cloned repositories',
                 'enhance-codebundles-weekly': 'Run AI enhancement on all codebundles',
                 'generate-metrics-daily': 'Generate daily metrics and statistics',
-                'update-statistics-hourly': 'Update collection statistics',
                 'health-check': 'System health check',
                 'scheduled-sync': 'Full registry population (clone, parse, sync)',
                 'cleanup-old-tasks': 'Clean up old completed tasks',

@@ -32,6 +32,13 @@ spec:
         env:
         - name: ENVIRONMENT
           value: "production"
+        # Directory-mounted ConfigMap paths (no subPath) so the kubelet
+        # auto-propagates ConfigMap updates without a pod restart. See
+        # scheduler-deployment.yaml for full rationale.
+        - name: SCHEDULES_FILE
+          value: /etc/cc-registry/schedules/schedules.yaml
+        - name: SOURCES_FILE
+          value: /etc/cc-registry/sources/sources.yaml
         envFrom:
         # Load all database and Redis configuration (supports both URL and component-based config)
         - secretRef:
@@ -44,12 +51,10 @@ spec:
           mountPath: /app
           readOnly: true
         - name: schedules-config
-          mountPath: /app/schedules.yaml
-          subPath: schedules.yaml
+          mountPath: /etc/cc-registry/schedules
           readOnly: true
         - name: documentation-sources
-          mountPath: /app/sources.yaml
-          subPath: sources.yaml
+          mountPath: /etc/cc-registry/sources
           readOnly: true
         resources:
           requests:

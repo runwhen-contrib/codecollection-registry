@@ -28,15 +28,20 @@ def store_yaml_data_task(self, yaml_data: Dict[str, Any] = None):
     try:
         logger.info(f"Starting YAML data storage task {self.request.id}")
         
-        # Use provided YAML data or load from file as fallback
+        # Use provided YAML data or load from file as fallback. Missing
+        # config is a hard failure — re-raise so the task is recorded as
+        # FAILURE in Celery + task_executions instead of silently
+        # returning SUCCESS with an error payload nobody checks.
         if not yaml_data:
-            yaml_path = "/app/codecollections.yaml"
+            yaml_path = settings.CODECOLLECTIONS_FILE
             try:
                 with open(yaml_path, 'r') as file:
                     yaml_data = yaml.safe_load(file)
             except FileNotFoundError:
-                logger.error("No YAML data provided and file not found")
-                return {'status': 'error', 'message': 'No YAML data available'}
+                logger.exception(
+                    f"No YAML data provided and file not found at {yaml_path}"
+                )
+                raise
         
         db = SessionLocal()
         try:

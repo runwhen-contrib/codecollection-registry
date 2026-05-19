@@ -1,0 +1,15 @@
+# Persistent volume for the SQLite DB.
+#
+# When you switch to Postgres (CC_CATALOG_DB_URL=postgresql+psycopg2://...),
+# delete this PVC and remove the volumeMount from the Deployment.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cc-catalog-svc-data
+  namespace: cc-catalog-svc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

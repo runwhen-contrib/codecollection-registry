@@ -52,7 +52,6 @@ Rebuilds all vector tables from scratch (codebundles + codecollections + documen
 | Schedule | Frequency | Task | Purpose |
 |---|---|---|---|
 | `validate-yaml-seed-daily` | Daily 1 AM | `sync_all_collections_task` | Ensure all YAML-defined collections exist in the database |
-| `update-statistics-hourly` | Hourly | `update_collection_statistics_task` | Refresh collection statistics |
 | `compute-task-growth-analytics` | Daily 2:30 AM | `compute_task_growth_analytics` | Analyze git history for task growth |
 | `health-check` | Every 5 min | `health_check_task` | System health check |
 | `health-check-tasks` | Every 10 min | `health_check_tasks_task` | Task queue health check |

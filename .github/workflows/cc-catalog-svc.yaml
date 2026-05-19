@@ -1,0 +1,164 @@
+name: Build cc-catalog-svc
+
+# Standalone build pipeline for the cc-catalog-svc microservice.
+#
+# Kept separate from build-images.yaml / release.yaml on purpose:
+#   * cc-catalog-svc is its own deployable; pinning it to the cc-registry-v2
+#     release cadence would be wrong.
+#   * It has no Flux/infra-flux deploy automation yet, so this workflow only
+#     builds and pushes the image. A deploy job can be added later without
+#     touching the registry build.
+#
+# Conventions are copied from build-images.yaml so operator instincts carry
+# over: same GAR registry, same Workload Identity auth, same tag scheme.
+
+on:
+  pull_request:
+    paths:
+      - 'cc-catalog-svc/**'
+      - '.github/workflows/cc-catalog-svc.yaml'
+
+  push:
+    branches:
+      - main
+    paths:
+      - 'cc-catalog-svc/**'
+      - '.github/workflows/cc-catalog-svc.yaml'
+
+  workflow_dispatch:
+    inputs:
+      push_image:
+        description: 'Push image to registry'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      tag:
+        description: 'Custom image tag (default: <branch>-<sha8>)'
+        required: false
+        type: string
+
+env:
+  GCP_PROJECT_ID: runwhen-nonprod-shared
+  GCR_REGISTRY: us-docker.pkg.dev/runwhen-nonprod-shared/public-images
+  IMAGE_NAME: cc-catalog-svc
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  build:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      should_push: ${{ steps.push.outputs.should_push }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            # Matches the scheme used by build-images.yaml: concatenate
+            # HEAD_REF (set on PRs) with REF_NAME (set on push/dispatch);
+            # exactly one will be non-empty.
+            TAG="$(echo $GITHUB_HEAD_REF$GITHUB_REF_NAME | sed 's/[^a-zA-Z0-9]/-/g')-${GITHUB_SHA::8}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Using tag: ${TAG}"
+
+      - name: Resolve push behavior
+        id: push
+        run: |
+          if [ "${{ github.event.inputs.push_image }}" = "false" ]; then
+            echo "should_push=false" >> $GITHUB_OUTPUT
+          else
+            echo "should_push=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Compute all tags
+        id: tags
+        run: |
+          BASE="${GCR_REGISTRY}/${IMAGE_NAME}"
+          TAGS="${BASE}:${{ steps.tag.outputs.tag }}"
+          # On push-to-main, additionally tag :main and :latest. Release-style
+          # date-based tagging can be added later when this service has a
+          # release process of its own.
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" = "main" ]; then
+            TAGS="${TAGS}"$'\n'"${BASE}:main"
+            TAGS="${TAGS}"$'\n'"${BASE}:latest"
+          fi
+          {
+            echo "tags<<EOF"
+            echo "${TAGS}"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+          echo "Tags:"
+          echo "${TAGS}"
+
+      - name: Authenticate to Google Cloud
+        if: steps.push.outputs.should_push == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_PROVIDER }}
+          service_account: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_SA }}
+
+      - name: Configure Docker for GCR
+        if: steps.push.outputs.should_push == 'true'
+        run: gcloud --quiet auth configure-docker us-docker.pkg.dev
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push cc-catalog-svc
+        uses: docker/build-push-action@v5
+        with:
+          context: cc-catalog-svc
+          file: cc-catalog-svc/Dockerfile
+          platforms: linux/amd64
+          push: ${{ steps.push.outputs.should_push == 'true' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=cc-catalog-svc
+          cache-to: type=gha,mode=max,scope=cc-catalog-svc
+          build-args: |
+            GITHUB_SHA=${{ github.sha }}
+            GITHUB_REF=${{ github.ref }}
+
+  comment-on-pr:
+    name: PR Comment
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: always() && github.event_name == 'pull_request' && needs.build.outputs.should_push == 'true'
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = '${{ needs.build.outputs.tag }}';
+            const registry = '${{ env.GCR_REGISTRY }}';
+            const image = '${{ env.IMAGE_NAME }}';
+            const ok = '${{ needs.build.result }}' === 'success';
+
+            const body = `## cc-catalog-svc image\n\n` +
+              `**Tag:** \`${tag}\`\n` +
+              `**Build:** ${ok ? 'success' : 'failed'}\n\n` +
+              `| Image | Tag |\n` +
+              `|-------|-----|\n` +
+              `| \`${image}\` | \`${tag}\` |\n\n` +
+              `\`\`\`\n${registry}/${image}:${tag}\n\`\`\``;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });

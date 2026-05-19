@@ -8,6 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models import CodeCollection, Codebundle, CodeCollectionMetrics, SystemMetrics
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -333,7 +334,7 @@ async def get_metrics(
 
 @router.post("/seed-from-yaml")
 async def seed_database_from_yaml(
-    yaml_file_path: str = "/app/codecollections.yaml",
+    yaml_file_path: str = settings.CODECOLLECTIONS_FILE,
     db: Session = Depends(get_db),
     _: dict = Depends(verify_admin_token)
 ):
@@ -353,7 +354,7 @@ async def seed_database_from_yaml(
 
 @router.post("/validate-yaml-seed")
 async def validate_yaml_seed(
-    yaml_file_path: str = "/app/codecollections.yaml",
+    yaml_file_path: str = settings.CODECOLLECTIONS_FILE,
     db: Session = Depends(get_db),
     _: dict = Depends(verify_admin_token)
 ):

@@ -12,7 +12,9 @@ import subprocess
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from git import Repo
+import requests
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models import CodeCollection, Codebundle, RawRepositoryData
 from app.models.version import CodeCollectionVersion
@@ -43,6 +45,41 @@ def _parse_robot_file_content(content: str, file_path: str, collection_slug: str
     from app.tasks.fixed_parser import parse_robot_file_content
     return parse_robot_file_content(content, file_path, collection_slug)
 
+
+def _validate_git_url(git_url: str, collection_slug: str) -> Optional[str]:
+    """Sanity-check a CC's git_url at YAML ingestion time.
+
+    Returns None if the URL resolves (HTTP 200/301/302), or an
+    error string if it doesn't. The check is intentionally lenient:
+
+      - HEAD before GET (cheap; GitHub returns the same status codes).
+      - Short timeout (5s) — sync_all_collections_task runs ~30 CCs and
+        we don't want one DNS hang to stall the whole sync.
+      - Network errors are reported but never fatal: a transient outage
+        shouldn't make a sync fail. We log + collect the error and let
+        the rest of the task continue.
+
+    This is the guard that would have caught the stewartshea typo
+    (`rw-cli-codecollectionn`) at ingestion time, before image-sync
+    started silently skipping the bad entry.
+    """
+    if not git_url:
+        return "missing git_url"
+    if not git_url.startswith(("http://", "https://")):
+        return f"git_url {git_url!r} is not an http(s) URL"
+    try:
+        resp = requests.head(git_url, allow_redirects=True, timeout=5)
+        if resp.status_code in (200, 301, 302):
+            return None
+        if resp.status_code == 404:
+            return (
+                f"git_url returned 404 — repository does not exist or is "
+                f"private without auth (got {git_url})"
+            )
+        return f"git_url returned HTTP {resp.status_code} for {git_url}"
+    except requests.RequestException as e:
+        return f"git_url request failed: {type(e).__name__}: {e}"
+
 @celery_app.task(bind=True)
 def sync_all_collections_task(self):
     """
@@ -50,38 +87,91 @@ def sync_all_collections_task(self):
     - Load codecollections.yaml
     - Create/update CodeCollection records in DB
     - Clone repositories to temp directory for parsing
+
+    NOT updated here: `image_registry`. That field is not a column on
+    CodeCollection; image refs are stored per-version on
+    CodeCollectionVersion by `sync_image_tags_task`. That task reads
+    `image_registry` directly from codecollections.yaml on every run, so
+    edits to the YAML's `image_registry` field take effect the next time
+    `sync_image_tags_task` runs — no `CodeCollection` row update is
+    needed (or possible) here. See docs/CCV.md for the image-catalog
+    pipeline.
     """
     try:
         logger.info(f"Starting sync_all_collections_task {self.request.id}")
-        
-        # Load YAML
-        yaml_path = "/app/codecollections.yaml"
+
+        # Load YAML. Missing config is a hard failure — raise so the task
+        # is recorded as FAILURE in Celery + task_executions, rather than
+        # silently returning SUCCESS with an error payload that nobody
+        # checks. See AGENTS.md "task error handling".
+        yaml_path = settings.CODECOLLECTIONS_FILE
         if not os.path.exists(yaml_path):
-            return {"status": "error", "message": f"YAML file not found: {yaml_path}"}
-        
+            raise FileNotFoundError(f"codecollections.yaml not found at {yaml_path}")
+
         with open(yaml_path, 'r') as file:
             yaml_data = yaml.safe_load(file)
         
         collections_data = yaml_data.get('codecollections', [])
         logger.info(f"Loaded {len(collections_data)} collections from YAML")
-        
+
         collections_synced = 0
+        # Collect per-CC ingestion warnings so the task result surfaces
+        # them in one place (task_executions.result), instead of forcing
+        # operators to scrape worker logs. Non-fatal: a single CC with a
+        # bad git_url shouldn't block the rest of the sync.
+        ingestion_warnings: List[Dict[str, str]] = []
         db = SessionLocal()
-        
+
         try:
             for collection_data in collections_data:
                 collection_slug = collection_data.get('slug')
                 git_url = collection_data.get('git_url')
-                
+
                 if not collection_slug or not git_url:
                     logger.warning(f"Skipping collection with missing slug or git_url")
+                    ingestion_warnings.append({
+                        "slug": collection_slug or "<unknown>",
+                        "error": "missing slug or git_url in codecollections.yaml",
+                    })
                     continue
-                
+
+                # Validate git_url is reachable. This catches typos in
+                # codecollections.yaml (e.g. `rw-cli-codecollectionn`)
+                # at the earliest possible point, instead of letting
+                # them silently break image-sync and other downstream
+                # consumers. Non-fatal — we still write the row so the
+                # admin UI surfaces the CC alongside its error.
+                url_err = _validate_git_url(git_url, collection_slug)
+                if url_err:
+                    logger.warning(f"[{collection_slug}] git_url validation failed: {url_err}")
+                    ingestion_warnings.append({
+                        "slug": collection_slug,
+                        "git_url": git_url,
+                        "error": url_err,
+                    })
+
                 # Create/update collection in DB
                 collection = db.query(CodeCollection).filter(
                     CodeCollection.slug == collection_slug
                 ).first()
                 
+                # Visibility defaults to 'public' if omitted; only ever
+                # take on the values declared in YAML so a CC can be
+                # toggled hidden/public by re-deploying config alone.
+                visibility = collection_data.get('visibility', 'public')
+                if visibility not in ('public', 'hidden'):
+                    logger.warning(
+                        f"Unknown visibility {visibility!r} for {collection_slug}, defaulting to 'public'"
+                    )
+                    visibility = 'public'
+
+                # `last_synced` is OWNED by this task. It means
+                # "when was this CC last (re-)ingested from
+                # codecollections.yaml". Per-version image refreshes
+                # (sync_image_tags_task, every 5 min) and stats reads
+                # do NOT bump it — only an actual YAML→DB sync does.
+                now = datetime.utcnow()
+
                 if not collection:
                     collection = CodeCollection(
                         name=collection_data.get('name', collection_slug),
@@ -92,29 +182,45 @@ def sync_all_collections_task(self):
                         owner_email=collection_data.get('owner_email', ''),
                         owner_icon=collection_data.get('owner_icon', ''),
                         git_ref=collection_data.get('git_ref', 'main'),
-                        is_active=True
+                        visibility=visibility,
+                        is_active=True,
+                        last_synced=now,
                     )
                     db.add(collection)
-                    logger.info(f"Created collection: {collection_slug}")
+                    logger.info(f"Created collection: {collection_slug} (visibility={visibility})")
                 else:
                     collection.name = collection_data.get('name', collection_slug)
                     collection.git_url = git_url
                     collection.description = collection_data.get('description', '')
+                    collection.visibility = visibility
                     collection.is_active = True
-                    logger.info(f"Updated collection: {collection_slug}")
+                    collection.last_synced = now
+                    logger.info(f"Updated collection: {collection_slug} (visibility={visibility})")
                 
                 db.commit()
                 collections_synced += 1
             
-            logger.info(f"Synced {collections_synced} collections")
-            return {"status": "success", "collections_synced": collections_synced}
-            
+            logger.info(
+                f"Synced {collections_synced} collections "
+                f"({len(ingestion_warnings)} ingestion warning(s))"
+            )
+            return {
+                "status": "success",
+                "collections_synced": collections_synced,
+                "ingestion_warnings": ingestion_warnings,
+            }
+
         finally:
             db.close()
-            
-    except Exception as e:
-        logger.error(f"sync_all_collections_task failed: {e}")
-        return {"status": "error", "message": str(e)}
+
+    except Exception:
+        # logger.exception captures the full traceback into the log.
+        # The bare `raise` re-throws the original exception so Celery
+        # marks the task FAILURE (which task_failure_handler in
+        # celery_app.py persists to task_executions.error_message +
+        # task_executions.traceback via task_monitor.update_task_status).
+        logger.exception("sync_all_collections_task failed")
+        raise
 
 @celery_app.task(bind=True)
 def parse_all_codebundles_task(self):
@@ -272,13 +378,13 @@ def parse_all_codebundles_task(self):
                 "codebundles_created": codebundles_created,
                 "codebundles_updated": codebundles_updated
             }
-            
+
         finally:
             db.close()
-            
-    except Exception as e:
-        logger.error(f"parse_all_codebundles_task failed: {e}")
-        return {"status": "error", "message": str(e)}
+
+    except Exception:
+        logger.exception("parse_all_codebundles_task failed")
+        raise
 
 def _get_git_last_commit_date(repo_path: str, folder_path: str) -> Optional[datetime]:
     """Get the last commit date for files in a folder, excluding meta.yml"""

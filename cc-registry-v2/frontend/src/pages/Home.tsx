@@ -37,7 +37,6 @@ interface RegistryStats {
   codebundles: number;
   tasks: number;
   slis: number;
-  tasks_over_time: Array<{ month: string; tasks: number }>;
 }
 
 interface RecentCodebundle {

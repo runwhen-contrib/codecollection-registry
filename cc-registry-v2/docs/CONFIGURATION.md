@@ -24,7 +24,7 @@ The file is loaded by `docker-compose.yml` as `env_file` for the backend, worker
 |---|---|---|
 | Frontend | 3000 | http://localhost:3000 |
 | Backend API | 8001 | http://localhost:8001/api/v1/ |
-| Backend Swagger | 8001 | http://localhost:8001/docs |
+| Backend Swagger | 8001 | http://localhost:8001/api/docs |
 | MCP Server | 8000 | http://localhost:8000 |
 | MCP Server Docs | 8000 | http://localhost:8000/docs |
 | PostgreSQL | 5432 | `postgresql://user:password@localhost:5432/codecollection_registry` |
