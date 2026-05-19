@@ -162,6 +162,72 @@ def test_health_endpoints(client):
     assert client.get("/readyz").status_code == 200
 
 
+def test_entry_pointers_trusts_is_stable_for_semver_ordering():
+    """Regression: `entry_pointers` must trust the sync task's `is_stable`
+    flag (computed with proper semver awareness in `_upsert_versions`)
+    rather than re-deriving stable with a lexicographic comparison —
+    "v10.0.0" < "v9.0.0" lexicographically because '1' < '9'.
+    """
+    from types import SimpleNamespace
+    from app.services.catalog import entry_pointers
+
+    refs = [
+        SimpleNamespace(
+            ref_name="v9.0.0",
+            ref_type="tag",
+            image_tag="v9.0.0-aabbccd-e4f5a6b",
+            image_registry="ghcr.io/x/y",
+            is_latest=False,
+            is_stable=False,
+        ),
+        SimpleNamespace(
+            ref_name="v10.0.0",
+            ref_type="tag",
+            image_tag="v10.0.0-bbccdde-e4f5a6b",
+            image_registry="ghcr.io/x/y",
+            is_latest=False,
+            is_stable=True,  # sync task already picked the right winner
+        ),
+    ]
+    _latest, stable, _reg = entry_pointers(refs)
+    assert stable == "v10.0.0-bbccdde-e4f5a6b"
+
+
+def test_entry_pointers_fallback_never_compares_ref_name_to_image_tag():
+    """Regression for the Bugbot finding: when no row has `is_stable` set
+    (legacy data or sync hasn't propagated yet), the lexicographic
+    fallback must compare ref_name to ref_name — never to image_tag.
+
+    With `ref_name vs image_tag`:
+        "v2.0.0" > "v1.2.0-aabbccd-e4f5a6b"  is True ('2' > '1')
+    but the previously chosen image_tag's suffix can flip the result in
+    pathological inputs. We assert the cleaner apples-to-apples ordering.
+    """
+    from types import SimpleNamespace
+    from app.services.catalog import entry_pointers
+
+    refs = [
+        SimpleNamespace(
+            ref_name="v1.2.0",
+            ref_type="tag",
+            image_tag="v1.2.0-aabbccd-e4f5a6b",
+            image_registry="ghcr.io/x/y",
+            is_latest=False,
+            is_stable=False,
+        ),
+        SimpleNamespace(
+            ref_name="v2.0.0",
+            ref_type="tag",
+            image_tag="v2.0.0-bbccdde-e4f5a6b",
+            image_registry="ghcr.io/x/y",
+            is_latest=False,
+            is_stable=False,
+        ),
+    ]
+    _latest, stable, _reg = entry_pointers(refs)
+    assert stable == "v2.0.0-bbccdde-e4f5a6b"
+
+
 def test_duplicate_cc_slug_across_sources_fails_loudly():
     cfg = AppConfig(
         sources=[

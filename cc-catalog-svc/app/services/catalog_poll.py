@@ -165,7 +165,17 @@ def _upsert_refs(
         off the stable row.
     """
     now = _utcnow()
-    refs_by_name = {r.ref: r for r in refs}
+    # Group by ref name. Multiple discovered tags can share a single git
+    # ref (e.g. several builds of `main`). The row schema keys on ref_name,
+    # so we have to pick one. Choose the lexicographically-largest
+    # image_tag so the kept entry matches what OCISource.resolve_latest
+    # selects (same ordering); otherwise is_latest never matches the row
+    # that wins the dict and /resolve?pointer=latest 404s.
+    refs_by_name: dict[str, object] = {}
+    for r in refs:
+        existing_choice = refs_by_name.get(r.ref)
+        if existing_choice is None or (r.image_tag or "") > (existing_choice.image_tag or ""):
+            refs_by_name[r.ref] = r
 
     existing = db.execute(select(ImageRef).where(ImageRef.cc_id == cc_row.id)).scalars().all()
     existing_by_name = {v.ref_name: v for v in existing}
@@ -173,11 +183,16 @@ def _upsert_refs(
     upserted = 0
     deactivated = 0
 
-    for name, row in existing_by_name.items():
-        if name not in refs_by_name and row.is_active:
-            row.is_active = False
-            row.updated_at = now
-            deactivated += 1
+    # Skip deactivation entirely when the source returned no refs — that's
+    # almost always a transient registry hiccup, not a real "every image
+    # was deleted". Better to leave catalog state alone and converge on
+    # the next poll.
+    if refs_by_name:
+        for name, row in existing_by_name.items():
+            if name not in refs_by_name and row.is_active:
+                row.is_active = False
+                row.updated_at = now
+                deactivated += 1
 
     for name, ref in refs_by_name.items():
         is_latest_row = latest_tag is not None and ref.image_tag == latest_tag

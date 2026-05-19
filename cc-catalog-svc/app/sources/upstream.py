@@ -25,7 +25,7 @@ old enough that those fields aren't populated.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -105,8 +105,13 @@ class UpstreamCatalogSource(ImageSource):
         candidates = [r for r in refs if r.ref == default_ref]
         if not candidates:
             return None
+        # built_at from `_parse_iso` is timezone-aware; the fallback for
+        # rows that lack it must match or Python raises TypeError when the
+        # sort compares an aware datetime to a naive one. Mirrors the
+        # pattern used in app.sources.oci.
+        epoch_min = datetime.min.replace(tzinfo=timezone.utc)
         candidates.sort(
-            key=lambda r: (r.built_at or datetime.min, r.image_tag)
+            key=lambda r: (r.built_at or epoch_min, r.image_tag)
         )
         return candidates[-1].image_tag
 

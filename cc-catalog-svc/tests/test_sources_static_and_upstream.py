@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 import httpx
 import respx
 
+from app.sources.base import DiscoveredImageRef
 from app.sources.static import StaticSource
 from app.sources.upstream import UpstreamCatalogSource
 
@@ -96,3 +98,33 @@ def test_upstream_source_404_returns_empty():
     ).mock(return_value=httpx.Response(404))
     refs = src.discover_refs({"slug": "unknown"})
     assert refs == []
+
+
+def test_upstream_resolve_latest_mixes_aware_and_naive_built_at():
+    """Regression: when some candidates have tz-aware `built_at` (from
+    `_parse_iso`) and others don't, the fallback sort key must not use a
+    naive `datetime.min` — that raises TypeError when Python compares an
+    offset-aware with an offset-naive datetime.
+    """
+    src = UpstreamCatalogSource(default_upstream_url="https://example")
+    cc = {"slug": "x", "default_ref": "main"}
+    refs = [
+        DiscoveredImageRef(
+            ref="main",
+            ref_type="branch",
+            commit="aaa",
+            rt_revision="111",
+            image_tag="main-aaa-111",
+            built_at=None,  # missing -> falls back to epoch
+        ),
+        DiscoveredImageRef(
+            ref="main",
+            ref_type="branch",
+            commit="bbb",
+            rt_revision="222",
+            image_tag="main-bbb-222",
+            built_at=datetime(2026, 5, 12, 10, 0, 0, tzinfo=timezone.utc),
+        ),
+    ]
+    # Must not raise; the second (aware) ref wins on built_at.
+    assert src.resolve_latest(cc, refs) == "main-bbb-222"

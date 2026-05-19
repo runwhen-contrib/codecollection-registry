@@ -182,12 +182,21 @@ def test_drain_retries_failed_jobs_until_max_attempts(cfg_for_mirror, fake_plugi
     for _ in range(5):  # plenty of drains
         drain_mirror_jobs(cfg_for_mirror)
 
-    from app.models import MirrorJob
+    from app.models import Destination, MirrorJob
     from sqlalchemy import select
     from app.db import session_scope
 
     with session_scope() as s:
         statuses = [r.status for r in s.execute(select(MirrorJob)).scalars().all()]
+        # Regression: when a job exhausts max_attempts, _finish_job must
+        # stamp Destination.last_sync_error. If the failure-path call to
+        # _finish_job skips `ctx`, that update silently becomes dead code
+        # and operators lose visibility into permanent failures.
+        dest = s.execute(
+            select(Destination).where(Destination.name == "acme-jfrog")
+        ).scalar_one()
+        assert dest.last_sync_error is not None
+        assert "simulated push failure" in (dest.last_sync_error or "")
     assert all(st == "failed" for st in statuses)
 
 

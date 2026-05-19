@@ -21,7 +21,6 @@ from sqlalchemy.orm import Query
 from app.models import CodeCollection
 
 PUBLIC_VISIBILITY = "public"
-HIDDEN_VISIBILITY = "hidden"
 
 
 def public_only(query: Query) -> Query:
@@ -31,8 +30,3 @@ def public_only(query: Query) -> Query:
     endpoint (anything PAPI / corestate would NOT call).
     """
     return query.filter(CodeCollection.visibility == PUBLIC_VISIBILITY)
-
-
-def is_public(cc: CodeCollection) -> bool:
-    """Predicate version for code paths that already have a loaded row."""
-    return (cc.visibility or PUBLIC_VISIBILITY) == PUBLIC_VISIBILITY

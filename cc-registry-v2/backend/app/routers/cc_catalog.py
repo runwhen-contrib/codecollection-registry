@@ -58,22 +58,37 @@ def _to_image_ref(v: CodeCollectionVersion) -> ImageRef:
 
 
 def _entry_pointers(versions: list[CodeCollectionVersion]) -> tuple[Optional[str], Optional[str], Optional[str]]:
-    """Pull (latest_tag, stable_tag, image_registry) out of a CC's versions."""
+    """Pull (latest_tag, stable_tag, image_registry) out of a CC's versions.
+
+    `stable` is re-derived here from version_type=='tag' rows because the
+    schema does not (yet) track `is_stable` on CodeCollectionVersion —
+    cc-catalog-svc's ImageRef does. The comparison is apples-to-apples
+    (version_name vs version_name), never mixed against image_tag — that
+    would compare "v1.2.0" against "v1.2.0-aabbccd-e4f5a6b" and let the
+    suffix flip the result.
+
+    Caveat: the comparison is still lexicographic, so multi-digit semver
+    components ("v10.0.0" vs "v9.0.0") will still mis-sort. The cleaner
+    fix is to add `is_stable` to the model and set it in the sync task
+    using the source plugin's semver-aware resolver (cc-catalog-svc
+    already does this).
+    """
     latest_tag: Optional[str] = None
     stable_tag: Optional[str] = None
+    stable_version_name: Optional[str] = None
     image_registry: Optional[str] = None
     for v in versions:
         if v.image_registry and not image_registry:
             image_registry = v.image_registry
         if v.is_latest and v.image_tag:
             latest_tag = v.image_tag
-        # `stable` = the highest semver tag (mirrors OCISource.resolve_stable).
         if (
             v.image_tag
             and v.version_type == "tag"
-            and (stable_tag is None or v.version_name > stable_tag)
+            and (stable_version_name is None or v.version_name > stable_version_name)
         ):
             stable_tag = v.image_tag
+            stable_version_name = v.version_name
     # Fall back to `latest` if no semver tag is present.
     return latest_tag, (stable_tag or latest_tag), image_registry
 
@@ -150,7 +165,11 @@ def list_refs(
     include_inactive: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> list[ImageRef]:
-    cc = db.query(CodeCollection).filter(CodeCollection.slug == slug).first()
+    cc = (
+        db.query(CodeCollection)
+        .filter(CodeCollection.slug == slug, CodeCollection.is_active.is_(True))
+        .first()
+    )
     if cc is None:
         raise HTTPException(status_code=404, detail=f"unknown codecollection: {slug}")
     versions = list(cc.versions)
@@ -165,7 +184,11 @@ def get_ref(slug: str, ref: str, db: Session = Depends(get_db)) -> ImageRef:
     row = (
         db.query(CodeCollectionVersion)
         .join(CodeCollection, CodeCollectionVersion.codecollection_id == CodeCollection.id)
-        .filter(CodeCollection.slug == slug, CodeCollectionVersion.version_name == ref)
+        .filter(
+            CodeCollection.slug == slug,
+            CodeCollection.is_active.is_(True),
+            CodeCollectionVersion.version_name == ref,
+        )
         .first()
     )
     if row is None or not row.image_tag:
@@ -179,7 +202,7 @@ def get_ref(slug: str, ref: str, db: Session = Depends(get_db)) -> ImageRef:
 def resolve_image(
     slug: str,
     pointer: Optional[str] = Query(
-        None, regex="^(latest|stable)$",
+        None, pattern="^(latest|stable)$",
         description="Resolve a named pointer ('latest' or 'stable').",
     ),
     ref: Optional[str] = Query(

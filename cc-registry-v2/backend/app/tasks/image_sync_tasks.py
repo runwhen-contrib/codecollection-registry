@@ -160,7 +160,17 @@ def _upsert_versions(
     deactivated = 0
     now = datetime.utcnow()
 
-    refs_by_name = {r.ref: r for r in refs}
+    # Group by ref name. Multiple discovered tags can share a single git ref
+    # (e.g. several builds of `main`). The row schema keys on version_name,
+    # so we have to pick one. Choose the lexicographically-largest image_tag
+    # so the kept entry matches what OCISource.resolve_latest selects (it
+    # uses the same ordering); without this, is_latest never matches the
+    # row that wins the dict and the /resolve?pointer=latest path 404s.
+    refs_by_name: dict[str, DiscoveredImageRef] = {}
+    for r in refs:
+        existing_choice = refs_by_name.get(r.ref)
+        if existing_choice is None or (r.image_tag or "") > (existing_choice.image_tag or ""):
+            refs_by_name[r.ref] = r
 
     existing_versions = (
         db.query(CodeCollectionVersion)
@@ -170,11 +180,23 @@ def _upsert_versions(
     existing_by_name = {v.version_name: v for v in existing_versions}
 
     # Deactivate rows that no longer appear in the source.
-    for name, row in existing_by_name.items():
-        if name not in refs_by_name and row.is_active:
-            row.is_active = False
-            row.updated_at = now
-            deactivated += 1
+    #   - Skip the whole pass when refs is empty: an empty registry response
+    #     usually means transient flake / first-time CC, not "every image
+    #     was deleted". Better to leave the catalog state alone and let the
+    #     next sync converge.
+    #   - Only touch image-bearing rows; other processes (git branch/tag
+    #     tracking via VersionCodebundle / RawRepositoryData) create CCV
+    #     rows without an image_tag and must not be flipped off here.
+    if refs_by_name:
+        for name, row in existing_by_name.items():
+            if (
+                name not in refs_by_name
+                and row.is_active
+                and row.image_tag
+            ):
+                row.is_active = False
+                row.updated_at = now
+                deactivated += 1
 
     # Upsert each discovered ref.
     for name, ref in refs_by_name.items():

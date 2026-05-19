@@ -358,13 +358,20 @@ def drain_mirror_jobs(
 
 
 def _run_one_job(ctx: dict, timeout: int) -> bool:
-    """Execute a single mirror job. Returns True on success."""
+    """Execute a single mirror job. Returns True on success.
+
+    `ctx` is threaded into every `_finish_job` call (both success and
+    failure) so the destination's `last_sync_error` / `last_synced` rows
+    stay accurate. Skipping `ctx` on failure makes the error-state update
+    in `_finish_job` silently dead code.
+    """
     plugin = get_destination(ctx["destination_type"])
     if plugin is None:
         _finish_job(
             ctx["job_id"],
             success=False,
             error=f"unknown destination type {ctx['destination_type']!r}",
+            ctx=ctx,
         )
         return False
 
@@ -388,6 +395,7 @@ def _run_one_job(ctx: dict, timeout: int) -> bool:
             ctx["job_id"],
             success=False,
             error=f"destination exists() failed: {exc!r}",
+            ctx=ctx,
         )
         return False
 
@@ -413,6 +421,7 @@ def _run_one_job(ctx: dict, timeout: int) -> bool:
         success=False,
         log_text=result.log_text,
         error=result.error,
+        ctx=ctx,
     )
     return False
 
