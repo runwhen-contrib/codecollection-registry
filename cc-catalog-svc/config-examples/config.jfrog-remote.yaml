@@ -42,46 +42,49 @@ sources:
     type: oci
     auth:
       # HTTP Basic against JFrog (LDAP user + password, or user + access
-      # token used as the password). This matches the curl command the
-      # customer verified end-to-end:
+      # token used as the password). Equivalent to:
       #
-      #   curl -u "$JCR_USER:$JCR_PASS" \
-      #     https://artifactory.rw.backforest.ca/artifactory/api/docker/docker-ghcr/v2/<image>/tags/list
-      user_env: JCR_USER
-      pass_env: JCR_PASS
+      #   curl -u "$JFROG_USER:$JFROG_PASS" \
+      #     https://artifactory.example.com/artifactory/api/docker/<repo>/v2/<image>/tags/list
+      user_env: JFROG_USER
+      pass_env: JFROG_PASS
       # If you prefer a bearer access token instead, swap to:
-      # token_env: JCR_TOKEN
+      # token_env: JFROG_ACCESS_TOKEN
 
     codecollections:
+      # `image_registry` is the JFrog-side path consumers pull from:
+      #   <jfrog-host>/<remote-docker-repo-key>/<upstream-path>
+      # Replace `artifactory.example.com` with your JFrog hostname and
+      # `docker-ghcr` with whatever you named the Remote Docker repo.
       - slug: rw-cli-codecollection
         name: RunWhen CLI CodeCollection
         git_url: https://github.com/runwhen-contrib/rw-cli-codecollection
-        image_registry: artifactory.rw.backforest.ca/docker-ghcr/runwhen-contrib/rw-cli-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-cli-codecollection
 
       - slug: rw-public-codecollection
         name: RunWhen Public CodeCollection
         git_url: https://github.com/runwhen-contrib/rw-public-codecollection
-        image_registry: artifactory.rw.backforest.ca/docker-ghcr/runwhen-contrib/rw-public-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-public-codecollection
 
       - slug: rw-generic-codecollection
         name: RunWhen Generic CodeCollection
         git_url: https://github.com/runwhen-contrib/rw-generic-codecollection
-        image_registry: artifactory.rw.backforest.ca/docker-ghcr/runwhen-contrib/rw-generic-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-generic-codecollection
 
       - slug: rw-workspace-utils
         name: RunWhen Workspace Utilities CodeCollection
         git_url: https://github.com/runwhen-contrib/rw-workspace-utils
-        image_registry: artifactory.rw.backforest.ca/docker-ghcr/runwhen-contrib/rw-workspace-utils
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-workspace-utils
 
       - slug: aws-c7n-codecollection
         name: AWS CloudCustodian CodeCollection
         git_url: https://github.com/runwhen-contrib/aws-c7n-codecollection
-        image_registry: artifactory.rw.backforest.ca/docker-ghcr/runwhen-contrib/aws-c7n-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/aws-c7n-codecollection
 
       - slug: azure-c7n-codecollection
         name: Azure CloudCustodian CodeCollection
         git_url: https://github.com/runwhen-contrib/azure-c7n-codecollection
-        image_registry: artifactory.rw.backforest.ca/docker-ghcr/runwhen-contrib/azure-c7n-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/azure-c7n-codecollection
 
 # ------------------------------------------------------------------------
 # NO `destinations:` block.
