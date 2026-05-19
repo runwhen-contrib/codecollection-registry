@@ -1,0 +1,28 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Runtime data: the SQLite DB lives here in local dev. Don't commit it.
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Local config overrides (the example file *is* checked in, see
+# config-examples/). Real secrets must never land in git.
+config.local.yaml
+.env
+.env.*
+!.env.example
+
+# Docker-managed volume mount targets
+.docker-data/

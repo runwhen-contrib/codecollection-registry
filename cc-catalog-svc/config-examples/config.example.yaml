@@ -1,0 +1,153 @@
+# cc-catalog-svc — example configuration.
+#
+# Copy this to `config.yaml` (or set `CC_CATALOG_CONFIG_FILE`) and edit
+# in place. Secrets must NEVER live in this file — only the names of
+# env vars that hold the secret values (see `auth.token_env` below).
+#
+# Validation runs at startup; an invalid file fails the container fast
+# instead of silently running with a half-formed config.
+
+storage:
+  # Optional override of CC_CATALOG_DB_URL. Most deployments leave this
+  # commented out and use the env var so they can rotate DSNs without
+  # touching the ConfigMap.
+  # url: postgresql+psycopg2://catalog:secret@catalog-db:5432/catalog
+
+catalog_api:
+  prefix: /api/v1/catalog   # PAPI-compatible contract path
+
+scheduler:
+  catalog_poll_minutes: 5   # how often to poll sources
+  mirror_poll_minutes: 5    # how often to enqueue + drain mirror work
+  mirror_workers: 2         # concurrent crane copies
+  per_job_timeout_seconds: 600
+
+# ------------------------------------------------------------------------
+# Sources — where to discover image refs from.
+#
+# A source can list any number of CodeCollections; one CC must NOT appear
+# under more than one source (the loader validates this and fails fast).
+#
+# Auth: every source has an optional `auth:` block with EITHER a bearer
+# token OR a HTTP Basic user+pass pair. Names point at env vars; the
+# YAML itself is safe to commit. Validators enforce "exactly one mode";
+# misconfigurations fail fast at startup.
+# ------------------------------------------------------------------------
+sources:
+  # Default RunWhen-on-the-public-internet shape: anonymous against GHCR.
+  # The OCI source falls into the public-GHCR bearer-realm dance for you.
+  - name: ghcr-runwhen-contrib
+    type: oci
+    # auth:                # omit entirely == anonymous (works for public GHCR)
+    codecollections:
+      - slug: rw-cli-codecollection
+        name: RunWhen CLI CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-cli-codecollection
+        image_registry: ghcr.io/runwhen-contrib/rw-cli-codecollection
+      - slug: rw-public-codecollection
+        name: RunWhen Public CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-public-codecollection
+        image_registry: ghcr.io/runwhen-contrib/rw-public-codecollection
+      - slug: rw-generic-codecollection
+        name: RunWhen Generic CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-generic-codecollection
+        image_registry: ghcr.io/runwhen-contrib/rw-generic-codecollection
+      - slug: rw-workspace-utils
+        name: RunWhen Workspace Utilities CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-workspace-utils
+        image_registry: ghcr.io/runwhen-contrib/rw-workspace-utils
+      - slug: aws-c7n-codecollection
+        name: AWS CloudCustodian CodeCollection
+        git_url: https://github.com/runwhen-contrib/aws-c7n-codecollection
+        image_registry: ghcr.io/runwhen-contrib/aws-c7n-codecollection
+      - slug: azure-c7n-codecollection
+        name: Azure CloudCustodian CodeCollection
+        git_url: https://github.com/runwhen-contrib/azure-c7n-codecollection
+        image_registry: ghcr.io/runwhen-contrib/azure-c7n-codecollection
+
+  # ------------------------------------------------------------------------
+  # Self-hosted: JFrog Artifactory as a Remote Docker repo proxying ghcr.io.
+  #
+  # The catalog polls JFrog directly using the canonical OCI path
+  # (/v2/<repo-key>/<image>/tags/list), JFrog proxies tag listings to the
+  # upstream when "List Remote Folder Content" is enabled, and consumers
+  # pull from JFrog (the same URL the catalog publishes). The catalog
+  # process only ever talks to artifactory.rw.example.com — no ghcr.io
+  # egress required.
+  # ------------------------------------------------------------------------
+  # - name: jfrog-remote-runwhen
+  #   type: oci
+  #   auth:
+  #     # Option A: bearer token (JFrog access token, GHCR PAT, etc.)
+  #     token_env: JFROG_ACCESS_TOKEN
+  #     # Option B: HTTP Basic (LDAP user, or user + access-token-as-password)
+  #     # user_env: JFROG_USER
+  #     # pass_env: JFROG_PASS
+  #   codecollections:
+  #     - slug: rw-cli-codecollection
+  #       name: RunWhen CLI CodeCollection
+  #       git_url: https://github.com/runwhen-contrib/rw-cli-codecollection
+  #       image_registry: artifactory.rw.example.com/docker-ghcr/runwhen-contrib/rw-cli-codecollection
+  #     - slug: rw-public-codecollection
+  #       image_registry: artifactory.rw.example.com/docker-ghcr/runwhen-contrib/rw-public-codecollection
+
+  # Self-hosted instance can also chain off another cc-catalog-svc (or the
+  # public cc-registry-v2) instead of polling OCI directly.
+  # - name: runwhen-public
+  #   type: upstream
+  #   options:
+  #     upstream_url: https://registry.runwhen.com
+  #   codecollections:
+  #     - slug: rw-cli-codecollection
+  #     - slug: rw-public-codecollection
+
+# ------------------------------------------------------------------------
+# Destinations — where to mirror the discovered images to.
+#
+# THIS BLOCK IS OPTIONAL. Leave it omitted (or all commented out, as
+# below) and the catalog runs in pull-only mode: it polls the sources,
+# publishes the catalog API, and never attempts to push anywhere. That
+# is the right shape for two common cases:
+#
+#   1. You're just exposing the public registry — consumers pull from the
+#      same `image_registry` URLs the catalog publishes.
+#   2. You're using JFrog Artifactory as a Remote Docker repo (Pattern C
+#      in docs/JFROG.md) — JFrog handles the upstream pull + cache on
+#      demand, so cc-catalog-svc has nothing to mirror.
+#
+# Uncomment + edit the block below ONLY when you actually want this
+# service to copy images from a source registry to a destination (e.g.
+# an internal JFrog you're pre-populating, or a backup registry).
+# Each destination is a `(type, config)` pair. v1 ships the `jfrog`
+# plugin; additional types (ecr, gar, harbor) drop in here later.
+# ------------------------------------------------------------------------
+# destinations:
+#   - name: acme-jfrog
+#     type: jfrog
+#     base_url: https://acme.jfrog.io
+#     repo_key: runwhen-virtual          # Artifactory repo, must already exist
+#     path_prefix: codecollections       # optional path under the repo
+#     auth:
+#       # Set EXACTLY ONE of token_env / user_env+pass_env / docker_config_env.
+#
+#       # Option A: Bearer access token (preferred — easy to scope/rotate).
+#       # Generate via Artifactory: User Profile -> Generate Access Token.
+#       token_env: JFROG_ACCESS_TOKEN
+#
+#       # Option B: HTTP Basic (LDAP user, or user + access token used as pwd).
+#       # user_env: JFROG_USER
+#       # pass_env: JFROG_PASS
+#
+#       # Option C: reuse an existing k8s pull secret mounted as a file. Crane
+#       # reads <dir>/config.json directly.
+#       # docker_config_env: JFROG_DOCKER_CONFIG
+#
+#     enable_xray_scan: false            # POST /xray/scanArtifact after push
+#
+#     mirror:
+#       # CC slugs to mirror, or ["*"] for every CC the catalog knows.
+#       codecollections: ["*"]
+#       include_pointers: [latest, stable]
+#       include_branches: [main]
+#       include_semver_tags: true
+#       include_pr_refs: false

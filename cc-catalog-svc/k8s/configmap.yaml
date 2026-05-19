@@ -1,0 +1,65 @@
+# ConfigMap holding the cc-catalog-svc config.yaml.
+#
+# Mount path matches the default CC_CATALOG_CONFIG_FILE (/app/config.yaml).
+# Update the inline YAML below as your destinations / sources change, or
+# generate it from cluster Kustomize configMapGenerator instead.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cc-catalog-svc-config
+  namespace: cc-catalog-svc
+data:
+  config.yaml: |
+    storage: {}
+    catalog_api:
+      prefix: /api/v1/catalog
+    scheduler:
+      catalog_poll_minutes: 5
+      mirror_poll_minutes: 5
+      mirror_workers: 2
+      per_job_timeout_seconds: 600
+
+    sources:
+      - name: ghcr-runwhen-contrib
+        type: oci
+        codecollections:
+          - slug: rw-cli-codecollection
+            name: RunWhen CLI CodeCollection
+            git_url: https://github.com/runwhen-contrib/rw-cli-codecollection
+            image_registry: ghcr.io/runwhen-contrib/rw-cli-codecollection
+          - slug: rw-public-codecollection
+            name: RunWhen Public CodeCollection
+            git_url: https://github.com/runwhen-contrib/rw-public-codecollection
+            image_registry: ghcr.io/runwhen-contrib/rw-public-codecollection
+          - slug: rw-generic-codecollection
+            name: RunWhen Generic CodeCollection
+            git_url: https://github.com/runwhen-contrib/rw-generic-codecollection
+            image_registry: ghcr.io/runwhen-contrib/rw-generic-codecollection
+          - slug: rw-workspace-utils
+            name: RunWhen Workspace Utilities CodeCollection
+            git_url: https://github.com/runwhen-contrib/rw-workspace-utils
+            image_registry: ghcr.io/runwhen-contrib/rw-workspace-utils
+          - slug: aws-c7n-codecollection
+            name: AWS CloudCustodian CodeCollection
+            git_url: https://github.com/runwhen-contrib/aws-c7n-codecollection
+            image_registry: ghcr.io/runwhen-contrib/aws-c7n-codecollection
+          - slug: azure-c7n-codecollection
+            name: Azure CloudCustodian CodeCollection
+            git_url: https://github.com/runwhen-contrib/azure-c7n-codecollection
+            image_registry: ghcr.io/runwhen-contrib/azure-c7n-codecollection
+
+    destinations:
+      - name: acme-jfrog
+        type: jfrog
+        base_url: https://acme.jfrog.io
+        repo_key: runwhen-virtual
+        path_prefix: codecollections
+        auth:
+          token_env: JFROG_ACCESS_TOKEN
+        enable_xray_scan: false
+        mirror:
+          codecollections: ["*"]
+          include_pointers: [latest, stable]
+          include_branches: [main]
+          include_semver_tags: true
+          include_pr_refs: false
