@@ -84,8 +84,10 @@ jobs:
           git config --global user.name "${GITHUB_ACTOR}"
 
           # Same YYYY-MM-DD.N scheme as release.yaml; image name disambiguates.
+          # Use `git tag --list` (not grep): with set -e, grep exits 1 when there
+          # are no tags for today yet and the step fails before tagging.
           BASE_TAG=$(date "+%Y-%m-%d")
-          last=$(git tag | grep "^${BASE_TAG}" | awk -F '.' '{print $NF}' | sort -n | tail -1)
+          last=$(git tag --list "${BASE_TAG}.*" | awk -F '.' '{print $NF}' | sort -n | tail -1)
           next=$([ -z "$last" ] && echo 1 || echo $((last + 1)))
           NEW_TAG="${BASE_TAG}.${next}"
 
