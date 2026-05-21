@@ -15,5 +15,16 @@ def test_repos_to_bake_reads_codecollections_without_runtime_git_enabled():
     pairs = repos_to_bake(cfg)
     slugs = {slug for slug, _ in pairs}
     assert "rw-cli-codecollection" in slugs
-    assert "ss-cli-codecollection" in slugs
-    assert len(pairs) == 7
+    assert len(pairs) == 6
+
+
+def test_git_auth_args_uses_github_basic_token(monkeypatch):
+    from app.config import GitAuth
+    from app.services import git_mirror as gm
+
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_test")
+    args = gm._git_auth_args(GitAuth(token_env="GITHUB_TOKEN"))
+    assert len(args) == 2
+    assert args[0] == "-c"
+    assert args[1].startswith("http.extraHeader=Authorization: Basic ")
+    assert "Bearer" not in args[1]

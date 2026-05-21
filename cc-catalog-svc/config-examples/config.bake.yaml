@@ -33,6 +33,3 @@ sources:
       - slug: azure-c7n-codecollection
         git_url: https://github.com/runwhen-contrib/azure-c7n-codecollection
         image_registry: ghcr.io/runwhen-contrib/azure-c7n-codecollection
-      - slug: ss-cli-codecollection
-        git_url: https://github.com/stewartshea/rw-cli-codecollection
-        image_registry: ghcr.io/stewartshea/rw-cli-codecollection

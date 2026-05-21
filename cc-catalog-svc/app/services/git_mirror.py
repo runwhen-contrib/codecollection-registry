@@ -6,7 +6,7 @@ mirror clones of each configured CodeCollection's ``git_url`` under
 ``git.data_dir``. The mirrors are served read-only via git smart HTTP
 (see ``app/git_http``).
 
-Upstream fetch uses the optional ``git.auth`` block (Bearer token or
+Upstream fetch uses the optional ``git.auth`` block (PAT via ``token_env`` or
 HTTP Basic) so private GitHub repos can be mirrored during the brief
 window when outbound access is available.
 """
@@ -188,7 +188,13 @@ def _git_auth_args(auth: GitAuth) -> list[str]:
     args: list[str] = []
     token = os.environ.get(auth.token_env, "") if auth.token_env else ""
     if token:
-        args.extend(["-c", f"http.extraHeader=Authorization: Bearer {token}"])
+        # GitHub git HTTPS expects Basic x-access-token, not Bearer (API-only).
+        args.extend(
+            [
+                "-c",
+                f"http.extraHeader=Authorization: Basic {_basic_auth('x-access-token', token)}",
+            ]
+        )
         return args
 
     user = os.environ.get(auth.user_env, "") if auth.user_env else ""
