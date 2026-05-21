@@ -52,10 +52,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # operator instinct carries over.
 RUN groupadd --system --gid 1000 catalog \
  && useradd --system --uid 1000 --gid 1000 --home /home/catalog --create-home catalog \
- && mkdir -p /app /data \
+ && mkdir -p /app /data /data/git \
  && chown -R catalog:catalog /app /data
 
 COPY --from=crane /usr/local/bin/crane /usr/local/bin/crane
+
+# git is required for upstream mirror fetch/update (clone --mirror, remote update).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 # README.md is referenced from pyproject.toml's `readme = "README.md"`, so

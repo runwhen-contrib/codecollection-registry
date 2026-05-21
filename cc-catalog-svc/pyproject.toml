@@ -25,6 +25,7 @@ dependencies = [
     "apscheduler>=3.10,<4",
     "httpx>=0.27,<0.30",
     "pyyaml>=6.0,<7",
+    "dulwich>=0.22,<0.24",
     # Optional Postgres support: import is lazy in db.py
     "psycopg2-binary>=2.9; extra == 'postgres'",
 ]

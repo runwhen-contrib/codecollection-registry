@@ -16,6 +16,7 @@ Run modes:
                scheduler. Useful when running 2+ API replicas behind a
                load balancer and a single dedicated scheduler pod.
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,9 +26,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import __version__
-from app.config import get_settings, load_config
+from app.config import get_settings, load_config, get_config
 from app.db import get_engine, init_db
-from app.routers import admin, catalog, health, mirror
+from app.routers import admin, catalog, git, health, mirror
 from app.scheduler import start_scheduler, stop_scheduler
 
 
@@ -48,8 +49,20 @@ async def lifespan(app: FastAPI):
     load_config()
     init_db()
 
+    cfg = get_config()
+    if cfg.git.enabled:
+        from starlette.middleware.wsgi import WSGIMiddleware
+
+        from app.git_http import make_git_wsgi_app
+
+        mount = cfg.git.mount_path.rstrip("/") or "/git"
+        app.mount(mount, WSGIMiddleware(make_git_wsgi_app(cfg.git.data_dir)))
+        logger.info("git smart HTTP mounted at %s (data_dir=%s)", mount, cfg.git.data_dir)
+
     if os.environ.get("CC_CATALOG_DISABLE_SCHEDULER", "").lower() not in (
-        "1", "true", "yes",
+        "1",
+        "true",
+        "yes",
     ):
         start_scheduler()
     else:
@@ -69,8 +82,9 @@ app = FastAPI(
     title="cc-catalog-svc",
     description=(
         "Self-contained CodeCollection image catalog + mirror microservice. "
-        "PAPI-compatible catalog API plus a destination plugin system for "
-        "mirroring images into customer registries (JFrog Artifactory in v1)."
+        "PAPI-compatible catalog API, optional git mirror hosting for air-gapped "
+        "deployments, and a destination plugin system for mirroring images into "
+        "customer registries (JFrog Artifactory in v1)."
     ),
     version=__version__,
     lifespan=lifespan,
@@ -82,6 +96,7 @@ app = FastAPI(
 app.include_router(health.router)
 app.include_router(catalog.router)
 app.include_router(mirror.router)
+app.include_router(git.router)
 app.include_router(admin.router)
 
 

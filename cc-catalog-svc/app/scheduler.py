@@ -17,6 +17,7 @@ architecture-agnostic.
 
 The scheduler is wired in via the FastAPI lifespan in `app/main.py`.
 """
+
 from __future__ import annotations
 
 import logging
@@ -27,6 +28,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.config import get_config
 from app.services.catalog_poll import run_catalog_poll
+from app.services.git_mirror import run_git_sync
 from app.services.mirror import (
     drain_mirror_jobs,
     enqueue_mirror_jobs,
@@ -96,13 +98,25 @@ def start_scheduler() -> BackgroundScheduler:
         next_run_time=_now_plus(seconds=45),
     )
 
+    if cfg.git.enabled:
+        bg.add_job(
+            run_git_sync,
+            trigger="interval",
+            minutes=sched.git_sync_minutes,
+            id="git-sync",
+            name="git-sync",
+            next_run_time=_now_plus(seconds=60),
+        )
+
     bg.start()
     _scheduler = bg
     logger.info(
-        "scheduler started: catalog_poll=%dm mirror_poll=%dm workers=%d",
+        "scheduler started: catalog_poll=%dm mirror_poll=%dm workers=%d git_sync=%dm enabled=%s",
         sched.catalog_poll_minutes,
         sched.mirror_poll_minutes,
         sched.mirror_workers,
+        sched.git_sync_minutes,
+        cfg.git.enabled,
     )
     return bg
 
@@ -120,4 +134,5 @@ def _now_plus(*, seconds: int):
     """A small initial delay so we don't run jobs before the HTTP
     listener is up — keeps the first /readyz probe honest."""
     from datetime import datetime, timedelta, timezone
+
     return datetime.now(timezone.utc) + timedelta(seconds=seconds)
