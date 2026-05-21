@@ -116,6 +116,34 @@ def test_resolve_git_url_uses_public_mirror_when_present(git_enabled_config, db_
     )
 
 
+def test_run_git_sync_skips_when_runtime_sync_disabled(git_enabled_config, monkeypatch):
+    git_enabled_config.git.runtime_sync = False
+    config_mod._CONFIG_CACHE = git_enabled_config
+
+    def fail_git(*args, **kwargs):
+        raise AssertionError("git should not run when runtime_sync is false")
+
+    monkeypatch.setattr("app.services.git_mirror.sync_one_repo", fail_git)
+    summary = run_git_sync(git_enabled_config)
+    assert summary["skipped"]
+    assert summary["repos_processed"] == 0
+
+
+def test_run_git_sync_force_overrides_runtime_sync_disabled(
+    git_enabled_config, db_session, monkeypatch
+):
+    git_enabled_config.git.runtime_sync = False
+    config_mod._CONFIG_CACHE = git_enabled_config
+
+    monkeypatch.setattr(
+        "app.services.git_mirror.sync_one_repo",
+        lambda slug, url, git_cfg: "deadbeef",
+    )
+    summary = run_git_sync(git_enabled_config, force=True)
+    assert summary["repos_updated"] == 1
+    assert "skipped" not in summary
+
+
 def test_run_git_sync_clone_and_update(git_enabled_config, monkeypatch):
     calls: list[list[str]] = []
 
@@ -172,7 +200,12 @@ def test_git_api_lists_repos(git_enabled_config, git_client):
 def test_admin_sync_git(git_enabled_config, client, monkeypatch):
     monkeypatch.setattr(
         "app.routers.admin.run_git_sync",
-        lambda: {"enabled": True, "repos_processed": 0, "repos_updated": 0, "errors": []},
+        lambda **kwargs: {
+            "enabled": True,
+            "repos_processed": 0,
+            "repos_updated": 0,
+            "errors": [],
+        },
     )
     resp = client.post(
         "/api/v1/admin/sync-git",

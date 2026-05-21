@@ -1,5 +1,6 @@
 # cc-catalog-svc image.
 #
+# syntax=docker/dockerfile:1.4
 # Two layers worth of intent:
 #
 #   1. A small Python runtime (python:3.12-slim) running a single uvicorn
@@ -10,11 +11,20 @@
 #      the de-facto tool for OCI image copy. We pin a specific version so
 #      builds are reproducible.
 #
+# Air-gap git mirrors:
+#   CI has outbound git access; the running container may not. When
+#   BAKE_GIT_MIRRORS=true (default in CI), the git-bake stage clones bare
+#   mirrors into /opt/cc-catalog/git — outside the /data volume so a PVC
+#   mount does not hide baked repos. Deploy with git.data_dir=/opt/cc-catalog/git
+#   and git.runtime_sync=false (see config-examples/config.airgap.yaml).
+#
 # Read-only-rootfs friendly: the only writable path the service needs is
 # /data (SQLite DB + crane's auth cache). Mount a volume there in k8s.
 
 ARG PYTHON_VERSION=3.12-slim
 ARG CRANE_VERSION=v0.20.2
+ARG BAKE_GIT_MIRRORS=true
+ARG BAKE_CONFIG=config-examples/config.bake.yaml
 
 # -----------------------------------------------------------------------------
 # Stage 1: fetch crane. Doing this in a tiny scratch-ish stage keeps the
@@ -39,7 +49,33 @@ RUN set -eux; \
     /usr/local/bin/crane version
 
 # -----------------------------------------------------------------------------
-# Stage 2: runtime image.
+# Stage 2: bake git mirrors (CI only — needs outbound network).
+# -----------------------------------------------------------------------------
+FROM python:${PYTHON_VERSION} AS git-bake
+ARG BAKE_GIT_MIRRORS
+ARG BAKE_CONFIG
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY pyproject.toml README.md ./
+COPY app ./app
+COPY scripts ./scripts
+COPY config-examples/config.bake.yaml ./config-examples/config.bake.yaml
+RUN pip install --no-cache-dir .
+RUN mkdir -p /opt/cc-catalog/git
+RUN --mount=type=secret,id=github_token \
+    if [ "${BAKE_GIT_MIRRORS}" = "true" ]; then \
+      export GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)"; \
+      python scripts/bake_git_mirrors.py \
+        --config "${BAKE_CONFIG}" \
+        --dest /opt/cc-catalog/git; \
+    else \
+      echo "BAKE_GIT_MIRRORS=false; skipping git mirror bake"; \
+    fi
+
+# -----------------------------------------------------------------------------
+# Stage 3: runtime image.
 # -----------------------------------------------------------------------------
 FROM python:${PYTHON_VERSION} AS runtime
 
@@ -52,15 +88,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # operator instinct carries over.
 RUN groupadd --system --gid 1000 catalog \
  && useradd --system --uid 1000 --gid 1000 --home /home/catalog --create-home catalog \
- && mkdir -p /app /data /data/git \
- && chown -R catalog:catalog /app /data
+ && mkdir -p /app /data /data/git /opt/cc-catalog/git \
+ && chown -R catalog:catalog /app /data /opt/cc-catalog
 
 COPY --from=crane /usr/local/bin/crane /usr/local/bin/crane
+COPY --from=git-bake /opt/cc-catalog/git /opt/cc-catalog/git
 
-# git is required for upstream mirror fetch/update (clone --mirror, remote update).
+# git binary kept for optional runtime_sync in connected environments.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && chown -R catalog:catalog /opt/cc-catalog/git
 
 WORKDIR /app
 # README.md is referenced from pyproject.toml's `readme = "README.md"`, so

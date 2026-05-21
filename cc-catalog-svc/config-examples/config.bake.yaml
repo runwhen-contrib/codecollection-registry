@@ -1,0 +1,34 @@
+# Docker build manifest — bare git mirrors baked into the release image.
+#
+# Used only by scripts/bake_git_mirrors.py during `docker build`. The running
+# container reads config.yaml from the deployment ConfigMap instead.
+#
+# Keep this in sync with the CodeCollections you ship in air-gap releases.
+
+git:
+  auth:
+    # GITHUB_TOKEN is injected as a BuildKit secret in CI (rate limits + private repos).
+    token_env: GITHUB_TOKEN
+
+sources:
+  - name: bake
+    type: oci
+    codecollections:
+      - slug: rw-cli-codecollection
+        git_url: https://github.com/runwhen-contrib/rw-cli-codecollection
+        image_registry: ghcr.io/runwhen-contrib/rw-cli-codecollection
+      - slug: rw-public-codecollection
+        git_url: https://github.com/runwhen-contrib/rw-public-codecollection
+        image_registry: ghcr.io/runwhen-contrib/rw-public-codecollection
+      - slug: rw-generic-codecollection
+        git_url: https://github.com/runwhen-contrib/rw-generic-codecollection
+        image_registry: ghcr.io/runwhen-contrib/rw-generic-codecollection
+      - slug: rw-workspace-utils
+        git_url: https://github.com/runwhen-contrib/rw-workspace-utils
+        image_registry: ghcr.io/runwhen-contrib/rw-workspace-utils
+      - slug: aws-c7n-codecollection
+        git_url: https://github.com/runwhen-contrib/aws-c7n-codecollection
+        image_registry: ghcr.io/runwhen-contrib/aws-c7n-codecollection
+      - slug: azure-c7n-codecollection
+        git_url: https://github.com/runwhen-contrib/azure-c7n-codecollection
+        image_registry: ghcr.io/runwhen-contrib/azure-c7n-codecollection

@@ -118,17 +118,25 @@ def list_repo_status(cfg: Optional[AppConfig] = None) -> list[GitRepoStatus]:
     return statuses
 
 
-def run_git_sync(config: Optional[AppConfig] = None) -> dict:
-    """Fetch/update every configured git mirror."""
+def run_git_sync(config: Optional[AppConfig] = None, *, force: bool = False) -> dict:
+    """Fetch/update every configured git mirror.
+
+    When ``git.runtime_sync`` is false (air-gap), this is a no-op unless
+    ``force=True`` (admin manual sync).
+    """
     cfg = config or get_config()
     git_cfg = cfg.git
     summary = {
         "enabled": git_cfg.enabled,
+        "runtime_sync": git_cfg.runtime_sync,
         "repos_processed": 0,
         "repos_updated": 0,
         "errors": [],
     }
     if not git_cfg.enabled:
+        return summary
+    if not git_cfg.runtime_sync and not force:
+        summary["skipped"] = "runtime_sync disabled (using build-time baked mirrors)"
         return summary
 
     os.makedirs(git_cfg.data_dir, exist_ok=True)

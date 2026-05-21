@@ -51,4 +51,4 @@ def admin_sync_catalog() -> dict:
     dependencies=[Depends(require_admin)],
 )
 def admin_sync_git() -> dict:
-    return run_git_sync()
+    return run_git_sync(force=True)

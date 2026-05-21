@@ -319,12 +319,20 @@ class GitServiceConfig(BaseModel):
     configured CodeCollection ``git_url`` and serves them read-only at
     ``mount_path``. Catalog API responses rewrite ``git_url`` to
     ``public_base_url/<slug>.git`` once a mirror exists.
+
+    Release images bake mirrors at Docker build time into
+    ``/opt/cc-catalog/git`` (outside the ``/data`` volume). Set
+    ``data_dir: /opt/cc-catalog/git`` and ``runtime_sync: false`` for
+    air-gapped deployments with no outbound git access.
     """
 
     enabled: bool = False
     data_dir: str = Field(
         "/data/git",
-        description="Directory for bare mirror repos (<slug>.git).",
+        description=(
+            "Directory for bare mirror repos (<slug>.git). Use "
+            "/opt/cc-catalog/git for air-gap images with build-time baked mirrors."
+        ),
     )
     mount_path: str = Field(
         "/git",
@@ -336,6 +344,13 @@ class GitServiceConfig(BaseModel):
             "External base URL for clone commands, e.g. "
             "https://cc-catalog.example.com/git. Omit to keep upstream git_url "
             "in catalog responses even when mirrors exist."
+        ),
+    )
+    runtime_sync: bool = Field(
+        True,
+        description=(
+            "When false, skip scheduled/admin background fetch from upstream. "
+            "Use with build-time baked mirrors in air-gapped environments."
         ),
     )
     auth: GitAuth = Field(default_factory=GitAuth)

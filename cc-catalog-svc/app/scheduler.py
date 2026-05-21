@@ -98,7 +98,7 @@ def start_scheduler() -> BackgroundScheduler:
         next_run_time=_now_plus(seconds=45),
     )
 
-    if cfg.git.enabled:
+    if cfg.git.enabled and cfg.git.runtime_sync:
         bg.add_job(
             run_git_sync,
             trigger="interval",
@@ -111,12 +111,13 @@ def start_scheduler() -> BackgroundScheduler:
     bg.start()
     _scheduler = bg
     logger.info(
-        "scheduler started: catalog_poll=%dm mirror_poll=%dm workers=%d git_sync=%dm enabled=%s",
+        "scheduler started: catalog_poll=%dm mirror_poll=%dm workers=%d "
+        "git_sync=%dm git_runtime_sync=%s",
         sched.catalog_poll_minutes,
         sched.mirror_poll_minutes,
         sched.mirror_workers,
         sched.git_sync_minutes,
-        cfg.git.enabled,
+        cfg.git.runtime_sync if cfg.git.enabled else "n/a",
     )
     return bg
 
