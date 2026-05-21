@@ -27,8 +27,11 @@ def repo_exists(data_dir: str, slug: str) -> bool:
     return os.path.isdir(path) and os.path.isfile(os.path.join(path, "HEAD"))
 
 
-def _discover_repos(data_dir: str) -> dict[bytes, str]:
-    repos: dict[bytes, str] = {}
+def _discover_repos(data_dir: str) -> dict[str, "Repo"]:
+    """Map Dulwich URL prefixes (``/<slug>.git``) to open Repo handles."""
+    from dulwich.repo import Repo
+
+    repos: dict[str, Repo] = {}
     if not os.path.isdir(data_dir):
         return repos
     for name in sorted(os.listdir(data_dir)):
@@ -37,7 +40,8 @@ def _discover_repos(data_dir: str) -> dict[bytes, str]:
         path = os.path.join(data_dir, name)
         if os.path.isdir(path) and os.path.isfile(os.path.join(path, "HEAD")):
             slug = name[:-4]  # strip .git
-            repos[f"{slug}.git".encode()] = path
+            # HTTPGitApplication resolves repos via url_prefix() → "/<slug>.git"
+            repos[f"/{slug}.git"] = Repo(path)
     return repos
 
 
