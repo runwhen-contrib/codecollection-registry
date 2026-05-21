@@ -48,9 +48,11 @@ def _discover_repos(data_dir: str) -> dict[str, "Repo"]:
 def make_git_wsgi_app(data_dir: str) -> Callable:
     """Build a WSGI app that serves bare repos under ``data_dir``."""
     from dulwich.server import DictBackend
-    from dulwich.web import HTTPGitApplication
+    from dulwich.web import make_wsgi_chain
 
     repos = _discover_repos(data_dir)
     logger.info("git HTTP: serving %d repo(s) from %s", len(repos), data_dir)
     backend = DictBackend(repos)
-    return HTTPGitApplication(backend)
+    # make_wsgi_chain wraps HTTPGitApplication with GunzipFilter (git clients
+    # gzip upload-pack POST bodies) and LimitedInputFilter (Content-Length).
+    return make_wsgi_chain(backend)
