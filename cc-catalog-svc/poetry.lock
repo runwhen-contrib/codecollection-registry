@@ -184,55 +184,6 @@ files = [
 ]
 
 [[package]]
-name = "dulwich"
-version = "0.23.2"
-description = "Python Git Library"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "dulwich-0.23.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:1896a478cd7e7b90b612814c6245b8e4dc31c23e124237025ac99d11925b9f5b"},
-    {file = "dulwich-0.23.2-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:ec22c6ed9afdd5e6715692d90724be3f5af30b3c7fcfc59209bd4307ad7ecbfd"},
-    {file = "dulwich-0.23.2-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:5a2c4cc671fda1800be2166d31f82c2bbd1a3ab33f3892b913c13c8917adb479"},
-    {file = "dulwich-0.23.2-cp310-cp310-win32.whl", hash = "sha256:a482affc0bcce1d096530144f52a6a85ff244b80ed874d160838649cf20da4c8"},
-    {file = "dulwich-0.23.2-cp310-cp310-win_amd64.whl", hash = "sha256:b08ab5c86e4804377a03a03e327beb224a0b434675fe34c83711df054a83f4ad"},
-    {file = "dulwich-0.23.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:042b0ab903e17abbc6687677f78ae38b7dbf43b86fe1d73adc20ae7bb1fbabf7"},
-    {file = "dulwich-0.23.2-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:8b25470b129dcaf5b63792b628e583292cec350d897a3a6f0c38d2ad1929fbf0"},
-    {file = "dulwich-0.23.2-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:f416bb5f72f72394c7051bd5072875c917011b763d9b06c39c4ef67045de0dab"},
-    {file = "dulwich-0.23.2-cp311-cp311-win32.whl", hash = "sha256:135791b753a14e9cff98b7525b1dc60dd36d10fb1a3a113089f8ddb6e2828446"},
-    {file = "dulwich-0.23.2-cp311-cp311-win_amd64.whl", hash = "sha256:19fe318a34b5ee65b0cbfb516b07451d751c357b17cb82a6b80d9f59c6ea70e6"},
-    {file = "dulwich-0.23.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:4a83def7610627f3b4ad63d8be35b4b48bf0954ba5eaf960bf795b6fc725b953"},
-    {file = "dulwich-0.23.2-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:de4089f0ea198b4abffe43de6171a981767abf293742eff9b937ed90b16821d5"},
-    {file = "dulwich-0.23.2-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:64bc5d9489a45178040621ad9e94c37fee1166c795b77c972d3d4016ffe29718"},
-    {file = "dulwich-0.23.2-cp312-cp312-win32.whl", hash = "sha256:a620bb343c6019728f784cba2a7b3bada6cc2d299a26f0617dab23d24d682855"},
-    {file = "dulwich-0.23.2-cp312-cp312-win_amd64.whl", hash = "sha256:f90b5c641ce6e8b3365f6b23c7d3c52c994b7af0ed4af3245817ce67f3177251"},
-    {file = "dulwich-0.23.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:e44dec7e36bc035da0ec3df6c1564810699e319ba41b71d17750dd7452e1b2fc"},
-    {file = "dulwich-0.23.2-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:398ba1c0e1581071cdcb38a681e0ff1e046aa8f31bad3bc368266f499c4ddf9e"},
-    {file = "dulwich-0.23.2-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:432c6eeac5edf97ff7090fbac7cda708167ee90e5afa78652d252e87e397f425"},
-    {file = "dulwich-0.23.2-cp313-cp313-win32.whl", hash = "sha256:8555980e8509d7f76e80de58d1eb7bd2c1c317942b7a3c9c113d81dfc287f4c0"},
-    {file = "dulwich-0.23.2-cp313-cp313-win_amd64.whl", hash = "sha256:2b042dca31de4d4a0e88e4dbe20afe804a640c8882eec0de5093bffb34b75370"},
-    {file = "dulwich-0.23.2-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:72931245a0893245fa8e4ec8000c2b5879cc0e78375b7a8a9a51a40f88f6ee52"},
-    {file = "dulwich-0.23.2-cp39-cp39-manylinux_2_28_aarch64.whl", hash = "sha256:146453107836b803291352f61045b1891dc055ebeadfd69f1385a4f89dac3c68"},
-    {file = "dulwich-0.23.2-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:559b42e4788b2bae16b836632e523fb0b9aaa358df5921ec18df1089fdd9e056"},
-    {file = "dulwich-0.23.2-cp39-cp39-win32.whl", hash = "sha256:33a80b35aefd496576e84227ce3c4662884811ed67749e30062ab971ca92fcb4"},
-    {file = "dulwich-0.23.2-cp39-cp39-win_amd64.whl", hash = "sha256:a57fe099e8d22c5168f5902ccf283a7693629963258d5f3e2fde359f541f063e"},
-    {file = "dulwich-0.23.2-py3-none-any.whl", hash = "sha256:0b0439d309cf808f7955f74776981d9ac9dc1ec715aa39798de9b22bb95ac163"},
-    {file = "dulwich-0.23.2.tar.gz", hash = "sha256:a152ebb0e95bc0f23768be563f80ff1e719bf5c4f5c2696be4fa8ab625a39879"},
-]
-
-[package.dependencies]
-urllib3 = ">=1.25"
-
-[package.extras]
-dev = ["dissolve (>=0.1.1)", "mypy (==1.16.1)", "ruff (==0.12.1)"]
-fastimport = ["fastimport"]
-fuzzing = ["atheris"]
-https = ["urllib3 (>=1.24.1)"]
-merge = ["merge3"]
-paramiko = ["paramiko"]
-pgp = ["gpg"]
-
-[[package]]
 name = "fastapi"
 version = "0.119.1"
 description = "FastAPI framework, high performance, easy to learn, fast to code, ready for production"
@@ -1377,24 +1328,6 @@ tzdata = {version = "*", markers = "platform_system == \"Windows\""}
 devenv = ["check-manifest", "pytest (>=4.3)", "pytest-cov", "pytest-mock (>=3.3)", "zest.releaser"]
 
 [[package]]
-name = "urllib3"
-version = "2.7.0"
-description = "HTTP library with thread-safe connection pooling, file post, and more."
-optional = false
-python-versions = ">=3.10"
-groups = ["main"]
-files = [
-    {file = "urllib3-2.7.0-py3-none-any.whl", hash = "sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897"},
-    {file = "urllib3-2.7.0.tar.gz", hash = "sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c"},
-]
-
-[package.extras]
-brotli = ["brotli (>=1.2.0) ; platform_python_implementation == \"CPython\"", "brotlicffi (>=1.2.0.0) ; platform_python_implementation != \"CPython\""]
-h2 = ["h2 (>=4,<5)"]
-socks = ["pysocks (>=1.5.6,!=1.5.7,<2.0)"]
-zstd = ["backports-zstd (>=1.0.0) ; python_version < \"3.14\""]
-
-[[package]]
 name = "uvicorn"
 version = "0.39.0"
 description = "The lightning-fast ASGI server."
@@ -1683,4 +1616,4 @@ postgres = ["psycopg2-binary"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11"
-content-hash = "036fd03337d23325ea91e4e9d2c340e315d40c0d9ef99161336fadd39e6952b9"
+content-hash = "e5bb5efab99f4dd4ecb5531ff3f7a5947b7c1dc058f9e63da67f2199111da363"

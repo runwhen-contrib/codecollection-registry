@@ -56,10 +56,11 @@ async def lifespan(app: FastAPI):
         from app.git_http import make_git_wsgi_app
 
         mount = cfg.git.mount_path.rstrip("/") or "/git"
-        # Dulwich git smart HTTP uses the WSGI write() callback; Starlette's
-        # deprecated WSGIMiddleware returns None from start_response and drops
-        # streamed pack data (git clone fails with "transfer closed").
-        app.mount(mount, WSGIMiddleware(make_git_wsgi_app(cfg.git.data_dir)))
+        # git http-backend streams packfiles via the WSGI write() callback.
+        app.mount(
+            mount,
+            WSGIMiddleware(make_git_wsgi_app(cfg.git.data_dir), send_queue_size=100),
+        )
         logger.info("git smart HTTP mounted at %s (data_dir=%s)", mount, cfg.git.data_dir)
 
     if os.environ.get("CC_CATALOG_DISABLE_SCHEDULER", "").lower() not in (

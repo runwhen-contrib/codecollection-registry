@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.git_http import make_git_wsgi_app, repo_bare_path
-from app.git_http.server import _discover_repos
+from app.git_http.server import list_bare_repo_slugs
 
 
 def _init_bare_repo(path: str) -> None:
@@ -74,21 +74,46 @@ def _init_bare_repo_many_branches(path: str, *, branches: int = 40) -> None:
         )
 
 
-def test_dulwich_backend_uses_leading_slash_repo_paths(tmp_path):
-    """HTTPGitApplication resolves repos at ``/<slug>.git``, not ``<slug>.git``."""
+def _mount_test_server(tmp_path: str) -> tuple[FastAPI, int]:
+    import socket
+
+    import uvicorn
+
+    api = FastAPI()
+    api.mount("/git", WSGIMiddleware(make_git_wsgi_app(tmp_path)))
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+
+    config = uvicorn.Config(api, host="127.0.0.1", port=port, log_level="error")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    time.sleep(0.5)
+    return api, port
+
+
+def test_bare_repos_discovered_by_slug(tmp_path):
     bare = repo_bare_path(str(tmp_path), "demo-cc")
     _init_bare_repo(bare)
 
-    repos = _discover_repos(str(tmp_path))
-    assert "/demo-cc.git" in repos
-    assert repos["/demo-cc.git"].head() is not None
+    slugs = list_bare_repo_slugs(str(tmp_path))
+    assert slugs == ["demo-cc"]
 
-    # WSGI chain is buildable (GunzipFilter + LimitedInputFilter wrapper).
+    head = subprocess.run(
+        ["git", "--git-dir", bare, "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert head
+
     assert callable(make_git_wsgi_app(str(tmp_path)))
 
 
 def test_info_refs_via_a2wsgi_mount(tmp_path):
-    """Dulwich streams refs via WSGI write(); a2wsgi must expose that callback."""
     bare = repo_bare_path(str(tmp_path), "demo-cc")
     _init_bare_repo(bare)
 
@@ -108,33 +133,12 @@ def test_info_refs_via_a2wsgi_mount(tmp_path):
     assert b"refs/heads/" in resp.content
 
 
-@pytest.mark.skipif(
-    shutil.which("git") is None,
-    reason="git binary required",
-)
-def test_git_clone_gzip_upload_pack_via_a2wsgi_mount(tmp_path):
-    """Git gzip-compresses upload-pack POST bodies; GunzipFilter must be enabled."""
-    import socket
-
-    import uvicorn
-
+@pytest.mark.skipif(shutil.which("git") is None, reason="git binary required")
+def test_git_clone_via_a2wsgi_mount(tmp_path):
     bare = repo_bare_path(str(tmp_path), "many-branches")
     _init_bare_repo_many_branches(bare)
 
-    api = FastAPI()
-    api.mount("/git", WSGIMiddleware(make_git_wsgi_app(str(tmp_path))))
-
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-
-    config = uvicorn.Config(api, host="127.0.0.1", port=port, log_level="error")
-    server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    time.sleep(0.5)
-
+    _, port = _mount_test_server(str(tmp_path))
     dest = tmp_path / "clone"
     result = subprocess.run(
         [
@@ -147,8 +151,36 @@ def test_git_clone_gzip_upload_pack_via_a2wsgi_mount(tmp_path):
         text=True,
         timeout=60,
     )
-    server.should_exit = True
-    thread.join(timeout=5)
-
     assert result.returncode == 0, result.stderr
     assert (dest / ".git").is_dir()
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git binary required")
+def test_shallow_fetch_depth2_tags_via_a2wsgi_mount(tmp_path):
+    """Platform gitget uses ``fetch(depth=2, tags=True)`` — must not crash server."""
+    bare = repo_bare_path(str(tmp_path), "many-branches")
+    _init_bare_repo_many_branches(bare)
+
+    _, port = _mount_test_server(str(tmp_path))
+    repo = tmp_path / "work"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True)
+    subprocess.run(
+        [
+            "git",
+            "remote",
+            "add",
+            "origin",
+            f"http://127.0.0.1:{port}/git/many-branches.git",
+        ],
+        cwd=repo,
+        check=True,
+    )
+    result = subprocess.run(
+        ["git", "fetch", "-v", "--depth=2", "--tags", "--", "origin"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
