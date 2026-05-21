@@ -328,10 +328,13 @@ class GitServiceConfig(BaseModel):
 
     enabled: bool = False
     data_dir: str = Field(
-        "/data/git",
+        "/opt/cc-catalog/git",
         description=(
-            "Directory for bare mirror repos (<slug>.git). Use "
-            "/opt/cc-catalog/git for air-gap images with build-time baked mirrors."
+            "Directory for bare mirror repos (<slug>.git). Defaults to "
+            "/opt/cc-catalog/git so release images with build-time baked "
+            "mirrors work out of the box. Override to a writable path on "
+            "the data PVC (e.g. /data/git) if you want runtime_sync to "
+            "persist fetched objects across pod restarts."
         ),
     )
     mount_path: str = Field(

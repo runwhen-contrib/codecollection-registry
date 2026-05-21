@@ -2,8 +2,8 @@
 
 This document explains *why* the service is shaped the way it is. For
 operator how-tos, see the per-plugin docs (e.g.
-[JFROG.md](JFROG.md)) and the top-level
-[README.md](../README.md).
+[JFROG.md](JFROG.md), [GIT_MIRROR.md](GIT_MIRROR.md)) and the
+top-level [README.md](../README.md).
 
 ---
 

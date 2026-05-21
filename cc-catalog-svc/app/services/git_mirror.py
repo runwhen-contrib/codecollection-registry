@@ -6,16 +6,26 @@ mirror clones of each configured CodeCollection's ``git_url`` under
 ``git.data_dir``. The mirrors are served read-only via git smart HTTP
 (see ``app/git_http``).
 
-Upstream fetch uses the optional ``git.auth`` block (PAT via ``token_env`` or
-HTTP Basic) so private GitHub repos can be mirrored during the brief
-window when outbound access is available.
+Upstream fetch uses the optional ``git.auth`` block (PAT via
+``token_env`` or HTTP Basic) so private GitHub repos can be mirrored
+during the brief window when outbound access is available.
+
+Air-gap mode: when ``runtime_sync`` is false the scheduler never runs
+sync, and ``run_git_sync(force=True)`` (admin endpoint) refuses by
+default. Operators that need to refresh mirrors from an air-gapped
+deployment must pass ``allow_runtime_sync=True`` *and* flip
+``git.runtime_sync`` to true via config reload — this is intentional, so
+nobody accidentally reaches public github.com from an air-gapped
+cluster.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
@@ -24,10 +34,21 @@ from sqlalchemy import select
 
 from app.config import AppConfig, GitAuth, GitServiceConfig, get_config
 from app.db import session_scope
-from app.git_http import repo_bare_path, repo_exists
+from app.git_http import (
+    is_valid_slug,
+    list_bare_repo_slugs,
+    repo_bare_path,
+    repo_exists,
+)
 from app.models import CodeCollection
 
 logger = logging.getLogger(__name__)
+
+# Process-wide lock guarding both scheduled and admin-triggered runs.
+# Prevents two ``git clone --mirror`` / ``remote update`` invocations
+# from hitting the same on-disk bare repo concurrently and corrupting
+# packs / refs.
+_SYNC_LOCK = threading.Lock()
 
 
 @dataclass
@@ -48,6 +69,8 @@ def _utcnow() -> datetime:
 
 def public_git_url(slug: str, git_cfg: GitServiceConfig) -> Optional[str]:
     if not git_cfg.enabled or not git_cfg.public_base_url:
+        return None
+    if not is_valid_slug(slug):
         return None
     return f"{git_cfg.public_base_url.rstrip('/')}/{slug}.git"
 
@@ -92,6 +115,24 @@ def repos_to_sync(cfg: AppConfig) -> list[tuple[str, str]]:
     return [(slug, cc.git_url) for slug, cc in cfg.all_codecollections().items() if cc.git_url]
 
 
+def _head_commit_from_disk(bare_path: str) -> Optional[str]:
+    """Return the HEAD commit of a bare repo on disk, or None on error."""
+    if not os.path.isdir(bare_path):
+        return None
+    try:
+        proc = subprocess.run(
+            ["git", "--git-dir", bare_path, "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return None
+    head = proc.stdout.strip()
+    return head or None
+
+
 def list_repo_status(cfg: Optional[AppConfig] = None) -> list[GitRepoStatus]:
     app_cfg = cfg or get_config()
     git_cfg = app_cfg.git
@@ -103,30 +144,53 @@ def list_repo_status(cfg: Optional[AppConfig] = None) -> list[GitRepoStatus]:
     for slug, upstream in repos_to_sync(app_cfg):
         row = rows.get(slug)
         local_path = repo_bare_path(git_cfg.data_dir, slug)
+        present = repo_exists(git_cfg.data_dir, slug)
+        # Prefer the DB-tracked head_commit (set on the most recent
+        # successful runtime sync), but fall back to reading HEAD off
+        # disk so build-time baked mirrors still surface a commit even
+        # when runtime_sync=False.
+        head_commit = getattr(row, "git_head_commit", None) if row else None
+        if head_commit is None and present:
+            head_commit = _head_commit_from_disk(local_path)
         statuses.append(
             GitRepoStatus(
                 slug=slug,
                 upstream_url=upstream,
                 local_path=local_path,
                 public_url=public_git_url(slug, git_cfg),
-                head_commit=getattr(row, "git_head_commit", None) if row else None,
+                head_commit=head_commit,
                 last_synced=getattr(row, "git_last_synced", None) if row else None,
                 last_sync_error=getattr(row, "git_last_sync_error", None) if row else None,
-                present=repo_exists(git_cfg.data_dir, slug),
+                present=present,
             )
         )
     return statuses
 
 
-def run_git_sync(config: Optional[AppConfig] = None, *, force: bool = False) -> dict:
+def run_git_sync(
+    config: Optional[AppConfig] = None,
+    *,
+    force: bool = False,
+    allow_runtime_sync: bool = False,
+) -> dict:
     """Fetch/update every configured git mirror.
 
-    When ``git.runtime_sync`` is false (air-gap), this is a no-op unless
-    ``force=True`` (admin manual sync).
+    Args:
+        force: bypass the "is anything stale" heuristic and sync now.
+            Useful for the admin endpoint. Does NOT bypass
+            ``runtime_sync=False`` — see ``allow_runtime_sync``.
+        allow_runtime_sync: required for sync to actually reach upstream
+            when ``git.runtime_sync`` is false. Defaults to False so an
+            air-gapped operator who calls the admin endpoint by mistake
+            doesn't trigger outbound git traffic.
+
+    Concurrency: holds a process-wide lock for the whole run, so an
+    admin POST that arrives mid-scheduler-tick waits rather than
+    racing the scheduler on the same bare repos.
     """
     cfg = config or get_config()
     git_cfg = cfg.git
-    summary = {
+    summary: dict = {
         "enabled": git_cfg.enabled,
         "runtime_sync": git_cfg.runtime_sync,
         "repos_processed": 0,
@@ -135,31 +199,94 @@ def run_git_sync(config: Optional[AppConfig] = None, *, force: bool = False) -> 
     }
     if not git_cfg.enabled:
         return summary
-    if not git_cfg.runtime_sync and not force:
-        summary["skipped"] = "runtime_sync disabled (using build-time baked mirrors)"
+    if not git_cfg.runtime_sync and not allow_runtime_sync:
+        summary["skipped"] = (
+            "runtime_sync disabled (using build-time baked mirrors); "
+            "pass allow_runtime_sync=True to override"
+        )
+        return summary
+    # ``force`` is retained for callers that want to bypass a future
+    # "is anything stale" check. We don't have one yet, so it's a no-op
+    # other than nudging operators that they explicitly asked for it.
+    _ = force
+
+    acquired = _SYNC_LOCK.acquire(blocking=False)
+    if not acquired:
+        summary["skipped"] = "another git sync is already running"
         return summary
 
-    os.makedirs(git_cfg.data_dir, exist_ok=True)
-
-    for slug, upstream_url in repos_to_sync(cfg):
-        summary["repos_processed"] += 1
-        try:
-            head = sync_one_repo(slug, upstream_url, git_cfg)
-            _record_git_sync_success(slug, head)
-            summary["repos_updated"] += 1
-        except Exception as exc:
-            logger.exception("git mirror sync failed for %s", slug)
-            summary["errors"].append({"slug": slug, "error": str(exc)})
-            _record_git_sync_error(slug, str(exc))
-
-    logger.info("git mirror sync complete: %s", summary)
+    try:
+        os.makedirs(git_cfg.data_dir, exist_ok=True)
+        for slug, upstream_url in repos_to_sync(cfg):
+            summary["repos_processed"] += 1
+            try:
+                head = sync_one_repo(slug, upstream_url, git_cfg)
+                _record_git_sync_success(slug, head)
+                summary["repos_updated"] += 1
+            except Exception as exc:
+                logger.exception("git mirror sync failed for %s", slug)
+                summary["errors"].append({"slug": slug, "error": str(exc)})
+                _record_git_sync_error(slug, str(exc))
+        logger.info("git mirror sync complete: %s", summary)
+    finally:
+        _SYNC_LOCK.release()
     return summary
+
+
+def _is_complete_bare_clone(path: str) -> bool:
+    """A bare clone is 'complete' if HEAD exists and has refs."""
+    if not os.path.isfile(os.path.join(path, "HEAD")):
+        return False
+    objects = os.path.join(path, "objects")
+    if not os.path.isdir(objects):
+        return False
+    return True
+
+
+def _ensure_remote_url(dest: str, upstream_url: str) -> None:
+    """Make sure ``origin`` points at ``upstream_url``; reset if not."""
+    try:
+        proc = subprocess.run(
+            ["git", "--git-dir", dest, "remote", "get-url", "origin"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return
+    current = proc.stdout.strip()
+    if proc.returncode == 0 and current == upstream_url:
+        return
+    logger.info(
+        "git mirror: updating origin url for %s (was %r, now %r)",
+        dest,
+        current or "<unset>",
+        upstream_url,
+    )
+    subprocess.run(
+        ["git", "--git-dir", dest, "remote", "set-url", "origin", upstream_url],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
 
 
 def sync_one_repo(slug: str, upstream_url: str, git_cfg: GitServiceConfig) -> str:
     """Clone or update one bare mirror. Returns HEAD commit hash."""
     dest = repo_bare_path(git_cfg.data_dir, slug)
     os.makedirs(git_cfg.data_dir, exist_ok=True)
+
+    # If a previous clone died mid-flight the directory exists but is
+    # missing HEAD / objects. Treat as garbage and re-clone, otherwise
+    # ``git remote update`` would just keep failing forever.
+    if os.path.isdir(dest) and not _is_complete_bare_clone(dest):
+        logger.warning(
+            "git mirror: %s exists but is not a complete bare clone; removing and re-cloning",
+            dest,
+        )
+        shutil.rmtree(dest, ignore_errors=True)
 
     if not os.path.isdir(dest):
         _run_git(
@@ -168,6 +295,10 @@ def sync_one_repo(slug: str, upstream_url: str, git_cfg: GitServiceConfig) -> st
             timeout=git_cfg.clone_timeout_seconds,
         )
     else:
+        # If the configured upstream_url changed since the last clone
+        # (e.g. operator updated config.yaml to point at a fork) reset
+        # origin so subsequent fetches pull from the right place.
+        _ensure_remote_url(dest, upstream_url)
         _run_git(
             ["-C", dest, "remote", "update", "--prune"],
             git_cfg.auth,
@@ -182,6 +313,51 @@ def sync_one_repo(slug: str, upstream_url: str, git_cfg: GitServiceConfig) -> st
     if not head:
         raise RuntimeError(f"mirror at {dest} has no HEAD after sync")
     return head
+
+
+def populate_baked_head_commits(cfg: Optional[AppConfig] = None) -> int:
+    """Backfill ``CodeCollection.git_head_commit`` from baked mirrors on disk.
+
+    Called once at startup so ``GET /api/v1/git/repos`` and catalog
+    rewrites have accurate HEAD info immediately, even in air-gap
+    deployments where ``run_git_sync`` is never invoked.
+
+    Returns the number of rows touched.
+    """
+    app_cfg = cfg or get_config()
+    git_cfg = app_cfg.git
+    if not git_cfg.enabled:
+        return 0
+
+    on_disk = set(list_bare_repo_slugs(git_cfg.data_dir))
+    if not on_disk:
+        return 0
+
+    touched = 0
+    with session_scope() as db:
+        rows_by_slug = {
+            r.slug: r for r in db.execute(select(CodeCollection)).scalars().all()
+        }
+        for slug, _ in repos_to_sync(app_cfg):
+            if slug not in on_disk:
+                continue
+            head = _head_commit_from_disk(repo_bare_path(git_cfg.data_dir, slug))
+            if not head:
+                continue
+            row = rows_by_slug.get(slug)
+            if row is None:
+                row = CodeCollection(slug=slug)
+                db.add(row)
+            if row.git_head_commit == head:
+                continue
+            row.git_head_commit = head
+            # Don't fake a last_synced timestamp — baked content was
+            # synced at build time, not now. ``last_synced`` stays NULL
+            # until a real runtime sync fires.
+            touched += 1
+    if touched:
+        logger.info("git mirror: backfilled head_commit for %d baked repo(s)", touched)
+    return touched
 
 
 def _git_auth_args(auth: GitAuth) -> list[str]:

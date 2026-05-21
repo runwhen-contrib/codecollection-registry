@@ -23,7 +23,7 @@ import logging
 from contextlib import contextmanager
 from typing import Iterator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -31,6 +31,18 @@ from app.config import get_settings
 from app.models import Base
 
 logger = logging.getLogger(__name__)
+
+# Columns added after the initial schema cut. ``init_db`` ensures these
+# exist on already-deployed databases without requiring a full Alembic
+# pipeline. Format: {table_name: {column_name: SQL type for ADD COLUMN}}.
+# Keep types portable across sqlite + postgres (no ``SERIAL`` etc.).
+_LEGACY_COLUMN_ADDITIONS: dict[str, dict[str, str]] = {
+    "codecollections": {
+        "git_head_commit": "VARCHAR(80)",
+        "git_last_synced": "TIMESTAMP",
+        "git_last_sync_error": "TEXT",
+    },
+}
 
 _engine: Engine | None = None
 _SessionLocal: sessionmaker[Session] | None = None
@@ -79,17 +91,49 @@ def get_session_factory() -> sessionmaker[Session]:
 
 
 def init_db() -> None:
-    """Create all tables. Idempotent.
+    """Create all tables and apply lightweight in-place migrations.
 
-    We intentionally use `Base.metadata.create_all` rather than Alembic
-    for the first cut: the schema is small (5 tables), single-writer
-    (the scheduler), and the service is greenfield. When the schema
-    starts evolving we'll add Alembic; until then `create_all` keeps the
-    bootstrap path trivial.
+    We intentionally use ``Base.metadata.create_all`` rather than
+    Alembic for the first cut: the schema is small (5 tables),
+    single-writer (the scheduler), and the service is greenfield. When
+    the schema starts evolving in earnest we'll add Alembic.
+
+    ``create_all`` only creates *missing* tables, so any column added
+    to an existing table after the initial release would silently fail
+    on upgrade. ``_apply_legacy_column_additions`` patches that gap by
+    issuing ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS`` (sqlite + pg
+    compatible) for every column registered in
+    ``_LEGACY_COLUMN_ADDITIONS``.
     """
     engine = get_engine()
     logger.info("initializing schema on %s", _safe_dsn(str(engine.url)))
     Base.metadata.create_all(engine)
+    _apply_legacy_column_additions(engine)
+
+
+def _apply_legacy_column_additions(engine: Engine) -> None:
+    """Idempotently add columns introduced after the initial schema."""
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    for table_name, columns in _LEGACY_COLUMN_ADDITIONS.items():
+        if table_name not in existing_tables:
+            # create_all just made it, so every column is already there.
+            continue
+        present = {c["name"] for c in inspector.get_columns(table_name)}
+        missing = {name: ddl for name, ddl in columns.items() if name not in present}
+        if not missing:
+            continue
+        with engine.begin() as conn:
+            for col_name, col_ddl in missing.items():
+                logger.info(
+                    "init_db: adding missing column %s.%s (%s)",
+                    table_name,
+                    col_name,
+                    col_ddl,
+                )
+                conn.execute(
+                    text(f'ALTER TABLE {table_name} ADD COLUMN {col_name} {col_ddl}')
+                )
 
 
 @contextmanager

@@ -10,7 +10,7 @@ import argparse
 import sys
 
 from app.config import AppConfig, load_config
-from app.services.git_mirror import repos_to_sync, sync_one_repo
+from app.services.git_mirror import sync_one_repo
 
 
 def repos_to_bake(cfg: AppConfig) -> list[tuple[str, str]]:

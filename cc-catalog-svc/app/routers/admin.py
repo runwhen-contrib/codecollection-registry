@@ -7,11 +7,16 @@ Tiny admin endpoints that don't fit cleanly in catalog/mirror routers.
 
 The mirror admin endpoints live on the mirror router because they're
 mirror-specific.
+
+``sync-git`` accepts an ``allow_runtime_sync`` query flag. When
+``git.runtime_sync`` is false (air-gap), the endpoint refuses to reach
+upstream unless this flag is explicitly true — that prevents an
+operator from accidentally bypassing the air-gap with a stray click.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.config import reload_config
 from app.security import require_admin
@@ -50,5 +55,14 @@ def admin_sync_catalog() -> dict:
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(require_admin)],
 )
-def admin_sync_git() -> dict:
-    return run_git_sync(force=True)
+def admin_sync_git(
+    allow_runtime_sync: bool = Query(
+        False,
+        description=(
+            "Required to reach upstream when git.runtime_sync is false. "
+            "Defaults to false so air-gap deployments don't accidentally "
+            "egress to github.com on a stray admin click."
+        ),
+    ),
+) -> dict:
+    return run_git_sync(force=True, allow_runtime_sync=allow_runtime_sync)

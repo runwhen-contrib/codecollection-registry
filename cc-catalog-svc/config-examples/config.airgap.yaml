@@ -4,8 +4,19 @@
 # hide baked content). runtime_sync is off so the scheduler never tries to
 # reach github.com after deploy.
 #
+# data_dir defaults to /opt/cc-catalog/git already (matches the Dockerfile
+# bake stage). It's listed explicitly here for documentation.
+#
+# Admin sync: POST /api/v1/admin/sync-git is a no-op while runtime_sync=false.
+# An operator who really needs to refresh from upstream must call:
+#   POST /api/v1/admin/sync-git?allow_runtime_sync=true
+# This guard rail exists so a stray click can't egress to github.com from an
+# air-gapped cluster.
+#
 # Mount your environment-specific values (public_base_url, JFrog creds) via
 # ConfigMap/Secret. This file is a starting template.
+#
+# See docs/GIT_MIRROR.md for the full operator runbook.
 
 catalog_api:
   prefix: /api/v1/catalog

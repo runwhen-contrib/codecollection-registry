@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.git_http import make_git_wsgi_app, repo_bare_path
-from app.git_http.server import list_bare_repo_slugs
+from app.git_http.server import is_valid_slug, list_bare_repo_slugs
 
 
 def _init_bare_repo(path: str) -> None:
@@ -153,6 +153,74 @@ def test_git_clone_via_a2wsgi_mount(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert (dest / ".git").is_dir()
+
+
+def test_repo_bare_path_rejects_traversal(tmp_path):
+    """Slug must not be allowed to escape data_dir via .. or path separators."""
+    for bad in (
+        "../etc",
+        "..",
+        "foo/bar",
+        "foo\\bar",
+        ".hidden",
+        "",
+        " spaces ",
+    ):
+        with pytest.raises(ValueError):
+            repo_bare_path(str(tmp_path), bad)
+
+
+def test_is_valid_slug():
+    assert is_valid_slug("demo-cc")
+    assert is_valid_slug("rw_cli.codecollection-001")
+    assert not is_valid_slug("../etc")
+    assert not is_valid_slug("foo/bar")
+    assert not is_valid_slug("")
+    assert not is_valid_slug(".hidden")
+
+
+def test_app_404s_for_path_traversal_attempts(tmp_path):
+    """Unmatched / suspicious paths return 404 (not 500, no shell-out)."""
+    bare = repo_bare_path(str(tmp_path), "demo-cc")
+    _init_bare_repo(bare)
+
+    api = FastAPI()
+    api.mount("/git", WSGIMiddleware(make_git_wsgi_app(str(tmp_path))))
+    with TestClient(api) as client:
+        for bad in (
+            "/git/../etc/passwd",
+            "/git/demo-cc.git/../../etc/passwd",
+            "/git/demo-cc.git/objects/pack/pack-xxx.idx",
+            "/git/demo-cc.git/config",
+            "/git/demo-cc.git/HEAD/../etc",
+        ):
+            resp = client.get(bad)
+            assert resp.status_code in (404, 400), f"{bad} returned {resp.status_code}"
+
+
+def test_allowed_slugs_filters_unknown_repos(tmp_path):
+    """Repos on disk but not in allowed_slugs must be 404, not served."""
+    _init_bare_repo(repo_bare_path(str(tmp_path), "allowed-cc"))
+    _init_bare_repo(repo_bare_path(str(tmp_path), "leftover-cc"))
+
+    api = FastAPI()
+    api.mount(
+        "/git",
+        WSGIMiddleware(
+            make_git_wsgi_app(str(tmp_path), allowed_slugs={"allowed-cc"})
+        ),
+    )
+    with TestClient(api) as client:
+        ok = client.get(
+            "/git/allowed-cc.git/info/refs",
+            params={"service": "git-upload-pack"},
+        )
+        denied = client.get(
+            "/git/leftover-cc.git/info/refs",
+            params={"service": "git-upload-pack"},
+        )
+    assert ok.status_code == 200
+    assert denied.status_code == 404
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git binary required")
