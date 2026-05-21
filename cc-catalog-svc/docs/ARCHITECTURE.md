@@ -143,13 +143,20 @@ We sort by `(built_at, image_tag)` ascending and keep the last entry.
 
 `built_at` is filled in by the OCI source's tiebreak enrichment:
 
-1. `GET /v2/<repo>/manifests/<tag>` (with the right `Accept` headers).
-2. If the response has a `Last-Modified` header (JFrog, Harbor, Quay,
-   most filesystem-backed registries), parse it and we're done.
-3. Otherwise descend into the manifest's `config.digest` blob (for
-   image indices, walk into the first child platform manifest first)
-   and read its `created` field. This is always set by buildkit /
-   docker buildx.
+1. `GET /v2/<repo>/manifests/<tag>` with manifest `Accept` headers.
+2. Descend into the manifest's `config.digest` blob (for image
+   indices, walk into the first child platform manifest first).
+3. Read the config blob's `created` field — always set by buildkit /
+   docker buildx and the only OCI-spec'd source of truth for actual
+   build time.
+
+We deliberately do NOT trust the `Last-Modified` HTTP header even
+though many registries set it. JFrog Artifactory (and other caching
+proxies) sets `Last-Modified` to the local cache freshness time, not
+the upstream build time — so whichever tag the poll happened to GET
+first or last would win the tiebreak based on cache-warmup order
+instead of actual recency. Going to `config.digest.created` adds one
+HTTP call per tiebreak tag but is universally correct.
 
 Enrichment only fires for refs that have >1 canonical tag, so most
 polls do zero extra HTTP work. Per-tag failures are tolerated — the

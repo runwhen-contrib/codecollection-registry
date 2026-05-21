@@ -38,7 +38,6 @@ import dataclasses
 import logging
 import re
 from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
 from typing import Optional
 
 import requests
@@ -293,14 +292,23 @@ class OCISource(ImageSource):
     ) -> Optional[datetime]:
         """Return the build timestamp of an OCI image, best-effort.
 
-        Strategy:
-          1. GET ``/v2/<repo>/manifests/<tag>`` with Accept headers.
-             If the response carries ``Last-Modified``, use it (JFrog,
-             Harbor, Quay set it; GHCR usually does not).
-          2. Otherwise descend into the manifest's ``config.digest``
-             blob (for OCI image indices: the first child platform
-             manifest first) and read its ``created`` field (always
-             written by buildkit / docker buildx).
+        Strategy: GET ``/v2/<repo>/manifests/<tag>`` with Accept headers,
+        descend into the manifest's ``config.digest`` blob (or, for OCI
+        image indices, the first child platform manifest's config blob),
+        and read its ``created`` field. That field is always populated by
+        buildkit / docker buildx and is the only OCI-spec'd source of
+        truth for when the image was actually built.
+
+        We deliberately do NOT use the ``Last-Modified`` HTTP header,
+        even though many registries set it. Caching proxies — most
+        notably JFrog Artifactory's docker-remote setup — set
+        ``Last-Modified`` to the local CACHE freshness time, not the
+        upstream build time. That means whichever tag the sync happens
+        to GET first or last would win the tiebreak based on
+        cache-warmup order, completely unrelated to which image is
+        actually newer. The OCI spec does not require ``Last-Modified``
+        either, so taking the extra HTTP hop to ``config.digest`` is the
+        only universally correct path.
 
         Returns None on any failure so the caller can fall back to its
         lex-only ordering rather than crash the sync.
@@ -319,13 +327,6 @@ class OCISource(ImageSource):
                     resp.status_code,
                 )
                 return None
-
-            lm = resp.headers.get("Last-Modified")
-            if lm:
-                try:
-                    return parsedate_to_datetime(lm)
-                except (TypeError, ValueError):
-                    pass
 
             manifest = resp.json()
             return self._fetch_created_from_manifest(

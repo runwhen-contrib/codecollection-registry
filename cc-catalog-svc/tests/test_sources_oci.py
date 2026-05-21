@@ -153,7 +153,8 @@ def test_discover_refs_enriches_built_at_on_tiebreak():
     This is the bug seen in air-gap deployments behind JFrog: the newer
     ``main-10792f4-6e4bc81`` push was being beaten by the older
     ``main-de76dd0-71dfdc4`` because ``d`` > ``1`` in ASCII. With built_at
-    enrichment, the newer Last-Modified header wins.
+    enrichment (sourced from manifest config blob `created`), the actually-
+    newer build wins regardless of tag lex order.
     """
     src = OCISource()
     repo_path = "stewartshea/rw-cli-codecollection"
@@ -170,28 +171,27 @@ def test_discover_refs_enriches_built_at_on_tiebreak():
                 "tags": [
                     "latest",
                     "main",
-                    "main-10792f4-6e4bc81",  # newer push (per Last-Modified)
+                    "main-10792f4-6e4bc81",  # newer push (per config.created)
                     "main-de76dd0-71dfdc4",  # older push, but ASCII-larger
                 ],
             },
         )
     )
 
-    # Older tag: registry says it was pushed first.
+    # Older tag → older config.created.
     respx.get(f"https://jfrog.example.com/v2/{repo_path}/manifests/main-de76dd0-71dfdc4").mock(
-        return_value=httpx.Response(
-            200,
-            headers={"Last-Modified": "Mon, 12 May 2026 10:00:00 GMT"},
-            json={"manifests": []},
-        )
+        return_value=httpx.Response(200, json={"config": {"digest": "sha256:old-cfg"}})
     )
-    # Newer tag: pushed later.
+    respx.get(f"https://jfrog.example.com/v2/{repo_path}/blobs/sha256:old-cfg").mock(
+        return_value=httpx.Response(200, json={"created": "2026-05-12T10:00:00Z"})
+    )
+
+    # Newer tag → newer config.created.
     respx.get(f"https://jfrog.example.com/v2/{repo_path}/manifests/main-10792f4-6e4bc81").mock(
-        return_value=httpx.Response(
-            200,
-            headers={"Last-Modified": "Wed, 21 May 2026 17:00:00 GMT"},
-            json={"manifests": []},
-        )
+        return_value=httpx.Response(200, json={"config": {"digest": "sha256:new-cfg"}})
+    )
+    respx.get(f"https://jfrog.example.com/v2/{repo_path}/blobs/sha256:new-cfg").mock(
+        return_value=httpx.Response(200, json={"created": "2026-05-21T17:00:00Z"})
     )
 
     refs = src.discover_refs(cc)
@@ -205,6 +205,78 @@ def test_discover_refs_enriches_built_at_on_tiebreak():
 
     # The enriched built_at flips resolve_latest's decision from the
     # ASCII-largest tag to the actually-newest one.
+    latest = src.resolve_latest({"default_ref": "main"}, refs)
+    assert latest == "main-10792f4-6e4bc81"
+
+
+@respx.mock
+def test_discover_refs_ignores_misleading_last_modified_from_jfrog():
+    """Regression: never trust the Last-Modified header.
+
+    JFrog Artifactory's docker-remote setup proxies an upstream
+    registry but sets ``Last-Modified`` to JFrog's local cache mtime
+    — i.e. when JFrog last refreshed the manifest from upstream. After
+    a cache flush, whichever tag the poll happens to GET first or last
+    ends up with the freshest cache-mtime regardless of which image
+    was actually built more recently. Production hit exactly this:
+    the user cleared JFrog's cache, the catalog re-polled, and the
+    OLDER ``main-de76dd0-71dfdc4`` ended up with a more recent
+    ``Last-Modified`` than the NEWER ``main-10792f4-6e4bc81`` (because
+    cc-catalog-svc happened to GET de76dd0's manifest a few hundred
+    millis later in the loop). The OCI source must ignore that header
+    entirely and read ``config.created`` instead.
+    """
+    src = OCISource()
+    repo_path = "stewartshea/rw-cli-codecollection"
+    cc = {
+        "slug": "ss-rw-cli-codecollection",
+        "image_registry": f"jfrog.example.com/{repo_path}",
+    }
+
+    respx.get(f"https://jfrog.example.com/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "name": repo_path,
+                "tags": [
+                    "main-10792f4-6e4bc81",  # actually newer
+                    "main-de76dd0-71dfdc4",  # actually older
+                ],
+            },
+        )
+    )
+
+    # The OLDER image, but JFrog cached it most recently → newer LM.
+    respx.get(f"https://jfrog.example.com/v2/{repo_path}/manifests/main-de76dd0-71dfdc4").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Last-Modified": "Thu, 21 May 2026 18:26:19 GMT"},
+            json={"config": {"digest": "sha256:older-build-cfg"}},
+        )
+    )
+    respx.get(f"https://jfrog.example.com/v2/{repo_path}/blobs/sha256:older-build-cfg").mock(
+        return_value=httpx.Response(200, json={"created": "2026-05-12T10:00:00Z"})
+    )
+
+    # The NEWER image, cached slightly earlier → older LM.
+    respx.get(f"https://jfrog.example.com/v2/{repo_path}/manifests/main-10792f4-6e4bc81").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Last-Modified": "Thu, 21 May 2026 18:26:18 GMT"},
+            json={"config": {"digest": "sha256:newer-build-cfg"}},
+        )
+    )
+    respx.get(f"https://jfrog.example.com/v2/{repo_path}/blobs/sha256:newer-build-cfg").mock(
+        return_value=httpx.Response(200, json={"created": "2026-05-21T17:00:00Z"})
+    )
+
+    refs = src.discover_refs(cc)
+    by_tag = {r.image_tag: r for r in refs}
+    # build times reflect actual build, NOT Last-Modified
+    assert by_tag["main-10792f4-6e4bc81"].built_at > by_tag["main-de76dd0-71dfdc4"].built_at
+
+    # And resolve_latest picks the actually-newer build despite the
+    # Last-Modified misdirection.
     latest = src.resolve_latest({"default_ref": "main"}, refs)
     assert latest == "main-10792f4-6e4bc81"
 
@@ -376,11 +448,10 @@ def test_discover_refs_enrichment_tolerates_per_tag_failure():
         return_value=httpx.Response(500)
     )
     respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main-1111111-bbbbbbb").mock(
-        return_value=httpx.Response(
-            200,
-            headers={"Last-Modified": "Wed, 21 May 2026 17:00:00 GMT"},
-            json={"manifests": []},
-        )
+        return_value=httpx.Response(200, json={"config": {"digest": "sha256:ok-cfg"}})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:ok-cfg").mock(
+        return_value=httpx.Response(200, json={"created": "2026-05-21T17:00:00Z"})
     )
 
     refs = src.discover_refs(cc)
