@@ -15,7 +15,10 @@ def test_repos_to_bake_reads_codecollections_without_runtime_git_enabled():
     pairs = repos_to_bake(cfg)
     slugs = {slug for slug, _ in pairs}
     assert "rw-cli-codecollection" in slugs
-    assert len(pairs) == 6
+    # Asserts the shipped example covers every CC the bake step will see.
+    # If you add a new CC in config.bake.yaml, bump this number — the
+    # bake step must know about it ahead of build time.
+    assert len(pairs) == len(slugs) == 7
 
 
 def test_git_auth_args_uses_github_basic_token(monkeypatch):

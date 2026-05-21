@@ -38,6 +38,22 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _ensure_aware(ts: Optional[datetime]) -> Optional[datetime]:
+    """Compare-safe datetime: stamp naive values as UTC.
+
+    Sources return tz-aware datetimes (HTTP Last-Modified is RFC 7231,
+    OCI manifests use RFC 3339), but historical DB rows may be naive.
+    Mixing the two in a comparison raises TypeError, which would break
+    the tiebreak. Treating naive as UTC is consistent with how
+    ``_utcnow`` writes timestamps elsewhere in this module.
+    """
+    if ts is None:
+        return None
+    if ts.tzinfo is None:
+        return ts.replace(tzinfo=timezone.utc)
+    return ts
+
+
 def run_catalog_poll(config: Optional[AppConfig] = None) -> dict:
     """Discover refs for every configured CC; upsert into the DB.
 
@@ -167,14 +183,31 @@ def _upsert_refs(
     now = _utcnow()
     # Group by ref name. Multiple discovered tags can share a single git
     # ref (e.g. several builds of `main`). The row schema keys on ref_name,
-    # so we have to pick one. Choose the lexicographically-largest
-    # image_tag so the kept entry matches what OCISource.resolve_latest
-    # selects (same ordering); otherwise is_latest never matches the row
-    # that wins the dict and /resolve?pointer=latest 404s.
+    # so we have to pick one. Match OCISource.resolve_latest's ordering
+    # exactly: prefer the highest ``built_at`` (manifest creation time as
+    # populated by the source's tiebreak enrichment), falling back to a
+    # lex sort on ``image_tag`` when timestamps are missing or tied.
+    #
+    # Earlier versions used the lex sort alone — that's wrong for our
+    # canonical ``<ref>-<cc_sha7>-<rt_sha7>`` schema because cc_sha7 is hex
+    # and has no temporal ordering (``main-1...`` sorts before ``main-d...``
+    # even if the ``1...`` build is newer). With ``built_at`` populated the
+    # surviving row tracks what ``resolve_latest`` declared as the latest
+    # tag, so ``is_latest=True`` ends up on the right row and the
+    # ``/resolve?pointer=latest`` endpoint returns the freshest build.
+    _EPOCH_MIN = datetime.min.replace(tzinfo=timezone.utc)
+
+    def _newer(a, b) -> bool:
+        a_ts = _ensure_aware(getattr(a, "built_at", None)) or _EPOCH_MIN
+        b_ts = _ensure_aware(getattr(b, "built_at", None)) or _EPOCH_MIN
+        if a_ts != b_ts:
+            return a_ts > b_ts
+        return (a.image_tag or "") > (b.image_tag or "")
+
     refs_by_name: dict[str, object] = {}
     for r in refs:
         existing_choice = refs_by_name.get(r.ref)
-        if existing_choice is None or (r.image_tag or "") > (existing_choice.image_tag or ""):
+        if existing_choice is None or _newer(r, existing_choice):
             refs_by_name[r.ref] = r
 
     existing = db.execute(select(ImageRef).where(ImageRef.cc_id == cc_row.id)).scalars().all()

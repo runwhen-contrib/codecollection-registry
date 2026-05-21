@@ -6,6 +6,8 @@ respx to fake the GHCR token + tags endpoints for the discovery path.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import httpx
 import respx
 
@@ -142,3 +144,251 @@ def test_discover_refs_handles_anonymous_bearer_dance():
     refs = src.discover_refs(cc)
     assert len(refs) == 1
     assert refs[0].ref == "main"
+
+
+@respx.mock
+def test_discover_refs_enriches_built_at_on_tiebreak():
+    """When two canonical tags share a ref, fetch built_at to break the tie.
+
+    This is the bug seen in air-gap deployments behind JFrog: the newer
+    ``main-10792f4-6e4bc81`` push was being beaten by the older
+    ``main-de76dd0-71dfdc4`` because ``d`` > ``1`` in ASCII. With built_at
+    enrichment, the newer Last-Modified header wins.
+    """
+    src = OCISource()
+    repo_path = "stewartshea/rw-cli-codecollection"
+    cc = {
+        "slug": "ss-rw-cli-codecollection",
+        "image_registry": f"jfrog.example.com/{repo_path}",
+    }
+
+    respx.get(f"https://jfrog.example.com/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "name": repo_path,
+                "tags": [
+                    "latest",
+                    "main",
+                    "main-10792f4-6e4bc81",  # newer push (per Last-Modified)
+                    "main-de76dd0-71dfdc4",  # older push, but ASCII-larger
+                ],
+            },
+        )
+    )
+
+    # Older tag: registry says it was pushed first.
+    respx.get(f"https://jfrog.example.com/v2/{repo_path}/manifests/main-de76dd0-71dfdc4").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Last-Modified": "Mon, 12 May 2026 10:00:00 GMT"},
+            json={"manifests": []},
+        )
+    )
+    # Newer tag: pushed later.
+    respx.get(f"https://jfrog.example.com/v2/{repo_path}/manifests/main-10792f4-6e4bc81").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Last-Modified": "Wed, 21 May 2026 17:00:00 GMT"},
+            json={"manifests": []},
+        )
+    )
+
+    refs = src.discover_refs(cc)
+    by_tag = {r.image_tag: r for r in refs}
+    assert by_tag["main-10792f4-6e4bc81"].built_at is not None
+    assert by_tag["main-de76dd0-71dfdc4"].built_at is not None
+    assert (
+        by_tag["main-10792f4-6e4bc81"].built_at
+        > by_tag["main-de76dd0-71dfdc4"].built_at
+    )
+
+    # The enriched built_at flips resolve_latest's decision from the
+    # ASCII-largest tag to the actually-newest one.
+    latest = src.resolve_latest({"default_ref": "main"}, refs)
+    assert latest == "main-10792f4-6e4bc81"
+
+
+@respx.mock
+def test_discover_refs_skips_enrichment_when_no_tiebreak():
+    """With one tag per ref the enrichment must hit zero manifest endpoints.
+
+    Otherwise every poll across many CCs becomes O(tags) extra HTTP calls.
+    respx in strict mode would raise if we accidentally GET a manifest
+    here, which would make this test fail.
+    """
+    src = OCISource()
+    cc = {
+        "slug": "rw-cli-codecollection",
+        "image_registry": "ghcr.io/runwhen-contrib/rw-cli-codecollection",
+    }
+
+    respx.get(
+        "https://ghcr.io/v2/runwhen-contrib/rw-cli-codecollection/tags/list"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "tags": [
+                    "main-c1a2b3d-e4f5a6b",
+                    "v1.2.0-aabbccd-e4f5a6b",
+                    "pr-42-9988aab-e4f5a6b",
+                ],
+            },
+        )
+    )
+
+    refs = src.discover_refs(cc)
+    assert len(refs) == 3
+    # built_at stays None for everyone — no enrichment triggered.
+    assert all(r.built_at is None for r in refs)
+
+
+@respx.mock
+def test_discover_refs_falls_back_to_config_blob_created():
+    """When Last-Modified is missing (GHCR), descend into manifest -> config blob."""
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-cli-codecollection"
+    cc = {
+        "slug": "rw-cli-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "tags": [
+                    "main-aaaaaaa-bbbbbbb",
+                    "main-1111111-bbbbbbb",
+                ],
+            },
+        )
+    )
+
+    # Single-platform manifest with config.digest pointing at a blob.
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main-aaaaaaa-bbbbbbb").mock(
+        return_value=httpx.Response(
+            200,
+            json={"config": {"digest": "sha256:older"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main-1111111-bbbbbbb").mock(
+        return_value=httpx.Response(
+            200,
+            json={"config": {"digest": "sha256:newer"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:older").mock(
+        return_value=httpx.Response(200, json={"created": "2026-05-12T10:00:00Z"})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:newer").mock(
+        return_value=httpx.Response(200, json={"created": "2026-05-21T17:00:00Z"})
+    )
+
+    refs = src.discover_refs(cc)
+    by_tag = {r.image_tag: r for r in refs}
+    assert by_tag["main-1111111-bbbbbbb"].built_at == datetime(
+        2026, 5, 21, 17, 0, 0, tzinfo=timezone.utc
+    )
+    assert by_tag["main-aaaaaaa-bbbbbbb"].built_at == datetime(
+        2026, 5, 12, 10, 0, 0, tzinfo=timezone.utc
+    )
+
+
+@respx.mock
+def test_discover_refs_handles_manifest_index_for_multiarch():
+    """OCI image indices have no top-level config; descend into a child manifest."""
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-cli-codecollection"
+    cc = {
+        "slug": "rw-cli-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "tags": [
+                    "main-aaaaaaa-bbbbbbb",
+                    "main-1111111-bbbbbbb",
+                ],
+            },
+        )
+    )
+
+    # Both tags are multi-arch indices.
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main-aaaaaaa-bbbbbbb").mock(
+        return_value=httpx.Response(
+            200,
+            json={"manifests": [{"digest": "sha256:older-amd64"}]},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main-1111111-bbbbbbb").mock(
+        return_value=httpx.Response(
+            200,
+            json={"manifests": [{"digest": "sha256:newer-amd64"}]},
+        )
+    )
+    # Child platform manifests carry config.digest.
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/sha256:older-amd64").mock(
+        return_value=httpx.Response(200, json={"config": {"digest": "sha256:older-cfg"}})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/sha256:newer-amd64").mock(
+        return_value=httpx.Response(200, json={"config": {"digest": "sha256:newer-cfg"}})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:older-cfg").mock(
+        return_value=httpx.Response(200, json={"created": "2026-05-12T10:00:00Z"})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:newer-cfg").mock(
+        return_value=httpx.Response(200, json={"created": "2026-05-21T17:00:00Z"})
+    )
+
+    refs = src.discover_refs(cc)
+    latest = src.resolve_latest({"default_ref": "main"}, refs)
+    assert latest == "main-1111111-bbbbbbb"
+
+
+@respx.mock
+def test_discover_refs_enrichment_tolerates_per_tag_failure():
+    """One broken tag's manifest must not poison the entire poll."""
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-cli-codecollection"
+    cc = {
+        "slug": "rw-cli-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "tags": [
+                    "main-aaaaaaa-bbbbbbb",
+                    "main-1111111-bbbbbbb",
+                ],
+            },
+        )
+    )
+    # One returns 500 (broken). The other still gets a timestamp.
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main-aaaaaaa-bbbbbbb").mock(
+        return_value=httpx.Response(500)
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main-1111111-bbbbbbb").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Last-Modified": "Wed, 21 May 2026 17:00:00 GMT"},
+            json={"manifests": []},
+        )
+    )
+
+    refs = src.discover_refs(cc)
+    by_tag = {r.image_tag: r for r in refs}
+    assert by_tag["main-aaaaaaa-bbbbbbb"].built_at is None
+    assert by_tag["main-1111111-bbbbbbb"].built_at is not None
+
+    # resolve_latest still produces the right answer: the only ref with
+    # a known built_at outranks the bare-image_tag fallback (epoch_min).
+    latest = src.resolve_latest({"default_ref": "main"}, refs)
+    assert latest == "main-1111111-bbbbbbb"
