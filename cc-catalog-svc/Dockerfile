@@ -70,6 +70,12 @@ RUN --mount=type=secret,id=github_token \
       python scripts/bake_git_mirrors.py \
         --config "${BAKE_CONFIG}" \
         --dest /opt/cc-catalog/git; \
+      baked="$(find /opt/cc-catalog/git -mindepth 1 -maxdepth 1 -type d -name '*.git' | wc -l)"; \
+      if [ "${baked}" -eq 0 ]; then \
+        echo "ERROR: BAKE_GIT_MIRRORS=true but no *.git dirs under /opt/cc-catalog/git" >&2; \
+        exit 1; \
+      fi; \
+      echo "git bake: ${baked} bare repo(s) in /opt/cc-catalog/git"; \
     else \
       echo "BAKE_GIT_MIRRORS=false; skipping git mirror bake"; \
     fi

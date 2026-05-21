@@ -9,8 +9,24 @@ from __future__ import annotations
 import argparse
 import sys
 
-from app.config import load_config
+from app.config import AppConfig, load_config
 from app.services.git_mirror import repos_to_sync, sync_one_repo
+
+
+def repos_to_bake(cfg: AppConfig) -> list[tuple[str, str]]:
+    """Return ``(slug, upstream_url)`` pairs for image bake.
+
+    Unlike ``repos_to_sync``, this does not require ``git.enabled`` — the bake
+    manifest only lists sources and is never used at runtime.
+    """
+    explicit = cfg.git.codecollections if cfg.git.codecollections else None
+    pairs: list[tuple[str, str]] = []
+    for slug, cc in cfg.all_codecollections().items():
+        if explicit is not None and slug not in explicit:
+            continue
+        if cc.git_url:
+            pairs.append((slug, cc.git_url))
+    return pairs
 
 
 def main() -> int:
@@ -29,10 +45,13 @@ def main() -> int:
 
     cfg = load_config(args.config)
     git_cfg = cfg.git.model_copy(update={"data_dir": args.dest})
-    pairs = repos_to_sync(cfg)
+    pairs = repos_to_bake(cfg)
     if not pairs:
-        print("bake_git_mirrors: no repos configured; nothing to do", file=sys.stderr)
-        return 0
+        print(
+            "bake_git_mirrors: no codecollections with git_url in bake config",
+            file=sys.stderr,
+        )
+        return 1
 
     errors: list[str] = []
     for slug, upstream_url in pairs:

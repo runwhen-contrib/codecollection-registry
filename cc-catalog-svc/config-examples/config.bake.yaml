@@ -6,6 +6,7 @@
 # Keep this in sync with the CodeCollections you ship in air-gap releases.
 
 git:
+  enabled: true
   auth:
     # GITHUB_TOKEN is injected as a BuildKit secret in CI (rate limits + private repos).
     token_env: GITHUB_TOKEN
