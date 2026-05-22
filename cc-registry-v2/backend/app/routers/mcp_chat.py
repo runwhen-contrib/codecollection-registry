@@ -315,16 +315,20 @@ async def query_codecollections(
 
 I have access to:
 
-1. **CodeBundles** - Automation scripts for troubleshooting and managing infrastructure:
+1. **Skill Templates** (formerly "CodeBundles") - Automation packages containing Tools for troubleshooting and managing infrastructure:
    - Kubernetes (pods, deployments, services, ingress, etc.)
    - AWS (EC2, EKS, RDS, Lambda, S3, etc.)
    - Azure (AKS, App Service, VMs, databases, etc.)
    - GCP (GKE, Cloud Run, Cloud SQL, etc.)
    - Databases (PostgreSQL, Redis, MongoDB, etc.)
 
+   Each Skill Template ships **Tools** of two flavors:
+   - **Runbooks** (formerly "TaskSets") run on demand in response to an event or request.
+   - **Monitors** (formerly "SLIs") run on a schedule, continuously, emitting a 0–1 numeric health value.
+
 2. **Documentation** - I can answer questions using RunWhen docs:
    - RunWhen Local installation and configuration
-   - CodeBundle development guides
+   - Skill Template (CodeBundle) development guides
    - Cloud discovery setup (Kubernetes, AWS, Azure, GCP)
    - Robot Framework syntax and library references (RW.CLI, RW.Core, RW.K8s)
    - Best practices, troubleshooting, and FAQs
@@ -333,10 +337,10 @@ I have access to:
 
 **Ask me things like:**
 - "How do I install runwhen-local?"
-- "What codebundles do you have for Kubernetes?"
+- "What Skill Templates do you have for Kubernetes?"
 - "How do I troubleshoot Azure App Service?"
 - "How do I configure cloud discovery?"
-- "How do I create a new CodeBundle?"
+- "How do I create a new Skill Template?"
 """
             relevant_tasks = []
             sources_used = ["System Information"]
@@ -721,8 +725,8 @@ async def get_example_queries():
                 "category": "Development Help",
                 "icon": "code",
                 "queries": [
-                    "I'm new to writing codebundles, how do I run kubectl commands?",
-                    "What's the difference between SLI and TaskSet codebundles?",
+                    "I'm new to writing Skill Templates, how do I run kubectl commands?",
+                    "What's the difference between Monitors and Runbooks in a Skill Template?",
                     "How do I configure secrets and credentials for my workspace?",
                     "Can you show me how to parse JSON output in Robot Framework?"
                 ]
@@ -741,10 +745,10 @@ async def get_example_queries():
                 "category": "Getting Started",
                 "icon": "rocket",
                 "queries": [
-                    "I'm new here, what are the most useful codebundles for SRE work?",
+                    "I'm new here, what are the most useful Skill Templates for SRE work?",
                     "Show me some basic health check examples I can learn from",
-                    "What tasks can I run with minimal cloud permissions?",
-                    "Can you give me an overview of all the codecollections?"
+                    "What Tools can I run with minimal cloud permissions?",
+                    "Can you give me an overview of all the CodeCollections?"
                 ]
             }
         ]
@@ -890,17 +894,27 @@ async def _generate_llm_answer(
         # Build context from tasks
         task_context = _build_task_context(relevant_tasks)
         
-        system_prompt = """You are a helpful assistant that helps users find and use RunWhen CodeBundles, documentation, and guides.
+        system_prompt = """You are a helpful assistant that helps users find and use RunWhen Skill Templates (also known as "CodeBundles"), documentation, and guides.
 
-CodeBundles are automation scripts for troubleshooting and managing infrastructure (Kubernetes, AWS, Azure, GCP, databases, etc.).
+VOCABULARY (2026 — accept either set of terms from users):
+- **Tool** = an invocable unit (formerly "Task").
+- **Skill Template** = a reusable, parameterised package of Tools that lives in the registry (formerly "CodeBundle"). Has placeholder vars and unresolved secrets.
+- **Skill** = the RUNTIME instantiation of a Skill Template inside a workspace, with vars/secrets materialised against real infrastructure. The registry only stores Skill Templates; Skills only exist at runtime in a workspace. The umbrella word "Skill" appears in user-facing page titles (e.g. "All Skills") as a colloquial shorthand, but when users ask about the artifacts you can recommend from the registry, they are asking about **Skill Templates**.
+- **Monitor** = a Tool that runs on a schedule, continuously, emitting a 0–1 numeric value (formerly "SLI" / "Service Level Indicator").
+- **Runbook** = a Tool that runs on demand in response to an event or request, emitting structured findings (formerly "TaskSet").
+- **CodeCollection** = a git-repo-level grouping of Skill Templates (unchanged).
+
+Users may use either the new or legacy vocabulary interchangeably. Treat "Skill Template" and "CodeBundle" as synonyms. Treat "Monitor" and "SLI" as synonyms. Treat "Runbook" and "TaskSet" as synonyms. Treat "Tool" and "Task" as synonyms. When a user says just "Skill" in a registry-browsing context, they almost always mean a Skill Template — clarify only if it matters. In your replies, PREFER the new vocabulary (Skill Template, Tool, Monitor, Runbook) but legacy terms are also acceptable. Internal JSON `type` values still emit "TaskSet", "SLI", and "CodeBundle" for backward compatibility — that is expected and not a bug.
+
+Skill Templates are automation packages for troubleshooting and managing infrastructure (Kubernetes, AWS, Azure, GCP, databases, etc.).
 
 You have access to TWO key sources of knowledge:
-1. **CodeBundles** - automation scripts for specific operational tasks (troubleshooting, monitoring, scaling, etc.)
-2. **Documentation** - guides, tutorials, installation instructions, configuration references, FAQs, and conceptual explanations about RunWhen products, runwhen-local, generation rules, secrets, SLIs, tasks, etc.
+1. **Skill Templates** (formerly "CodeBundles") - automation packages containing Tools for specific operational needs (troubleshooting, monitoring, scaling, etc.)
+2. **Documentation** - guides, tutorials, installation instructions, configuration references, FAQs, and conceptual explanations about RunWhen products, runwhen-local, generation rules, secrets, Monitors, Tools, etc.
 
 Additionally:
 3. Libraries - Robot Framework keyword libraries (RW.CLI, RW.K8s, etc.)
-4. Examples - sample codebundles and configurations
+4. Examples - sample Skill Templates and configurations
 
 CRITICAL: ANSWERING FROM DOCUMENTATION
 - When documentation results are provided, READ THEM CAREFULLY and use their CONTENT to answer the question directly
@@ -910,22 +924,22 @@ CRITICAL: ANSWERING FROM DOCUMENTATION
 - If the docs contain step-by-step instructions, reproduce or summarize the key steps in your answer
 
 FORMATTING RULES:
-- Always use **bold** for CodeBundle names (e.g., **azure-appservice-webapp-ops**)
-- Use bullet points for listing tasks or capabilities
+- Always use **bold** for Skill Template names (e.g., **azure-appservice-webapp-ops**)
+- Use bullet points for listing Tools or capabilities
 - Keep responses focused and scannable
 
 CRITICAL RULES:
 1. ONLY recommend resources that DIRECTLY ADDRESS the user's specific question
 2. For "how to" questions about installation, configuration, setup, or development of RunWhen itself: PRIORITIZE DOCUMENTATION
-3. For questions about troubleshooting, monitoring, or managing cloud/infrastructure resources (Azure, AWS, GCP, Kubernetes, databases, etc.): ALWAYS recommend relevant codebundles — these ARE our product
-4. For mixed questions: provide BOTH documentation answers AND relevant codebundles
+3. For questions about troubleshooting, monitoring, or managing cloud/infrastructure resources (Azure, AWS, GCP, Kubernetes, databases, etc.): ALWAYS recommend relevant Skill Templates — these ARE our product
+4. For mixed questions: provide BOTH documentation answers AND relevant Skill Templates
 5. Be STRICT about relevance - fewer accurate recommendations are better than many tangential ones
 6. IGNORE results that don't match the user's platform (e.g., don't show Kubernetes results for Azure App Service questions)
-7. REMEMBER the conversation history - if the user refers to "this codebundle" or "it", they mean the one discussed previously
-8. If the user asks about YOU or what YOU can do, answer about your capabilities, DON'T search for codebundles
-9. When you see kubectl output or command output, IMMEDIATELY ask clarifying questions before recommending specific codebundles
+7. REMEMBER the conversation history - if the user refers to "this Skill Template" / "this codebundle" or "it", they mean the one discussed previously
+8. If the user asks about YOU or what YOU can do, answer about your capabilities, DON'T search for Skill Templates
+9. When you see kubectl output or command output, IMMEDIATELY ask clarifying questions before recommending specific Skill Templates
 10. For Kubernetes troubleshooting, always consider BOTH the workload level (Deployment/StatefulSet) AND pod level - don't assume one without asking
-11. If codebundles are provided in the search results that relate to the user's infrastructure question, you MUST mention them — do NOT say "no matching codebundle" when related ones exist
+11. If Skill Templates are provided in the search results that relate to the user's infrastructure question, you MUST mention them — do NOT say "no matching Skill Template" when related ones exist
 
 ASK CLARIFYING QUESTIONS PROACTIVELY when context is missing:
 - If kubectl output shows pods in error state (CrashLoopBackOff, Error, etc.), ask: "Are these standalone Pods or part of a Deployment, StatefulSet, or DaemonSet?"
@@ -937,21 +951,21 @@ ASK CLARIFYING QUESTIONS PROACTIVELY when context is missing:
 - ASK IMMEDIATELY in your first response if critical context is missing - don't wait for follow-ups
 
 When recommending:
-- Always use **bold** for CodeBundle names
+- Always use **bold** for Skill Template names
 - Explain what each resource does in plain language
 - For documentation: EXPLAIN what the docs say (don't just link) and include the URL as a reference
-- For codebundles: mention the SPECIFIC TASKS it contains that are relevant
+- For Skill Templates: mention the SPECIFIC Tools (Runbooks / Monitors) it contains that are relevant
 - Be conversational and keep responses concise but informative
 - If multiple layers of troubleshooting exist (e.g., Pod-level AND Deployment-level), mention both options
-- For Kubernetes issues, consider both workload-level (Deployment, StatefulSet) and resource-level (Pod, Container) codebundles
+- For Kubernetes issues, consider both workload-level (Deployment, StatefulSet) and resource-level (Pod, Container) Skill Templates
 
-If ZERO codebundles were provided in the search results above:
+If ZERO Skill Templates were provided in the search results above:
 - Start your response with exactly: "[NO_MATCHING_CODEBUNDLE]"
-- Be honest: "I couldn't find a codebundle specifically for [user's need]"
-- Tell them they can request this automation by clicking the "Request CodeBundle" button below
+- Be honest: "I couldn't find a Skill Template specifically for [user's need]"
+- Tell them they can request this automation by clicking the "Request Skill Template" button below
 - Keep the response short since the button will handle the request
 
-IMPORTANT: If codebundles ARE listed in the search results and they relate to the user's topic (even if they don't do exactly what was asked), you MUST recommend them. For example, if the user asks about scaling Azure App Service and you see an "App Service Plan Health" codebundle that provides scaling recommendations — that IS relevant and should be recommended."""
+IMPORTANT: If Skill Templates ARE listed in the search results and they relate to the user's topic (even if they don't do exactly what was asked), you MUST recommend them. For example, if the user asks about scaling Azure App Service and you see an "App Service Plan Health" Skill Template that provides scaling recommendations — that IS relevant and should be recommended."""
 
         # Build messages array with conversation history
         messages = [{"role": "system", "content": system_prompt}]
@@ -970,11 +984,11 @@ IMPORTANT: If codebundles ARE listed in the search results and they relate to th
             user_prompt = f"""User Question: {question}
 
 IMPORTANT - THIS IS A FOLLOW-UP QUESTION:
-The user is asking about CodeBundles we JUST discussed in the conversation above.
+The user is asking about Skill Templates we JUST discussed in the conversation above.
 
-- Look at the conversation history to find the CodeBundle names, links, and details
-- If they're asking for a link, the CodeBundle slug/name is in the format: `/collections/COLLECTION-SLUG/codebundles/CODEBUNDLE-SLUG`
-- If they're asking "how to use" or "more info", refer to the CodeBundle we already mentioned
+- Look at the conversation history to find the Skill Template names, links, and details
+- If they're asking for a link, the Skill Template slug/name is in the format: `/collections/COLLECTION-SLUG/codebundles/CODEBUNDLE-SLUG` (the URL path keeps the legacy `codebundles` segment)
+- If they're asking "how to use" or "more info", refer to the Skill Template we already mentioned
 - DO NOT say "I couldn't find" - we literally just discussed it!
 - Answer directly from the conversation context
 
@@ -992,22 +1006,22 @@ The user is asking about CodeBundles we JUST discussed in the conversation above
             
             user_prompt = f"""User Question: {question}
 
-## Available CodeBundles from search (sorted by relevance score):
+## Available Skill Templates from search (sorted by relevance score):
 
 {task_context}
 {doc_section}
-ANSWER SOURCE CLASSIFICATION - You MUST start your response with exactly one of these tags:
-- [SOURCE:codebundles] — if CodeBundles from the search results are relevant to the user's question (DEFAULT when codebundles are listed)
-- [SOURCE:documentation] — ONLY if no codebundles are listed AND the answer comes from documentation
+ANSWER SOURCE CLASSIFICATION - You MUST start your response with exactly one of these tags (the internal tag tokens are unchanged so downstream systems still recognize them):
+- [SOURCE:codebundles] — if Skill Templates from the search results are relevant to the user's question (DEFAULT when Skill Templates are listed)
+- [SOURCE:documentation] — ONLY if no Skill Templates are listed AND the answer comes from documentation
 - [SOURCE:libraries] — if your answer is about Robot Framework keyword libraries (RW.CLI, RW.K8s, etc.)
-- [SOURCE:mixed] — if your answer uses BOTH documentation content AND CodeBundle recommendations
+- [SOURCE:mixed] — if your answer uses BOTH documentation content AND Skill Template recommendations
 
 RULES:
-- When CodeBundles are listed in search results that relate to the user's topic, use [SOURCE:codebundles] or [SOURCE:mixed]
-- Mention the most relevant CodeBundle(s) by name, explain what they do, and list their key tasks
+- When Skill Templates are listed in search results that relate to the user's topic, use [SOURCE:codebundles] or [SOURCE:mixed]
+- Mention the most relevant Skill Template(s) by name, explain what they do, and list their key Tools (Runbooks / Monitors)
 - Quality over quantity - 1-2 good matches is better than 5 mediocre ones
-- If the user is asking a follow-up about a previously mentioned codebundle, answer based on the conversation history
-- Only use [SOURCE:documentation] when NO codebundles are available and docs answer the question"""
+- If the user is asking a follow-up about a previously mentioned Skill Template, answer based on the conversation history
+- Only use [SOURCE:documentation] when NO Skill Templates are available and docs answer the question"""
 
         messages.append({"role": "user", "content": user_prompt})
 
@@ -1040,11 +1054,11 @@ def _build_task_context(tasks: List[RelevantTask]) -> str:
         ]
         if task.description:
             task_info.append(f"Description: {task.description}")
-        # Include actual tasks/capabilities - this is what users search for
+        # Include actual Tools/capabilities - this is what users search for
         if task.tasks:
-            task_info.append(f"Available Tasks: {', '.join(task.tasks[:8])}")
+            task_info.append(f"Available Runbooks (Tools): {', '.join(task.tasks[:8])}")
         if task.slis:
-            task_info.append(f"Available SLIs: {', '.join(task.slis[:5])}")
+            task_info.append(f"Available Monitors: {', '.join(task.slis[:5])}")
         if task.support_tags:
             task_info.append(f"Tags: {', '.join(task.support_tags)}")
         task_info.append(f"Relevance: {task.relevance_score:.0%}")
@@ -1056,12 +1070,12 @@ def _build_task_context(tasks: List[RelevantTask]) -> str:
 def _generate_fallback_answer(question: str, tasks: List[RelevantTask]) -> str:
     """Generate a simple fallback answer when LLM is not available"""
     if not tasks:
-        return f"""I couldn't find any tasks matching your question: "{question}"
+        return f"""I couldn't find any Tools matching your question: "{question}"
 
-Would you like to request these tasks be added to the registry? You can create a GitHub issue to request new automation tasks."""
+Would you like to request these Tools be added to the registry? You can create a GitHub issue to request new automation Skill Templates."""
 
     answer_parts = [
-        f"Here are the most relevant tasks for: **{question}**\n"
+        f"Here are the most relevant Tools for: **{question}**\n"
     ]
     
     for i, task in enumerate(tasks[:3], 1):
@@ -1070,7 +1084,7 @@ Would you like to request these tasks be added to the registry? You can create a
             answer_parts.append(f"   {task.description[:200]}...")
         answer_parts.append("")
     
-    answer_parts.append("\nSee the detailed results below for more information on each task.")
+    answer_parts.append("\nSee the detailed results below for more information on each Tool.")
     
     return "\n".join(answer_parts)
 

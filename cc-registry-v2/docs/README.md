@@ -8,6 +8,7 @@ All project documentation, organized by topic.
 - **[CCV.md](CCV.md)** - CodeCollection Version catalog: tag-schema contract, image-source plugins, `/api/v1/catalog` endpoints, PAPI integration
 - **[MCP_WORKFLOW.md](MCP_WORKFLOW.md)** - Document indexing pipeline, embedding generation, vector store, and search flow
 - **[CHAT.md](CHAT.md)** - Chat system architecture, dual search pipeline, LLM synthesis, follow-up detection
+- **[PHASE_2_SKILL_MD.md](PHASE_2_SKILL_MD.md)** - Phase 2 plan: add `SKILL.md` authoring + rendering per Anthropic Agent Skills spec (follow-up to the 2026 cosmetic terminology realignment)
 
 ## Setup and Configuration
 

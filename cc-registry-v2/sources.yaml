@@ -36,12 +36,15 @@ sources:
         - variables
       priority: medium
       
-    - name: Task and SLI Development
+    - name: Tool Development (Runbooks and Monitors)
       url: https://docs.runwhen.com/authors/codebundle-basics
-      description: Creating tasks for automation and SLIs (Service Level Indicators) for monitoring
+      description: Creating Tools for automation — Runbooks (formerly "TaskSets", on-demand) and Monitors (formerly "SLIs" / Service Level Indicators, scheduled, 0-1 numeric output)
       topics:
         - tasks
+        - tools
+        - runbooks
         - slis
+        - monitors
         - metrics
         - monitoring
         - health-checks
@@ -49,7 +52,7 @@ sources:
       
     - name: Generation Rules and Discovery
       url: https://docs.runwhen.com/authors/generation-rules
-      description: How to configure CodeBundles for automatic discovery and generation of workspace items
+      description: How to configure Skill Templates (formerly "CodeBundles") for automatic discovery and generation of workspace items
       topics:
         - discovery
         - automation
@@ -325,25 +328,29 @@ sources:
         - tasks
       priority: high
 
-    - name: SLI Development Guide
+    - name: Monitor (SLI) Development Guide
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/sli-development
-      description: Guide to creating Service Level Indicator (SLI) CodeBundles that measure metrics and return numeric values for monitoring
+      description: Guide to creating Monitors (formerly "SLIs" / Service Level Indicators) - Tools that measure metrics on a schedule and return numeric 0-1 health values for continuous monitoring
       topics:
         - sli
+        - monitor
         - service-level-indicator
         - metrics
         - monitoring
+        - scheduled
         - sli.robot
       priority: high
 
-    - name: TaskSet Development Guide
+    - name: Runbook (TaskSet) Development Guide
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/taskset-development
-      description: Guide to creating TaskSet CodeBundles for automated runbooks with multiple tasks for troubleshooting and remediation
+      description: Guide to creating Runbooks (formerly "TaskSets") - on-demand Skill Templates containing multiple Tools for troubleshooting and remediation
       topics:
         - taskset
         - runbook
         - automation
         - tasks
+        - tools
+        - on-demand
         - remediation
         - runbook.robot
       priority: high
@@ -449,7 +456,7 @@ sources:
         For GCP: Use the gcp-service-account secret type  
         For Azure: Use the azure-credentials secret type
         
-        These are automatically injected into your CodeBundle's environment.
+        These are automatically injected into your Skill Template's (CodeBundle's) environment.
       topics:
         - credentials
         - aws
@@ -457,27 +464,30 @@ sources:
         - azure
         - secrets
 
-    - question: How do I create an SLI vs a Task?
+    - question: How do I create a Monitor vs a Runbook?
       answer: |
-        SLIs (Service Level Indicators) return a numeric metric value (0-1 or percentage).
-        Tasks perform actions and may return success/failure.
+        Monitors (formerly "SLIs" / Service Level Indicators) return a numeric metric value (0-1 or percentage) and run on a schedule.
+        Runbooks (formerly "TaskSets") run on demand in response to events and emit structured findings with next steps.
         
         In your robot file:
-        - SLI: Use the `sli.robot` filename and return a numeric value
-        - Task: Use `runbook.robot` or `taskset.robot` and perform automation
+        - Monitor: Use the `sli.robot` filename and return a numeric value (the on-disk filename stays `sli.robot` for backward compatibility)
+        - Runbook: Use `runbook.robot` and perform automation
       topics:
         - sli
-        - task
+        - monitor
+        - taskset
+        - runbook
+        - tool
         - monitoring
         - automation
 
-    - question: How do I debug a CodeBundle?
+    - question: How do I debug a Skill Template?
       answer: |
-        Tips for debugging CodeBundles:
+        Tips for debugging Skill Templates (formerly "CodeBundles"):
         1. Use Log statements to output variable values
         2. Test locally with: robot --variable NAMESPACE:default sli.robot
         3. Check the RunSession logs in the RunWhen platform
-        4. Use RunWhen Local to test CodeBundles against real infrastructure
+        4. Use RunWhen Local to test Skill Templates against real infrastructure
         5. Add RW.Core.Add Pre To Report for detailed output
       topics:
         - debug
@@ -486,15 +496,15 @@ sources:
         - logs
         - testing
 
-    - question: What is the difference between SLI and TaskSet?
+    - question: What is the difference between a Monitor and a Runbook?
       answer: |
-        SLI (Service Level Indicator) CodeBundles measure a metric and return a numeric value (0-1 or percentage).
-        They are used for continuous monitoring and alerting.
+        Monitors (formerly "SLIs" / Service Level Indicators) measure a metric and return a numeric value (0-1 or percentage).
+        They are Tools that run on a schedule, continuously, in the background. Used for monitoring and alerting.
         
-        TaskSet CodeBundles run automated runbooks with multiple tasks that can be triggered on-demand or 
-        automatically. They are used for remediation and troubleshooting.
+        Runbooks (formerly "TaskSets") run on demand in response to an event or request, containing one or more Tools
+        for troubleshooting and remediation. They emit structured findings with next-steps.
         
-        Use SLIs for monitoring, TaskSets for remediation.
+        Use Monitors for continuous scheduled measurement, Runbooks for on-demand remediation.
       topics:
         - sli
         - taskset

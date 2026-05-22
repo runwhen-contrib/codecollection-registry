@@ -32,6 +32,7 @@ import {
 } from '@mui/icons-material';
 import { apiService, Task, TasksResponse } from '../services/api';
 import { useCart } from '../contexts/CartContext';
+import { labelForType } from '../lib/terminology';
 
 type ViewMode = 'grouped' | 'presentation';
 type SortOrder = 'alpha' | 'diverse' | 'codebundle';
@@ -263,10 +264,10 @@ const AllTasks: React.FC = () => {
       <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" component="h1" gutterBottom sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' }, fontWeight: 700, mb: 0.5 }}>
-            All Tasks
+            All Skills
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ fontSize: '0.9375rem' }}>
-            {filteredTasks.length} tasks across {Object.keys(groupedTasks).length} CodeBundles
+            {filteredTasks.length} Tools across {Object.keys(groupedTasks).length} Skill Templates
           </Typography>
         </Box>
 
@@ -282,7 +283,7 @@ const AllTasks: React.FC = () => {
               >
                 <MenuItem value="alpha">Alphabetical</MenuItem>
                 <MenuItem value="diverse">Platform Diversity</MenuItem>
-                <MenuItem value="codebundle">By CodeBundle</MenuItem>
+                <MenuItem value="codebundle">By Skill Template</MenuItem>
               </Select>
             </FormControl>
           )}
@@ -307,7 +308,7 @@ const AllTasks: React.FC = () => {
       <Box sx={{ mb: 2 }}>
         <TextField
           fullWidth
-          placeholder="Search tasks and codebundles..."
+          placeholder="Search Tools and Skill Templates..."
           value={taskSearch}
           onChange={(e) => setTaskSearch(e.target.value)}
           InputProps={{
@@ -463,7 +464,7 @@ const AllTasks: React.FC = () => {
                     </Box>
                   ) : (
                     <Box sx={{ textAlign: 'center', py: 8 }}>
-                      <Typography variant="h6" color="text.secondary" gutterBottom>No tasks found</Typography>
+                      <Typography variant="h6" color="text.secondary" gutterBottom>No Tools found</Typography>
                       <Typography variant="body2" color="text.secondary">Try adjusting your search criteria or clearing filters.</Typography>
                     </Box>
                   )}
@@ -484,7 +485,7 @@ const AllTasks: React.FC = () => {
             <Box sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  {Object.keys(groupedTasks).length} CodeBundle{Object.keys(groupedTasks).length !== 1 ? 's' : ''} • {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
+                  {Object.keys(groupedTasks).length} Skill Template{Object.keys(groupedTasks).length !== 1 ? 's' : ''} • {filteredTasks.length} Tool{filteredTasks.length !== 1 ? 's' : ''}
                   {selectedSupportTags.length > 0 && ` • ${selectedSupportTags.length} tag${selectedSupportTags.length > 1 ? 's' : ''}`}
                   {selectedCollection && ` • ${selectedCollection}`}
                 </Typography>
@@ -510,7 +511,7 @@ const AllTasks: React.FC = () => {
                                 {group.codebundle.name}
                               </Typography>
                               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                                {group.codebundle.collection_name} • {group.tasks.filter(t => t.type === 'TaskSet').length} tasks • {group.tasks.filter(t => t.type === 'SLI').length} SLIs
+                                {group.codebundle.collection_name} • {group.tasks.filter(t => t.type === 'TaskSet').length} Runbooks • {group.tasks.filter(t => t.type === 'SLI').length} Monitors
                               </Typography>
                             </Box>
                             <Box sx={{ ml: 1.5, display: 'flex', flexDirection: 'row', gap: 0.75, alignItems: 'center' }}>
@@ -540,7 +541,7 @@ const AllTasks: React.FC = () => {
                                   }
                                 }}
                               >
-                                {isInCart(group.codebundle.id) ? "Remove" : "Select CodeBundle"}
+                                {isInCart(group.codebundle.id) ? "Remove" : "Select Skill Template"}
                               </Button>
                               <Button variant="outlined" size="small" startIcon={<LaunchIcon />}
                                 href={`/collections/${group.codebundle.collection_slug}/codebundles/${group.codebundle.slug}`}
@@ -553,7 +554,7 @@ const AllTasks: React.FC = () => {
                             {group.tasks.filter(task => task.type === 'TaskSet').length > 0 && (
                               <Box sx={{ mb: 1.5 }}>
                                 <Typography variant="subtitle2" sx={{ color: 'primary.main', fontWeight: 600, mb: 0.5, fontSize: '0.875rem' }}>
-                                  TaskSet ({group.tasks.filter(task => task.type === 'TaskSet').length})
+                                  {labelForType('TaskSet')} ({group.tasks.filter(task => task.type === 'TaskSet').length})
                                 </Typography>
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                                   {group.tasks.filter(task => task.type === 'TaskSet').map((task) => (
@@ -567,7 +568,7 @@ const AllTasks: React.FC = () => {
                             {group.tasks.filter(task => task.type === 'SLI').length > 0 && (
                               <Box>
                                 <Typography variant="subtitle2" sx={{ color: 'secondary.main', fontWeight: 600, mb: 0.5, fontSize: '0.875rem' }}>
-                                  SLI ({group.tasks.filter(task => task.type === 'SLI').length})
+                                  {labelForType('SLI')} ({group.tasks.filter(task => task.type === 'SLI').length})
                                 </Typography>
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                                   {group.tasks.filter(task => task.type === 'SLI').map((task) => (
@@ -585,7 +586,7 @@ const AllTasks: React.FC = () => {
                   </Box>
                 ) : (
                   <Box sx={{ textAlign: 'center', py: 8 }}>
-                    <Typography variant="h6" color="text.secondary" gutterBottom>No tasks found</Typography>
+                    <Typography variant="h6" color="text.secondary" gutterBottom>No Tools found</Typography>
                     <Typography variant="body2" color="text.secondary">Try adjusting your search criteria or clearing filters.</Typography>
                   </Box>
                 )}

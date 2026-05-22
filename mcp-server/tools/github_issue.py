@@ -1,8 +1,10 @@
 """
 GitHub Issue Tools
 
-Creates CodeBundle request issues on GitHub when semantic search
-fails to find matching codebundles.
+Creates Skill Template request issues on GitHub when semantic search
+fails to find matching Skill Templates (internally still called
+``CodeBundle`` for backward compatibility -- see Phase 1 cosmetic
+rename notes in ``mcp-server/utils/terminology.py``).
 
 Uses the codebundle-wanted.yaml template format from:
 https://github.com/runwhen-contrib/codecollection-registry/blob/main/.github/ISSUE_TEMPLATE/codebundle-wanted.yaml
@@ -31,9 +33,13 @@ GITHUB_API_BASE = "https://api.github.com"
 
 @dataclass
 class CodeBundleRequest:
-    """Data for a new CodeBundle request issue."""
+    """Data for a new Skill Template (formerly "CodeBundle") request issue.
+
+    Class name is preserved for backward compatibility with existing
+    callers; the user-facing vocabulary is "Skill Template".
+    """
     platform: str                    # What cloud platform(s) should this support?
-    tasks: List[str]                 # Key tasks that should be performed
+    tasks: List[str]                 # Key Tools that should be performed
     original_query: Optional[str] = None  # The user's original search query
     context: Optional[str] = None    # Any other helpful context
     contact_ok: bool = False         # Willing to be contacted?
@@ -167,9 +173,9 @@ class GitHubIssueClient:
         return bool(self._app_mgr and self._app_mgr.available) or bool(self.token)
     
     def _format_tasks(self, tasks: List[str]) -> str:
-        """Format tasks as a numbered list."""
+        """Format Tools as a numbered list."""
         if not tasks:
-            return "No specific tasks provided"
+            return "No specific Tools provided"
         return "\n".join(f"{i+1}. {task}" for i, task in enumerate(tasks))
     
     def _build_issue_body(self, request: CodeBundleRequest) -> str:
@@ -183,8 +189,8 @@ class GitHubIssueClient:
         # Cloud platform(s)
         sections.append(f"## What cloud platform(s) should this support?\n{request.platform}")
         
-        # Key tasks
-        sections.append(f"## What are some key tasks that should be performed?\n{self._format_tasks(request.tasks)}")
+        # Key Tools (Runbooks/Monitors)
+        sections.append(f"## What are some key Tools that should be performed?\n{self._format_tasks(request.tasks)}")
         
         # Additional context
         if request.context:
@@ -320,15 +326,16 @@ def get_github_tool() -> GitHubIssueClient:
 
 class RequestCodeBundleTool(BaseTool):
     """
-    Request a new CodeBundle by creating a GitHub issue.
-    Use this when no existing CodeBundle matches the user's needs.
+    Request a new Skill Template (formerly "CodeBundle") by creating a
+    GitHub issue. Use this when no existing Skill Template matches the
+    user's needs.
     """
     
     @property
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="request_codebundle",
-            description="Request a new CodeBundle from the community by creating a GitHub issue. Use this when no existing CodeBundle matches the user's needs.",
+            description="Request a new Skill Template (formerly 'CodeBundle') from the community by creating a GitHub issue. Use this when no existing Skill Template matches the user's needs.",
             category="action",
             parameters=[
                 ToolParameter(
@@ -340,7 +347,7 @@ class RequestCodeBundleTool(BaseTool):
                 ToolParameter(
                     name="tasks",
                     type="array",
-                    description="List of key tasks that should be performed",
+                    description="List of key Tools (Runbooks or Monitors) that should be performed",
                     required=True,
                     items="string"
                 ),
@@ -374,7 +381,7 @@ class RequestCodeBundleTool(BaseTool):
         context: Optional[str] = None,
         contact_ok: bool = False
     ) -> str:
-        """Create a GitHub issue for a new CodeBundle request"""
+        """Create a GitHub issue for a new Skill Template request"""
         client = get_github_client()
         
         if not client.is_configured():
@@ -391,7 +398,7 @@ class RequestCodeBundleTool(BaseTool):
         result = client.create_issue(request)
         
         if result["success"]:
-            return f"""# CodeBundle Request Created!
+            return f"""# Skill Template Request Created!
 
 Your request has been submitted successfully.
 
@@ -413,13 +420,13 @@ https://github.com/{REPO_OWNER}/{REPO_NAME}/issues/new?template=codebundle-wante
 
 
 class CheckExistingRequestsTool(BaseTool):
-    """Check if there are existing CodeBundle requests similar to what the user needs."""
+    """Check if there are existing Skill Template (formerly "CodeBundle") requests similar to what the user needs."""
     
     @property
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="check_existing_requests",
-            description="Check if there are existing CodeBundle requests similar to what the user needs",
+            description="Check if there are existing Skill Template (formerly 'CodeBundle') requests similar to what the user needs",
             category="info",
             parameters=[
                 ToolParameter(
@@ -432,13 +439,13 @@ class CheckExistingRequestsTool(BaseTool):
         )
     
     async def execute(self, search_term: str) -> str:
-        """Check for existing CodeBundle requests"""
+        """Check for existing Skill Template requests"""
         client = get_github_client()
         
         existing = client.check_existing_issues(search_term)
         
         if existing:
-            output = f"# Existing CodeBundle Requests for: {search_term}\n\n"
+            output = f"# Existing Skill Template Requests for: {search_term}\n\n"
             output += f"Found {len(existing)} related open issue(s):\n\n"
             
             for issue in existing:
@@ -448,4 +455,4 @@ class CheckExistingRequestsTool(BaseTool):
             output += "\nConsider commenting on an existing issue if it matches your needs, or create a new request if yours is different."
             return output
         else:
-            return f"No existing open requests found for '{search_term}'.\n\nYou can create a new CodeBundle request using the request_codebundle tool."
+            return f"No existing open requests found for '{search_term}'.\n\nYou can create a new Skill Template request using the request_codebundle tool."

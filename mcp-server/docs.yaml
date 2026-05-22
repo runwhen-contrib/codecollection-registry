@@ -6,41 +6,47 @@ documentation:
   codebundle_development:
     - name: CodeBundle Development Guide
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development
-      description: Complete guide to developing RunWhen CodeBundles including structure, syntax, and best practices
+      description: Complete guide to developing RunWhen Skill Templates (formerly "CodeBundles") including structure, syntax, and best practices
       keywords:
         - development
         - best-practices
         - getting-started
         - structure
         - codebundle
+        - skill-template
 
     - name: Robot Framework Basics
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/robot-framework-basics
-      description: Introduction to Robot Framework syntax for CodeBundle development
+      description: Introduction to Robot Framework syntax for Skill Template (formerly "CodeBundle") development
       keywords:
         - robot
         - robot-framework
         - syntax
         - keywords
         - tasks
+        - tools
 
     - name: SLI Development
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/sli-development
-      description: Guide to creating Service Level Indicator (SLI) CodeBundles
+      description: Guide to creating Monitors (formerly "SLIs" / Service Level Indicators) - Tools that run on a schedule and emit a 0-1 numeric health value
       keywords:
         - sli
+        - monitor
         - service-level-indicator
         - metrics
         - monitoring
+        - scheduled
 
     - name: TaskSet Development
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/taskset-development
-      description: Guide to creating TaskSet CodeBundles for automated runbooks
+      description: Guide to creating Runbooks (formerly "TaskSets") - Tools that run on demand in response to events and emit structured findings
       keywords:
         - taskset
         - runbook
         - automation
         - tasks
+        - tools
+        - on-demand
 
   libraries:
     - name: RW.CLI Library

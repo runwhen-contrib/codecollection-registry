@@ -48,6 +48,7 @@ import {
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { apiService, CodeBundle } from '../services/api';
 import { useCart } from '../contexts/CartContext';
+import { labelForType } from '../lib/terminology';
 
 const CodeBundleDetail: React.FC = () => {
   const { collectionSlug, codebundleSlug } = useParams<{ collectionSlug: string; codebundleSlug: string }>();
@@ -97,7 +98,7 @@ const CodeBundleDetail: React.FC = () => {
   if (!codebundle) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Alert severity="warning">CodeBundle not found</Alert>
+        <Alert severity="warning">Skill Template not found</Alert>
       </Container>
     );
   }
@@ -142,7 +143,7 @@ const CodeBundleDetail: React.FC = () => {
             }
             onClick={() => {
               // Create context string with codebundle details
-              const context = `I have a question about the "${codebundle.display_name}" CodeBundle from the ${codebundle.codecollection?.name || 'unknown'} collection.\n\nCodeBundle Details:\n- Description: ${codebundle.description || 'N/A'}\n- Platform: ${codebundle.discovery_platform || 'N/A'}\n- Tasks: ${codebundle.task_count || 0}\n- Access Level: ${codebundle.access_level || 'N/A'}`;
+              const context = `I have a question about the "${codebundle.display_name}" Skill Template from the ${codebundle.codecollection?.name || 'unknown'} collection.\n\nSkill Template Details:\n- Description: ${codebundle.description || 'N/A'}\n- Platform: ${codebundle.discovery_platform || 'N/A'}\n- Tools: ${codebundle.task_count || 0}\n- Access Level: ${codebundle.access_level || 'N/A'}`;
               
               navigate('/chat', { 
                 state: { 
@@ -424,24 +425,24 @@ const CodeBundleDetail: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                   <CodeIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
                   <Typography variant="caption" color="text.secondary">
-                    Total Tasks
+                    Total Tools
                   </Typography>
                 </Box>
                 <Typography variant="body2" sx={{ fontWeight: 500, pl: 2.5 }}>
                   {(codebundle.task_count || 0) + (codebundle.sli_count || 0)}
                   {codebundle.task_count > 0 && codebundle.sli_count > 0 && (
                     <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
-                      ({codebundle.task_count} TaskSet + {codebundle.sli_count} SLI)
+                      ({codebundle.task_count} {labelForType('TaskSet')} + {codebundle.sli_count} {labelForType('SLI')})
                     </Typography>
                   )}
                   {codebundle.task_count > 0 && !codebundle.sli_count && (
                     <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
-                      (TaskSet)
+                      ({labelForType('TaskSet')})
                     </Typography>
                   )}
                   {!codebundle.task_count && codebundle.sli_count > 0 && (
                     <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
-                      (SLI)
+                      ({labelForType('SLI')})
                     </Typography>
                   )}
                 </Typography>
@@ -513,7 +514,7 @@ const CodeBundleDetail: React.FC = () => {
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
               <Tabs value={mainTab} onChange={(e, newValue) => setMainTab(newValue)}>
                 <Tab label="Description" sx={{ textTransform: 'none' }} />
-                <Tab label="Tasks" sx={{ textTransform: 'none' }} />
+                <Tab label="Tools" sx={{ textTransform: 'none' }} />
                 <Tab label="Variables" sx={{ textTransform: 'none' }} />
                 <Tab label="Security" sx={{ textTransform: 'none' }} />
                 <Tab label="Updates" sx={{ textTransform: 'none' }} />
@@ -574,9 +575,9 @@ const CodeBundleDetail: React.FC = () => {
                           <Tab 
                             label={
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                TaskSet ({codebundle.tasks.length})
+                                {labelForType('TaskSet')} ({codebundle.tasks.length})
                                 <Tooltip 
-                                  title="TaskSet contains automation tasks for troubleshooting, operations, and maintenance. These are typically triggered on-demand or by specific conditions."
+                                  title="A Runbook is a Tool that runs on demand in response to an event or request and emits structured findings with next-steps. Use them for troubleshooting, operations, and incident response."
                                   arrow
                                 >
                                   <InfoIcon sx={{ fontSize: '1rem', color: 'text.secondary' }} />
@@ -589,9 +590,9 @@ const CodeBundleDetail: React.FC = () => {
                           <Tab 
                             label={
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                SLI ({codebundle.slis.length})
+                                {labelForType('SLI')} ({codebundle.slis.length})
                                 <Tooltip 
-                                  title="SLI (Service Level Indicator) tasks are automated checks that run continuously to measure and monitor the health and performance of your services."
+                                  title="A Monitor is a Tool that runs on a schedule, continuously, in the background. It emits a numeric 0-1 health value used to track service health and performance over time."
                                   arrow
                                 >
                                   <InfoIcon sx={{ fontSize: '1rem', color: 'text.secondary' }} />
@@ -663,7 +664,7 @@ const CodeBundleDetail: React.FC = () => {
                   </Box>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
-                    No tasks or SLIs defined for this codebundle.
+                    No Tools defined for this Skill Template.
                   </Typography>
                 )}
               </CardContent>
@@ -717,7 +718,7 @@ const CodeBundleDetail: React.FC = () => {
                           No User Variables Documented
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          This CodeBundle may not require user-configured variables, or they have not been extracted yet. 
+                          This Skill Template may not require user-configured variables, or they have not been extracted yet. 
                           Check the source code on GitHub for the complete configuration requirements.
                         </Typography>
                         {codebundle.codecollection?.git_url && (
@@ -769,10 +770,10 @@ const CodeBundleDetail: React.FC = () => {
                     </Box>
                     <Typography variant="body2" color="text.secondary">
                       {codebundle.access_level === 'read-only' 
-                        ? 'This CodeBundle requires read-only access to resources. It will not make changes to your infrastructure.'
+                        ? 'This Skill Template requires read-only access to resources. It will not make changes to your infrastructure.'
                         : codebundle.access_level === 'read-write'
-                        ? 'This CodeBundle requires read-write access and may modify resources in your infrastructure.'
-                        : 'Access level requirements for this CodeBundle.'}
+                        ? 'This Skill Template requires read-write access and may modify resources in your infrastructure.'
+                        : 'Access level requirements for this Skill Template.'}
                     </Typography>
                   </Box>
                 )}
@@ -793,7 +794,7 @@ const CodeBundleDetail: React.FC = () => {
                       />
                     </Box>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      The following IAM permissions are required to execute this CodeBundle:
+                      The following IAM permissions are required to execute this Skill Template:
                     </Typography>
                     <Box 
                       component="ul" 
@@ -848,7 +849,7 @@ const CodeBundleDetail: React.FC = () => {
                 
                 {!codebundle.access_level && (!codebundle.minimum_iam_requirements || codebundle.minimum_iam_requirements.length === 0) && (
                   <Alert severity="info">
-                    No specific security requirements have been documented for this CodeBundle.
+                    No specific security requirements have been documented for this Skill Template.
                   </Alert>
                 )}
               </CardContent>
@@ -880,9 +881,9 @@ const CodeBundleDetail: React.FC = () => {
                       </Typography>
                     </Box>
                     <Typography variant="body2" sx={{ mb: 1 }}>
-                      <strong>Tasks:</strong> {codebundle.task_count} task{codebundle.task_count !== 1 ? 's' : ''}
-                      {codebundle.tasks && codebundle.tasks.length > 0 && ` (${codebundle.tasks.length} TaskSet)`}
-                      {codebundle.slis && codebundle.slis.length > 0 && ` + ${codebundle.slis.length} SLI`}
+                      <strong>Tools:</strong> {codebundle.task_count} Tool{codebundle.task_count !== 1 ? 's' : ''}
+                      {codebundle.tasks && codebundle.tasks.length > 0 && ` (${codebundle.tasks.length} ${labelForType('TaskSet', codebundle.tasks.length !== 1)})`}
+                      {codebundle.slis && codebundle.slis.length > 0 && ` + ${codebundle.slis.length} ${labelForType('SLI', codebundle.slis.length !== 1)}`}
                     </Typography>
                     {codebundle.configuration_type?.platform && codebundle.configuration_type.platform !== 'Unknown' && (
                       <Typography variant="body2">
@@ -926,7 +927,7 @@ const CodeBundleDetail: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                   <AutoAwesomeIcon sx={{ mr: 1, color: 'primary.main' }} />
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Enhanced Task Details ({codebundle.ai_enhanced_metadata.enhanced_tasks.length})
+                    Enhanced Tool Details ({codebundle.ai_enhanced_metadata.enhanced_tasks.length})
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
