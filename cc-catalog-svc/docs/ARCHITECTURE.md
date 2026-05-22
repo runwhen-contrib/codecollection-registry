@@ -2,8 +2,8 @@
 
 This document explains *why* the service is shaped the way it is. For
 operator how-tos, see the per-plugin docs (e.g.
-[JFROG.md](JFROG.md)) and the top-level
-[README.md](../README.md).
+[JFROG.md](JFROG.md), [GIT_MIRROR.md](GIT_MIRROR.md)) and the
+top-level [README.md](../README.md).
 
 ---
 
@@ -133,6 +133,40 @@ The `oci` source parses tags with the same regex the registry uses:
 Tags that don't match are silently ignored — that's deliberate, so
 `latest` / `main` / `<date>` tags coexist on the registry without
 confusing the catalog.
+
+### Tiebreak on multiple builds of the same ref
+
+When two canonical tags share a ref (e.g. `main-<a>-<x>` AND
+`main-<b>-<y>` both with `ref=main`), the catalog has to choose one
+row to persist because `image_refs` is keyed on `(cc_id, ref_name)`.
+We sort by `(built_at, image_tag)` ascending and keep the last entry.
+
+`built_at` is filled in by the OCI source's tiebreak enrichment:
+
+1. `GET /v2/<repo>/manifests/<tag>` with manifest `Accept` headers.
+2. Descend into the manifest's `config.digest` blob (for image
+   indices, walk into the first child platform manifest first).
+3. Read the config blob's `created` field — always set by buildkit /
+   docker buildx and the only OCI-spec'd source of truth for actual
+   build time.
+
+We deliberately do NOT trust the `Last-Modified` HTTP header even
+though many registries set it. JFrog Artifactory (and other caching
+proxies) sets `Last-Modified` to the local cache freshness time, not
+the upstream build time — so whichever tag the poll happened to GET
+first or last would win the tiebreak based on cache-warmup order
+instead of actual recency. Going to `config.digest.created` adds one
+HTTP call per tiebreak tag but is universally correct.
+
+Enrichment only fires for refs that have >1 canonical tag, so most
+polls do zero extra HTTP work. Per-tag failures are tolerated — the
+sort just falls back to lex on `image_tag` for whichever tags didn't
+get a timestamp.
+
+Lex-only ordering is wrong for this schema: `cc_sha7` is hex, so
+`main-1xxxxxx-...` sorts ASCII-before `main-dxxxxxx-...` even when the
+`1xxxxxx` build was pushed weeks later. Without `built_at`, JFrog-fronted
+catalogs would happily report a stale tag as `latest_image_tag`.
 
 ---
 

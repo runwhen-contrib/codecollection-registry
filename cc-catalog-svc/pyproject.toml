@@ -27,6 +27,7 @@ dependencies = [
     "pyyaml>=6.0,<7",
     # Optional Postgres support: import is lazy in db.py
     "psycopg2-binary>=2.9; extra == 'postgres'",
+    "a2wsgi (>=1.10,<2)",
 ]
 
 [project.optional-dependencies]

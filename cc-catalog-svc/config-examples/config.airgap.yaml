@@ -1,0 +1,69 @@
+# Air-gapped deployment — git repos baked into the image at build time.
+#
+# Mirrors live at /opt/cc-catalog/git (NOT under /data — a PVC on /data would
+# hide baked content). runtime_sync is off so the scheduler never tries to
+# reach github.com after deploy.
+#
+# data_dir defaults to /opt/cc-catalog/git already (matches the Dockerfile
+# bake stage). It's listed explicitly here for documentation.
+#
+# Admin sync: POST /api/v1/admin/sync-git is a no-op while runtime_sync=false.
+# An operator who really needs to refresh from upstream must call:
+#   POST /api/v1/admin/sync-git?allow_runtime_sync=true
+# This guard rail exists so a stray click can't egress to github.com from an
+# air-gapped cluster.
+#
+# Mount your environment-specific values (public_base_url, JFrog creds) via
+# ConfigMap/Secret. This file is a starting template.
+#
+# See docs/GIT_MIRROR.md for the full operator runbook.
+
+catalog_api:
+  prefix: /api/v1/catalog
+
+scheduler:
+  catalog_poll_minutes: 15
+  mirror_poll_minutes: 15
+  git_sync_minutes: 60   # ignored when git.runtime_sync is false
+
+git:
+  enabled: true
+  data_dir: /opt/cc-catalog/git
+  mount_path: /git
+  public_base_url: https://cc-catalog.example.com/git
+  runtime_sync: false
+
+sources:
+  # Pattern C: poll JFrog Remote Docker repo (no ghcr.io egress at runtime).
+  - name: jfrog-remote-runwhen
+    type: oci
+    auth:
+      user_env: JFROG_USER
+      pass_env: JFROG_PASS
+    codecollections:
+      - slug: rw-cli-codecollection
+        name: RunWhen CLI CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-cli-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-cli-codecollection
+      - slug: rw-public-codecollection
+        name: RunWhen Public CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-public-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-public-codecollection
+      - slug: rw-generic-codecollection
+        name: RunWhen Generic CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-generic-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-generic-codecollection
+      - slug: rw-workspace-utils
+        name: RunWhen Workspace Utilities CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-workspace-utils
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-workspace-utils
+      - slug: aws-c7n-codecollection
+        name: AWS CloudCustodian CodeCollection
+        git_url: https://github.com/runwhen-contrib/aws-c7n-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/aws-c7n-codecollection
+      - slug: azure-c7n-codecollection
+        name: Azure CloudCustodian CodeCollection
+        git_url: https://github.com/runwhen-contrib/azure-c7n-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/azure-c7n-codecollection
+
+# No destinations — JFrog Remote handles image caching on first pull.

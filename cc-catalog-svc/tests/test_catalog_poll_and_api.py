@@ -228,6 +228,105 @@ def test_entry_pointers_fallback_never_compares_ref_name_to_image_tag():
     assert stable == "v2.0.0-bbccdde-e4f5a6b"
 
 
+class TiebreakSource(ImageSource):
+    """In-memory source that returns two competing tags for ref=main.
+
+    Used to verify ``_upsert_refs`` picks the row with the newer
+    ``built_at`` rather than the one with the lexicographically-largest
+    ``image_tag``. The older tag's image_tag is intentionally larger in
+    ASCII (``main-d...`` > ``main-1...``) — that's the trap the bug fell
+    into in production behind JFrog.
+    """
+
+    name = "tiebreak"
+
+    def discover_refs(self, cc):
+        return [
+            DiscoveredImageRef(
+                ref="main",
+                ref_type="branch",
+                commit="de76dd0",
+                rt_revision="71dfdc4",
+                image_tag="main-de76dd0-71dfdc4",  # lex-larger, older
+                built_at=datetime(2026, 5, 12, 10, 0, 0),
+            ),
+            DiscoveredImageRef(
+                ref="main",
+                ref_type="branch",
+                commit="10792f4",
+                rt_revision="6e4bc81",
+                image_tag="main-10792f4-6e4bc81",  # lex-smaller, newer
+                built_at=datetime(2026, 5, 21, 17, 0, 0),
+            ),
+        ]
+
+    def resolve_latest(self, cc, refs):
+        # Match the OCISource ordering exactly.
+        from datetime import timezone
+
+        candidates = [r for r in refs if r.ref == cc.get("default_ref", "main")]
+        candidates.sort(
+            key=lambda r: (
+                r.built_at or datetime.min.replace(tzinfo=timezone.utc),
+                r.image_tag,
+            )
+        )
+        return candidates[-1].image_tag if candidates else None
+
+    def resolve_stable(self, cc, refs):
+        return None
+
+
+def test_upsert_refs_picks_newest_by_built_at_not_lex(monkeypatch, db_session):
+    """Regression: catalog must not be tricked into keeping the older
+    canonical tag just because its cc_sha7 prefix is ASCII-larger.
+
+    Before the fix, the JFrog-fronted catalog kept reporting
+    ``main-de76dd0-71dfdc4`` as the ``main`` ref's row even after the
+    newer ``main-10792f4-6e4bc81`` showed up in /v2/.../tags/list,
+    because ``d`` > ``1`` lexicographically. The fix wires
+    ``DiscoveredImageRef.built_at`` into the tiebreak so the surviving
+    row matches what ``resolve_latest`` declared.
+    """
+    src = TiebreakSource()
+    monkeypatch.setitem(src_registry.SOURCE_REGISTRY, src.name, src)
+    cfg = AppConfig(
+        storage=StorageConfig(),
+        scheduler=SchedulerConfig(),
+        sources=[
+            SourceConfig(
+                name="tiebreak-src",
+                type="tiebreak",
+                codecollections=[
+                    CodeCollectionConfig(
+                        slug="ss-rw-cli-codecollection",
+                        name="SheaStewart RW CLI",
+                        image_registry="jfrog.example.com/stewartshea/rw-cli-codecollection",
+                    )
+                ],
+            )
+        ],
+    )
+    config_mod._CONFIG_CACHE = cfg
+
+    summary = run_catalog_poll(cfg)
+    assert summary["collections_processed"] == 1
+    assert summary["errors"] == []
+
+    from app.models import CodeCollection, ImageRef
+    from sqlalchemy import select
+
+    cc = db_session.execute(
+        select(CodeCollection).where(CodeCollection.slug == "ss-rw-cli-codecollection")
+    ).scalar_one()
+    main_row = db_session.execute(
+        select(ImageRef).where(ImageRef.cc_id == cc.id, ImageRef.ref_name == "main")
+    ).scalar_one()
+    assert main_row.image_tag == "main-10792f4-6e4bc81"
+    assert main_row.commit_hash == "10792f4"
+    assert main_row.is_latest is True
+
+
 def test_duplicate_cc_slug_across_sources_fails_loudly():
     cfg = AppConfig(
         sources=[

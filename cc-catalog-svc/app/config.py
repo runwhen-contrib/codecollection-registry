@@ -276,6 +276,100 @@ class SchedulerConfig(BaseModel):
     mirror_poll_minutes: int = Field(5, ge=1, le=1440)
     mirror_workers: int = Field(2, ge=1, le=32)
     per_job_timeout_seconds: int = Field(600, ge=10, le=3600)
+    git_sync_minutes: int = Field(
+        60,
+        ge=1,
+        le=1440,
+        description="How often to fetch upstream git repos into local mirrors.",
+    )
+
+
+class GitAuth(BaseModel):
+    """Auth for fetching upstream git repos (GitHub PAT, etc.)."""
+
+    token_env: Optional[str] = Field(
+        None,
+        description="Env var holding a Bearer token (GitHub PAT, etc.).",
+    )
+    user_env: Optional[str] = Field(
+        None,
+        description="Env var holding HTTP Basic username.",
+    )
+    pass_env: Optional[str] = Field(
+        None,
+        description="Env var holding HTTP Basic password or token-as-password.",
+    )
+
+    @model_validator(mode="after")
+    def _exactly_one_or_none(self) -> "GitAuth":
+        token = bool(self.token_env)
+        basic_any = bool(self.user_env) or bool(self.pass_env)
+        basic_both = bool(self.user_env) and bool(self.pass_env)
+        if token and basic_any:
+            raise ValueError("git.auth: set EITHER token_env OR user_env+pass_env, not both")
+        if basic_any and not basic_both:
+            raise ValueError("git.auth: user_env and pass_env must be set together")
+        return self
+
+
+class GitServiceConfig(BaseModel):
+    """Local git mirror + smart HTTP service for air-gapped deployments.
+
+    When enabled, cc-catalog-svc maintains bare mirror clones of each
+    configured CodeCollection ``git_url`` and serves them read-only at
+    ``mount_path``. Catalog API responses rewrite ``git_url`` to
+    ``public_base_url/<slug>.git`` once a mirror exists.
+
+    Release images bake mirrors at Docker build time into
+    ``/opt/cc-catalog/git`` (outside the ``/data`` volume). Set
+    ``data_dir: /opt/cc-catalog/git`` and ``runtime_sync: false`` for
+    air-gapped deployments with no outbound git access.
+    """
+
+    enabled: bool = False
+    data_dir: str = Field(
+        "/opt/cc-catalog/git",
+        description=(
+            "Directory for bare mirror repos (<slug>.git). Defaults to "
+            "/opt/cc-catalog/git so release images with build-time baked "
+            "mirrors work out of the box. Override to a writable path on "
+            "the data PVC (e.g. /data/git) if you want runtime_sync to "
+            "persist fetched objects across pod restarts."
+        ),
+    )
+    mount_path: str = Field(
+        "/git",
+        description="HTTP path prefix for git smart HTTP (clone URL path).",
+    )
+    public_base_url: Optional[str] = Field(
+        None,
+        description=(
+            "External base URL for clone commands, e.g. "
+            "https://cc-catalog.example.com/git. Omit to keep upstream git_url "
+            "in catalog responses even when mirrors exist."
+        ),
+    )
+    runtime_sync: bool = Field(
+        True,
+        description=(
+            "When false, skip scheduled/admin background fetch from upstream. "
+            "Use with build-time baked mirrors in air-gapped environments."
+        ),
+    )
+    auth: GitAuth = Field(default_factory=GitAuth)
+    codecollections: list[str] = Field(
+        default_factory=list,
+        description=("Slugs to mirror. Empty = every CC with a git_url from sources."),
+    )
+    clone_timeout_seconds: int = Field(900, ge=30, le=7200)
+    fetch_timeout_seconds: int = Field(600, ge=30, le=3600)
+
+    @field_validator("auth", mode="before")
+    @classmethod
+    def _none_to_empty_auth(cls, v):
+        if v is None:
+            return {}
+        return v
 
 
 class CatalogAPIConfig(BaseModel):
@@ -304,10 +398,11 @@ class AppConfig(BaseModel):
     storage: StorageConfig = Field(default_factory=StorageConfig)
     catalog_api: CatalogAPIConfig = Field(default_factory=CatalogAPIConfig)
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
+    git: GitServiceConfig = Field(default_factory=GitServiceConfig)
     sources: list[SourceConfig] = Field(default_factory=list)
     destinations: list[DestinationConfig] = Field(default_factory=list)
 
-    @field_validator("storage", "catalog_api", "scheduler", mode="before")
+    @field_validator("storage", "catalog_api", "scheduler", "git", mode="before")
     @classmethod
     def _none_to_default(cls, v, info):
         # `key:` in YAML => None; treat as "use defaults".

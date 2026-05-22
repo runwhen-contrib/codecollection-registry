@@ -21,6 +21,29 @@ scheduler:
   mirror_poll_minutes: 5    # how often to enqueue + drain mirror work
   mirror_workers: 2         # concurrent crane copies
   per_job_timeout_seconds: 600
+  git_sync_minutes: 60      # how often to fetch upstream git repos (when git.enabled)
+
+# ------------------------------------------------------------------------
+# Git mirror service (air-gap source repos)
+#
+# When enabled, cc-catalog-svc maintains bare mirror clones of each CC's
+# git_url and serves them read-only at mount_path. Platform consumers clone
+# from public_base_url/<slug>.git instead of github.com once mirrored.
+#
+# Requires outbound git access only during sync (not at platform runtime).
+# ------------------------------------------------------------------------
+# git:
+#   enabled: true
+#   data_dir: /opt/cc-catalog/git   # baked into release images; NOT under /data PVC
+#   mount_path: /git
+#   public_base_url: https://cc-catalog.example.com/git
+#   runtime_sync: false             # air-gap: never fetch github.com at runtime
+#   auth:
+#     token_env: GITHUB_TOKEN       # build-time only (CI secret); omit at runtime
+#   # codecollections: []          # optional slug filter; default = all CCs with git_url
+#
+# See config-examples/config.airgap.yaml for a full air-gap deployment template.
+# Release images bake mirrors at docker build from config-examples/config.bake.yaml.
 
 # ------------------------------------------------------------------------
 # Sources — where to discover image refs from.

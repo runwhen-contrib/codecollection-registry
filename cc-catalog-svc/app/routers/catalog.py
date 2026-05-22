@@ -18,6 +18,7 @@ registry's behavior exactly.
 
 All endpoints are read-only and unauthenticated by design.
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -41,6 +42,7 @@ from app.services.catalog import (
     find_ref_by_name,
     get_cc_by_slug,
 )
+from app.services.git_mirror import resolve_git_url_for_catalog
 
 router = APIRouter(prefix="/api/v1/catalog", tags=["catalog"])
 
@@ -96,7 +98,7 @@ def list_catalog(
             CatalogEntry(
                 slug=cc.slug,
                 name=cc.name,
-                git_url=cc.git_url,
+                git_url=resolve_git_url_for_catalog(cc),
                 visibility=cc.visibility or "public",
                 latest_image_tag=latest_tag,
                 stable_image_tag=stable_tag,
@@ -117,7 +119,7 @@ def get_catalog_entry(slug: str, db: Session = Depends(db_session)) -> CatalogEn
     return CatalogEntryDetail(
         slug=cc.slug,
         name=cc.name,
-        git_url=cc.git_url,
+        git_url=resolve_git_url_for_catalog(cc),
         visibility=cc.visibility or "public",
         latest_image_tag=latest_tag,
         stable_image_tag=stable_tag,
@@ -150,9 +152,7 @@ def get_ref(slug: str, ref: str, db: Session = Depends(db_session)) -> ImageRefS
         raise HTTPException(status_code=404, detail=f"unknown codecollection: {slug}")
     row = find_ref_by_name(db, cc.id, ref)
     if row is None or not row.image_tag:
-        raise HTTPException(
-            status_code=404, detail=f"no image for {slug}@{ref}"
-        )
+        raise HTTPException(status_code=404, detail=f"no image for {slug}@{ref}")
     return _to_image_ref(row)
 
 
@@ -160,12 +160,11 @@ def get_ref(slug: str, ref: str, db: Session = Depends(db_session)) -> ImageRefS
 def resolve_image(
     slug: str,
     pointer: Optional[str] = Query(
-        None, pattern="^(latest|stable)$",
+        None,
+        pattern="^(latest|stable)$",
         description="Resolve a named pointer ('latest' or 'stable').",
     ),
-    ref: Optional[str] = Query(
-        None, description="Resolve a specific git ref name (branch/tag)."
-    ),
+    ref: Optional[str] = Query(None, description="Resolve a specific git ref name (branch/tag)."),
     destination: Optional[str] = Query(
         None,
         description=(
@@ -242,9 +241,7 @@ def _attach_destination(
     """
     dest_cfg = get_config().destination_by_name(dest_name)
     if dest_cfg is None:
-        raise HTTPException(
-            status_code=404, detail=f"unknown destination: {dest_name}"
-        )
+        raise HTTPException(status_code=404, detail=f"unknown destination: {dest_name}")
 
     dest_row = db.execute(
         select(Destination).where(Destination.name == dest_name)

@@ -142,6 +142,15 @@ Admin (writes):
 |---|---|
 | POST | `/api/v1/admin/reload-config` |
 | POST | `/api/v1/admin/sync-catalog` |
+| POST | `/api/v1/admin/sync-git?allow_runtime_sync=<bool>` |
+
+Git mirror hosting (read-only — see [docs/GIT_MIRROR.md](docs/GIT_MIRROR.md)):
+
+| Method | Path |
+|---|---|
+| GET  | `/api/v1/git/repos` |
+| GET  | `/api/v1/git/repos/{slug}` |
+| GET/POST | `/git/{slug}.git/info/refs`, `/git/{slug}.git/git-upload-pack` (smart HTTP) |
 
 Health:
 
@@ -212,5 +221,6 @@ without network, without Postgres.
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — design rationale, HA, schema
 - [docs/JFROG.md](docs/JFROG.md) — JFrog destination operator guide
+- [docs/GIT_MIRROR.md](docs/GIT_MIRROR.md) — git mirror hosting for air-gap deployments
 - [docs/PAPI_INTEGRATION.md](docs/PAPI_INTEGRATION.md) — how PAPI consumes the catalog and the `?destination=` extension
 - `cc-registry-v2/docs/CCV.md` — the contract this service is compatible with (in the sibling project)

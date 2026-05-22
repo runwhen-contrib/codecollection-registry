@@ -206,6 +206,9 @@ jobs:
           build-args: |
             GITHUB_SHA=${{ github.sha }}
             GITHUB_REF=${{ github.ref }}
+            BAKE_GIT_MIRRORS=true
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
 
       - name: Release summary
         if: needs.create-release.outputs.release_tag != ''

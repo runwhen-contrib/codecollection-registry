@@ -14,6 +14,7 @@ concepts the service deals with:
 so the catalog resolver logic ports cleanly. We don't reuse that model
 class because we don't want a hard dependency on the registry's package.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -60,11 +61,20 @@ class CodeCollection(Base):
     last_synced: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_sync_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    git_head_commit: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    git_last_synced: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    git_last_sync_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now(),
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now(), onupdate=func.now(),
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     refs: Mapped[list["ImageRef"]] = relationship(
@@ -112,10 +122,15 @@ class ImageRef(Base):
 
     synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now(),
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now(), onupdate=func.now(),
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     cc: Mapped[CodeCollection] = relationship(back_populates="refs")
@@ -150,10 +165,15 @@ class Destination(Base):
     last_sync_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now(),
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now(), onupdate=func.now(),
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
 
@@ -189,12 +209,16 @@ class MirrorTarget(Base):
     )
     target_digest: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     mirrored_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now(),
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
     )
 
     __table_args__ = (
         UniqueConstraint(
-            "cc_id", "destination_id", "source_image_tag",
+            "cc_id",
+            "destination_id",
+            "source_image_tag",
             name="uq_mirror_targets_cc_dest_tag",
         ),
     )
@@ -243,11 +267,11 @@ class MirrorJob(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now(),
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
     )
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    __table_args__ = (
-        Index("ix_mirror_jobs_status_created", "status", "created_at"),
-    )
+    __table_args__ = (Index("ix_mirror_jobs_status_created", "status", "created_at"),)
