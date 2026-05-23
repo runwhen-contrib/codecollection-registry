@@ -248,7 +248,7 @@ const Home: React.FC = () => {
               lineHeight: 1.2
             }}
           >
-            RunWhen Registry
+            RunWhen Skills Registry
           </Typography>
           
           <Typography 
@@ -264,7 +264,7 @@ const Home: React.FC = () => {
               mx: 'auto'
             }}
           >
-            Explore the largest open library of AI SRE tools. Describe your problem and the assistant will suggest the right automation to run securely in your own environment.
+            Grow your team's capability with safe-for-production skills for AI agents — across SRE, DevOps, FinOps, release engineering, and beyond. Describe your problem and the assistant will suggest the right skill to run securely in your own environment.
           </Typography>
 
           {/* Search Bar that routes to Registry Chat */}
@@ -320,18 +320,18 @@ const Home: React.FC = () => {
             {[
               {
                 icon: CollectionIcon, label: 'CodeCollections', count: stats?.collections || 0, to: '/collections',
-                desc: 'Groups of bundles by provider',
-                tooltip: 'CodeCollections group related CodeBundles by technology or provider — like aws-codecollection or k8s-codecollection. Each collection is backed by a Git repository maintained by the community.',
+                desc: 'Groups of Skill Templates by provider',
+                tooltip: 'CodeCollections group related Skill Templates by technology or provider — like aws-codecollection or k8s-codecollection. Each collection is backed by a Git repository maintained by the community.',
               },
               {
-                icon: BundleIcon, label: 'CodeBundles', count: stats?.codebundles || 0, to: '/codebundles',
+                icon: BundleIcon, label: 'Skill Templates', count: stats?.codebundles || 0, to: '/codebundles',
                 desc: 'Scripted automation packages',
-                tooltip: 'A CodeBundle is a self-contained automation package that targets a specific service or resource — like "Postgres Health" or "AKS Triage." Each bundle contains one or more executable tasks, configuration variables, and documentation.',
+                tooltip: 'A Skill Template is a self-contained automation package that targets a specific service or resource — like "Postgres Health" or "AKS Triage." Each Skill Template contains one or more executable Tools, configuration variables, and documentation.',
               },
               {
-                icon: TaskIcon, label: 'Tasks', count: stats?.tasks || 0, to: '/all-tasks',
+                icon: TaskIcon, label: 'Tools', count: stats?.tasks || 0, to: '/all-tasks',
                 desc: 'CLI & API actions to run',
-                tooltip: 'Tasks are the runnable units inside a CodeBundle. Each task is a scripted action — CLI commands, API calls, or queries — that performs a specific operation like "Check Pod Restarts" or "Query Connection Pool." Tasks run on private runners in your environment.',
+                tooltip: 'Tools are the runnable units inside a Skill Template. Each Tool is a scripted action — CLI commands, API calls, or queries — that performs a specific operation like "Check Pod Restarts" or "Query Connection Pool." Tools are either Runbooks (run on demand in response to an event) or Monitors (run on a schedule, emit a 0-1 health score). They execute on private runners in your environment.',
               },
               {
                 icon: DocsIcon, label: 'Docs', count: null, to: '/chat',
@@ -608,7 +608,7 @@ const Home: React.FC = () => {
                   letterSpacing: '-0.2px'
                 }}
               >
-                Recently Updated CodeBundles
+                Recently Updated Skill Templates
               </Typography>
             </Box>
             
@@ -737,7 +737,7 @@ const Home: React.FC = () => {
                   letterSpacing: '-0.2px'
                 }}
               >
-                Recently Updated Tasks
+                Recently Updated Tools
               </Typography>
             </Box>
             
@@ -881,7 +881,7 @@ const Home: React.FC = () => {
               }
             }}
           >
-            Browse All CodeBundles
+            Browse All Skill Templates
           </Button>
           <Button
             variant="outlined"

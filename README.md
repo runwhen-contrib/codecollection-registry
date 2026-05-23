@@ -1,6 +1,8 @@
-# CodeCollection Registry
+# RunWhen Skills Registry
 
-A registry for RunWhen CodeCollections -- browsing, searching, and configuring automation CodeBundles.
+A registry of safe-for-production Skills for AI agents -- browsing, searching, and configuring Skill Templates (formerly "CodeBundles") backed by RunWhen CodeCollections.
+
+> Note: the GitHub repo retains the legacy `codecollection-registry` name for URL stability. The product is **RunWhen Skills Registry**.
 
 ## Repository Structure
 
@@ -27,7 +29,7 @@ See [cc-registry-v2/README.md](cc-registry-v2/README.md) for setup, configuratio
 
 ### [mcp-server/](mcp-server/) -- MCP Server
 
-A standalone FastAPI server that exposes MCP tools for querying the CodeCollection Registry. Delegates all data access to the backend API. Includes an offline indexer for generating vector embeddings.
+A standalone FastAPI server that exposes MCP tools for querying the RunWhen Skills Registry. Delegates all data access to the backend API. Includes an offline indexer for generating vector embeddings.
 
 ```bash
 cd mcp-server/

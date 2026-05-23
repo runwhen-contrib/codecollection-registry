@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# CodeCollection Registry - Simple Startup Script
+# RunWhen Skills Registry - Simple Startup Script
 # Kubernetes-ready: Uses simple docker-compose commands
 
 set -e
 
-echo "🚀 Starting CodeCollection Registry..."
+echo "🚀 Starting RunWhen Skills Registry..."
 
 # Create .env file from example if it doesn't exist
 if [ ! -f .env ]; then

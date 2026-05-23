@@ -51,7 +51,7 @@ export default function IntakeWizard() {
 
   const buildTitle = () => {
     const firstLine = problemDescription.split('\n')[0].trim();
-    return firstLine.length > 60 ? firstLine.slice(0, 57) + '...' : firstLine || 'CodeBundle request';
+    return firstLine.length > 60 ? firstLine.slice(0, 57) + '...' : firstLine || 'Skill Template request';
   };
 
   const buildDescription = () => {
@@ -60,7 +60,7 @@ export default function IntakeWizard() {
     if (healthyLooksLike.trim()) parts.push(`\n**What healthy looks like:** ${healthyLooksLike.trim()}`);
     if (anythingElse.trim()) parts.push(`\n**Additional context:** ${anythingElse.trim()}`);
     if (mode === 'explicit' && (explicitTasks.trim() || explicitVariables.trim())) {
-      if (explicitTasks.trim()) parts.push(`\n**Suggested tasks:**\n${explicitTasks.trim()}`);
+      if (explicitTasks.trim()) parts.push(`\n**Suggested Tools:**\n${explicitTasks.trim()}`);
       if (explicitVariables.trim()) parts.push(`\n**Variables/config:**\n${explicitVariables.trim()}`);
     }
     return parts.join('\n');
@@ -134,7 +134,7 @@ export default function IntakeWizard() {
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Box sx={{ mb: 4, textAlign: 'center' }}>
         <Typography variant="h4" gutterBottom>
-          Request a CodeBundle
+          Request a Skill Template
         </Typography>
         <Typography variant="body1" color="text.secondary">
           Describe the problem you're solving. The designer will figure out the rest.
@@ -168,7 +168,7 @@ export default function IntakeWizard() {
           <Typography variant="caption" sx={{ ml: 2, alignSelf: 'center', color: 'text.secondary' }}>
             {mode === 'simple'
               ? 'Describe naturally — the designer has autonomy'
-              : 'Specify tasks and variables if you know them'}
+              : 'Specify Tools and variables if you know them'}
           </Typography>
         </Box>
 
@@ -246,7 +246,7 @@ export default function IntakeWizard() {
               fullWidth
               multiline
               minRows={2}
-              label="Suggested tasks (one per line)"
+              label="Suggested Tools (one per line)"
               placeholder="Check for failed CronJobs\nCheck for suspended CronJobs\n..."
               value={explicitTasks}
               onChange={(e) => setExplicitTasks(e.target.value)}
@@ -302,7 +302,7 @@ export default function IntakeWizard() {
           {submitting ? 'Searching & Submitting...' : 'Search & Submit'}
         </Button>
         <Typography variant="caption" display="block" sx={{ mt: 2, textAlign: 'center', color: 'text.secondary' }}>
-          We search existing CodeBundles first, then create your request with the results attached for the designer.
+          We search existing Skill Templates first, then create your request with the results attached for the designer.
         </Typography>
       </Paper>
     </Container>

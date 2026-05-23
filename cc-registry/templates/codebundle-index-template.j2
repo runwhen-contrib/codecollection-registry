@@ -9,32 +9,32 @@
 ## Available Pages
 <ul>
     {% if task_page %}
-    <li><a href="{{ task_page }}">View Tasks</a></li>
+    <li><a href="{{ task_page }}">View Runbooks (Tools)</a></li>
     {% endif %}
     {% if sli_page %}
-    <li><a href="{{ sli_page }}">View SLIs</a></li>
+    <li><a href="{{ sli_page }}">View Monitors</a></li>
     {% endif %}
 </ul>
 {% endif %}
 
 {% if tasks %}
-## Tasks
+## Runbooks (Tools)
 <ul>
     {% for task in tasks %}
     <li>{{ task }}</li>
     {% endfor %}
 </ul>
 {% else %}
-_No tasks available._
+_No Runbooks available._
 {% endif %}
 
 {% if slis %}
-## Service Level Indicators (SLIs)
+## Monitors
 <ul>
     {% for sli in slis %}
     <li>{{ sli }}</li>
     {% endfor %}
 </ul>
 {% else %}
-_No SLIs available._
+_No Monitors available._
 {% endif %}

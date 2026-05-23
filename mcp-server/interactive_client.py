@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Interactive CLI client for RunWhen Registry MCP Server
+Interactive CLI client for RunWhen Skills Registry MCP Server
 
 Allows you to interactively query the MCP server from the command line.
 """
@@ -12,7 +12,7 @@ from mcp.client.stdio import stdio_client
 
 async def interactive_session():
     """Run an interactive query session"""
-    print("\n🚀 RunWhen Registry MCP - Interactive Client")
+    print("\n🚀 RunWhen Skills Registry MCP - Interactive Client")
     print("="*80)
     print("\nAvailable commands:")
     print("  1. list      - List all codebundles and codecollections")

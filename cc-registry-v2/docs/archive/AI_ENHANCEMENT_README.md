@@ -1,6 +1,6 @@
 # AI CodeBundle Enhancement Framework
 
-This document describes the AI-powered enhancement framework for CodeBundles in the CodeCollection Registry v2.
+This document describes the AI-powered enhancement framework for Skill Templates (formerly "CodeBundles") in the RunWhen Skills Registry v2.
 
 ## Overview
 

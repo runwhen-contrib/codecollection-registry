@@ -1,14 +1,14 @@
 # MCP Server Workflow: Search and Indexing
 
-How data ingestion, embedding generation, and search work in the CodeCollection Registry.
+How data ingestion, embedding generation, and search work in the RunWhen Skills Registry.
 
 ## Unified Pipeline
 
 There is **one pipeline** for all environments. The backend Celery worker:
 
 1. Syncs CodeCollection repos from GitHub
-2. Parses codebundles from Robot files
-3. AI-enhances metadata for new codebundles
+2. Parses Skill Templates (formerly "CodeBundles") from Robot files
+3. AI-enhances metadata for new Skill Templates
 4. Generates embeddings and stores them in pgvector
 
 The MCP server is a **stateless HTTP proxy** that delegates all queries to the backend API.
@@ -32,28 +32,28 @@ Step 1: sync_all_collections_task
          │
          ▼
 Step 2: parse_all_codebundles_task
-  - For each collection repo:
+  - For each CodeCollection repo:
     - Walk directory tree looking for meta.yaml + *.robot files
     - Parse meta.yaml: extract name, description, tags
-    - Parse *.robot files: extract tasks, SLIs, keywords, variables
+    - Parse *.robot files: extract Tools — Runbooks (TaskSets) and Monitors (SLIs) — plus keywords and variables
     - Parse README.md for documentation content
-    - INSERT or UPDATE codebundle rows in PostgreSQL
+    - INSERT or UPDATE Skill Template rows in PostgreSQL (table name: `codebundles`)
          │
          ▼
 Step 3: enhance_pending_codebundles_task
-  - Query codebundles WHERE enhancement_status IS NULL or 'pending'
-  - For each unenhanced codebundle:
+  - Query Skill Templates WHERE enhancement_status IS NULL or 'pending'
+  - For each unenhanced Skill Template:
     - Send to Azure OpenAI GPT for analysis
     - Generate: improved description, platform classification,
       access level, IAM requirements, data classifications
-    - UPDATE the codebundle row
+    - UPDATE the Skill Template row
          │
          ▼
 Step 4: index_codebundles_task
-  - Query all active codebundles and codecollections from PostgreSQL
-  - Build document text for each (name + description + tags + tasks + readme)
+  - Query all active Skill Templates and CodeCollections from PostgreSQL
+  - Build document text for each (name + description + tags + Tools + readme)
   - Generate embeddings via Azure OpenAI text-embedding-3-small
-  - Upsert into vector_codebundles and vector_codecollections (pgvector)
+  - Upsert into vector_codebundles and vector_codecollections (pgvector — table names kept for backward compatibility)
 ```
 
 ### Documentation indexing

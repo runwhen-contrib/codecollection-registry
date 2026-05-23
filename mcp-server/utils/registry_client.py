@@ -1,7 +1,7 @@
 """
 Registry API Client
 
-Thin HTTP client for the CodeCollection Registry backend API.
+Thin HTTP client for the RunWhen Skills Registry backend API.
 All data access goes through the API — the MCP server never
 touches the database directly.
 
@@ -21,7 +21,7 @@ TIMEOUT = 30.0
 
 class RegistryClient:
     """
-    HTTP client for the CodeCollection Registry API.
+    HTTP client for the RunWhen Skills Registry API.
     
     Wraps the backend endpoints that the MCP server tools need.
     """

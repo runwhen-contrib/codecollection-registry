@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RunWhen Registry MCP Server - HTTP/REST API Version
+RunWhen Skills Registry MCP Server - HTTP/REST API Version
 
 Provides HTTP endpoints for MCP tools to enable client-server separation.
 This is the primary server for production deployments.
@@ -36,10 +36,10 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="RunWhen Registry MCP Server",
+    title="RunWhen Skills Registry MCP Server",
     description=(
         "Thin, stateless MCP server that provides tool-based access to the "
-        "RunWhen CodeCollection Registry. All data is fetched from the backend "
+        "RunWhen Skills Registry. All data is fetched from the backend "
         "Registry API via REGISTRY_API_URL. See /openapi.yaml for the full spec."
     ),
     version="2.0.0",
@@ -119,7 +119,7 @@ async def openapi_yaml():
 async def root():
     """Root endpoint with API information"""
     return {
-        "name": "RunWhen Registry MCP Server",
+        "name": "RunWhen Skills Registry MCP Server",
         "version": "1.0.0",
         "docs": "/docs",
         "health": "/health",
@@ -409,7 +409,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
     
-    logger.info(f"Starting RunWhen Registry MCP Server on http://{host}:{port}")
+    logger.info(f"Starting RunWhen Skills Registry MCP Server on http://{host}:{port}")
     logger.info(f"API Documentation: http://{host}:{port}/docs")
     logger.info(f"Health Check: http://{host}:{port}/health")
     

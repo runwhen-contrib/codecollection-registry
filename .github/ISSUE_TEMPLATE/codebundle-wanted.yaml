@@ -1,5 +1,5 @@
-name: CodeBundle Wanted
-description: Request a new CodeBundle from the Community
+name: Skill Template Wanted
+description: Request a new Skill Template (formerly "CodeBundle") from the community
 title: "[new-codebundle-request] - "
 labels: [new-codebundle-request"] 
 assignees: 
@@ -8,17 +8,19 @@ body:
   - type: markdown
     attributes:
       value: |
-        Hello there 🎉! We're excited that you want RunWhen's libraries to expand. Your request for a contribution will make a big difference in improving the community's experience with Kubernetes and cloud environments. Feel free to add as much or as little detail below. 
-        
+        Hello there 🎉! We're excited that you want RunWhen's libraries to expand. Your request for a contribution will make a big difference in improving the community's experience with Kubernetes and cloud environments. Feel free to add as much or as little detail below.
+
         Each and every request is highly appreciated! Let's make navigating complex environments easier together!
-        
+
+        > **Heads up — terminology:** a **Skill Template** is what we used to call a **CodeBundle** (a reusable package of automation Tools). A **Tool** is what we used to call a **Task** — Runbooks run on demand, Monitors run on a schedule. Issue title prefix `[new-codebundle-request]` and label `new-codebundle-request` are kept for backward compatibility with existing workflows.
+
         If you're open to being contacted with follow-up questions, please place an [x] beside 'yes, please' at the end of the form. 😊
 
   - type: textarea
     id: codebundle-request
     attributes:
       label: What cloud platform(s) should this support?
-      description: Please describe, as best as you can, what this CodeBundle should do - including which cloud resources it should interact with. 
+      description: Please describe, as best as you can, what this Skill Template should do - including which cloud resources it should interact with. 
       placeholder: ex. Kubernetes on Azure (AKS)
     validations:
       required: true
@@ -26,13 +28,13 @@ body:
   - type: textarea
     id: task-titles
     attributes:
-      label: What are some key tasks that should be performed?
-      description: Please outline a 3-7 key tasks that should be automated, along with any issues that should be raised if the result is not "healthy".
+      label: What are some key Tools (Runbooks / Monitors) that should be performed?
+      description: Please outline 3-7 key Tools that should be automated, along with any issues that should be raised if the result is not "healthy".
       placeholder: | 
         ex. 
-        1. Trace Namespace Errors - Raise issue if Warning or Error events in last 10 minutes
-        2. Fetch Unready Pods - Raise issue if more than 0 pods are unready
-        3. List all Namespace Resources and Add to Report
+        1. Trace Namespace Errors (Runbook) - Raise issue if Warning or Error events in last 10 minutes
+        2. Fetch Unready Pods (Runbook) - Raise issue if more than 0 pods are unready
+        3. List all Namespace Resources and Add to Report (Runbook)
     validations:
       required: true
 
@@ -40,7 +42,7 @@ body:
     id: additional-context
     attributes:
       label: Any other helpful context?
-      description: Provide any additional context surrounding this Codebundle, such as specific circumstances or dependencies that make it particularly useful.
+      description: Provide any additional context surrounding this Skill Template, such as specific circumstances or dependencies that make it particularly useful.
       placeholder: ex. We run a multi-cluster istio setup, so it's important to support multiple contexts/clusters. 
     validations:
       required: false

@@ -1,6 +1,6 @@
 # Architecture
 
-System architecture for the CodeCollection Registry v2.
+System architecture for the RunWhen Skills Registry v2.
 
 ## Service Overview
 
@@ -8,7 +8,7 @@ The registry runs as 8 Docker services coordinated by `docker-compose.yml`.
 
 | Service | Image / Stack | Port | Role |
 |---|---|---|---|
-| **frontend** | React 19 + TypeScript + MUI v7 | 3000 | SPA for browsing and managing CodeBundles |
+| **frontend** | React 19 + TypeScript + MUI v7 | 3000 | SPA for browsing and managing Skill Templates (formerly "CodeBundles") |
 | **backend** | FastAPI + SQLAlchemy 2.0 | 8001 | REST API (`/api/v1/`), business logic, AI enhancement, embedding generation |
 | **mcp-server** | FastAPI (separate repo: `../mcp-server`) | 8000 | Stateless MCP tool server, delegates all queries to backend API |
 | **worker** | Celery (shares backend image) | -- | Background task processing (sync, parse, enhance, embed) |
@@ -63,8 +63,8 @@ Worker: sync_parse_enhance_workflow_task
   │
   ├── Step 2: parse_all_codebundles_task
   │     Parse meta.yaml, *.robot files, README.md
-  │     Extract tasks, SLIs, metadata, support tags
-  │     INSERT/UPDATE codebundles in PostgreSQL
+  │     Extract Tools — Runbooks (TaskSets) and Monitors (SLIs) — plus metadata and support tags
+  │     INSERT/UPDATE Skill Templates (DB table: codebundles) in PostgreSQL
   │
   ├── Step 3: enhance_pending_codebundles_task
   │     AI-enhance NEW codebundles only (pending/NULL status)
@@ -179,14 +179,14 @@ The database image is `pgvector/pgvector:pg15`. The pgvector extension is enable
 
 | Table | Purpose |
 |---|---|
-| `codecollections` | Collection metadata (name, slug, git_url, owner) |
-| `codebundles` | CodeBundle details (name, slug, description, tasks, SLIs, AI metadata) |
-| `tasks` | Individual task definitions extracted from codebundles |
+| `codecollections` | CodeCollection metadata (name, slug, git_url, owner) |
+| `codebundles` | Skill Template details (name, slug, description, Tools, Monitors, AI metadata) — table name kept for backward compatibility |
+| `tasks` | Individual Tool (Runbook / Monitor) definitions extracted from Skill Templates — table name kept for backward compatibility |
 | `metrics` | Collection-level metrics and statistics |
 | `ai_enhancement_log` | AI enhancement audit trail |
 | `helm_charts` | Helm chart versions and templates |
-| `analytics` | Task growth metrics |
-| `task_executions` | Celery task execution history |
+| `analytics` | Tool growth metrics |
+| `task_executions` | Celery task execution history (background-job tasks, not Tools) |
 
 ### Vector tables (created by `006_add_pgvector.sql`)
 

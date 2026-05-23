@@ -349,7 +349,7 @@ const Chat: React.FC = () => {
             </Box>
 
             <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 600, mx: 'auto', fontSize: '0.9rem', lineHeight: 1.6 }}>
-              Ask Eager Edgar to help explore CodeBundles, documentation, and authoring guidelines. Get assistance with troubleshooting tasks, SLIs, and automation workflows across the CodeCollection ecosystem.
+              Ask Eager Edgar to help explore Skill Templates, documentation, and authoring guidelines. Get assistance with troubleshooting Tools, Monitors, and Runbooks across the CodeCollection ecosystem.
             </Typography>
 
             {chatHealth && chatHealth.status !== 'healthy' && (
@@ -511,7 +511,7 @@ const Chat: React.FC = () => {
                                 <CopyIcon sx={{ fontSize: 16 }} />
                               )}
                             </IconButton>
-                            {/* Only show Request CodeBundle button for codebundle-sourced answers */}
+                            {/* Only show Request Skill Template button for codebundle-sourced answers */}
                             {message.response?.answer_source !== 'documentation' && message.response?.answer_source !== 'libraries' && message.response?.answer_source !== 'system' && (
                               <Button
                                 size="small"
@@ -531,7 +531,7 @@ const Chat: React.FC = () => {
                                   }
                                 }}
                               >
-                                Request CodeBundle
+                                Request Skill Template
                               </Button>
                             )}
                             {/* Show source indicator for all tool types */}
@@ -541,7 +541,7 @@ const Chat: React.FC = () => {
                                   message.response.answer_source === 'documentation' ? 'Documentation' :
                                   message.response.answer_source === 'libraries' ? 'Libraries' :
                                   message.response.answer_source === 'system' ? 'System Info' :
-                                  message.response.answer_source === 'mixed' ? 'Docs + CodeBundles' :
+                                  message.response.answer_source === 'mixed' ? 'Docs + Skill Templates' :
                                   message.response.answer_source
                                 }`}
                                 size="small"
@@ -594,12 +594,12 @@ const Chat: React.FC = () => {
                                   }
                                 }}
                               >
-                                Request CodeBundle
+                                Request Skill Template
                               </Button>
                             }
                           >
                             <Typography variant="body2">
-                              Can't find what you're looking for? Request a new CodeBundle for this use case.
+                              Can't find what you're looking for? Request a new Skill Template for this use case.
                             </Typography>
                           </Alert>
                         </Box>
@@ -624,7 +624,7 @@ const Chat: React.FC = () => {
                               <ExpandMoreIcon sx={{ fontSize: 18 }} />
                             )}
                             <Typography variant="body2">
-                              {message.response.relevant_tasks.length} related codebundle{message.response.relevant_tasks.length > 1 ? 's' : ''}
+                              {message.response.relevant_tasks.length} related Skill Template{message.response.relevant_tasks.length > 1 ? 's' : ''}
                             </Typography>
                           </Box>
                           

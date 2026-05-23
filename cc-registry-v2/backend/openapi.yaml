@@ -1,9 +1,27 @@
 openapi: 3.1.0
 info:
-  title: RunWhen CodeCollection Registry API
+  title: RunWhen Skills Registry API
   description: |
-    Backend API for the RunWhen CodeCollection Registry. Manages codecollections,
-    codebundles, tasks, documentation, AI enhancement, Helm charts, and chat.
+    Backend API for the RunWhen Skills Registry. Manages CodeCollections,
+    Skill Templates (formerly "codebundles"), Tools (formerly "tasks"),
+    documentation, AI enhancement, Helm charts, and chat.
+
+    ## Terminology
+
+    The API path segments and JSON schemas still use the legacy vocabulary for
+    backward compatibility — internal/external clients depend on these identifiers.
+    The new user-facing vocabulary maps as follows:
+
+    | API path / JSON field (legacy, unchanged) | New display name |
+    |---|---|
+    | `/api/v1/codebundles`, `codebundles[]`, `codebundle` | **Skill Template** |
+    | `/api/v1/registry/tasks`, `tasks[]`, `task` | **Tool** |
+    | `type: "TaskSet"`, `/api/v1/tasksets` | **Runbook** (on-demand Tool) |
+    | `type: "SLI"`, `slis[]` | **Monitor** (scheduled Tool, 0-1 numeric output) |
+    | `codecollections[]`, `/api/v1/codecollections` | **CodeCollection** (unchanged) |
+
+    Treat the two vocabularies as synonyms. Endpoint summaries below use the
+    new vocabulary where it adds clarity; paths and schemas are stable.
 
     ## Architecture
 
@@ -20,7 +38,7 @@ info:
     ## Data Flow
 
     ```
-    codecollections.yaml → Seed → Sync (git clone) → Parse (codebundles) → Enhance (AI) → Serve
+    codecollections.yaml → Seed → Sync (git clone) → Parse (Skill Templates) → Enhance (AI) → Serve
     ```
 
   version: 2.0.0
@@ -41,19 +59,19 @@ tags:
   - name: Health
     description: Health checks and root info
   - name: Registry
-    description: Public endpoints for browsing collections, codebundles, and tasks
+    description: Public endpoints for browsing CodeCollections, Skill Templates (codebundles), and Tools (tasks)
   - name: Chat
     description: MCP-powered semantic search and conversational chat
   - name: Analytics
-    description: Task growth metrics and analytics
+    description: Tool growth metrics and analytics
   - name: Versions
-    description: Collection version management
+    description: CodeCollection version management
   - name: Helm Charts
     description: Helm chart versions, schemas, and validation
   - name: GitHub
-    description: GitHub issue creation for codebundle requests
+    description: GitHub issue creation for Skill Template (codebundle) requests
   - name: Admin - Collections
-    description: CRUD operations for codecollections (requires auth)
+    description: CRUD operations for CodeCollections (requires auth)
   - name: Admin - Inventory
     description: Detailed inventory views (requires auth)
   - name: Admin - Operations
@@ -144,10 +162,11 @@ paths:
   /api/v1/codebundles:
     get:
       tags: [Registry]
-      summary: List/search codebundles
+      summary: List/search Skill Templates (codebundles)
       description: |
-        List codebundles with full-text search, filtering, and pagination.
+        List Skill Templates (formerly "codebundles") with full-text search, filtering, and pagination.
         The `search` parameter searches across name, display_name, description, and doc fields.
+        The path segment `/codebundles` and response field `codebundles` are kept for backward compatibility.
       operationId: listCodebundles
       parameters:
         - name: limit
@@ -182,7 +201,7 @@ paths:
           schema: { type: string, enum: [name, updated, tasks], default: name }
       responses:
         "200":
-          description: Paginated codebundle list
+          description: Paginated Skill Template (codebundle) list
           content:
             application/json:
               schema:
@@ -199,7 +218,7 @@ paths:
   /api/v1/collections/{collection_slug}/codebundles/{codebundle_slug}:
     get:
       tags: [Registry]
-      summary: Get codebundle by slug
+      summary: Get Skill Template (codebundle) by slug
       operationId: getCodebundle
       parameters:
         - $ref: "#/components/parameters/CollectionSlug"
@@ -209,19 +228,23 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: Full codebundle details
+          description: Full Skill Template details
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CodeBundleFull"
         "404":
-          description: Codebundle not found
+          description: Skill Template (codebundle) not found
 
   /api/v1/registry/tasks:
     get:
       tags: [Registry]
-      summary: Search tasks
-      description: Search tasks across all codebundles with tag and text filtering.
+      summary: Search Tools (tasks)
+      description: |
+        Search Tools (formerly "tasks") — both Runbooks (TaskSets) and Monitors (SLIs) —
+        across all Skill Templates (codebundles) with tag and text filtering. The
+        JSON response field name `tasks` is kept for backward compatibility; each
+        item carries a `type` of "TaskSet" (Runbook) or "SLI" (Monitor).
       operationId: searchTasks
       parameters:
         - name: support_tags
@@ -242,7 +265,7 @@ paths:
           schema: { type: integer, default: 0 }
       responses:
         "200":
-          description: Task search results
+          description: Tool (task) search results
           content:
             application/json:
               schema:
@@ -258,12 +281,12 @@ paths:
   /api/v1/registry/recent-codebundles:
     get:
       tags: [Registry]
-      summary: Recent codebundles
-      description: Get the 20 most recently updated codebundles.
+      summary: Recent Skill Templates (codebundles)
+      description: Get the 20 most recently updated Skill Templates.
       operationId: recentCodebundles
       responses:
         "200":
-          description: Recent codebundles
+          description: Recent Skill Templates
           content:
             application/json:
               schema:
@@ -274,11 +297,11 @@ paths:
   /api/v1/registry/recent-tasks:
     get:
       tags: [Registry]
-      summary: Recent tasks
+      summary: Recent Tools (tasks)
       operationId: recentTasks
       responses:
         "200":
-          description: Recent tasks
+          description: Recent Tools
           content:
             application/json:
               schema:

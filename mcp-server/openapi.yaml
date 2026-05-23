@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
-  title: RunWhen Registry MCP Server
+  title: RunWhen Skills Registry MCP Server
   description: |
     Thin, stateless MCP (Model Context Protocol) server that provides tool-based
-    access to the RunWhen CodeCollection Registry.
+    access to the RunWhen Skills Registry.
 
     All data is fetched from the backend Registry API via `REGISTRY_API_URL`.
     The MCP server itself stores no data — it is a protocol adapter that exposes
@@ -87,7 +87,7 @@ paths:
                 properties:
                   name:
                     type: string
-                    example: RunWhen Registry MCP Server
+                    example: RunWhen Skills Registry MCP Server
                   version:
                     type: string
                     example: "2.0.0"

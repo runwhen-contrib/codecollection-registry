@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-RunWhen Registry MCP Server
+RunWhen Skills Registry MCP Server
 
-A Model Context Protocol server for querying RunWhen codecollection data,
-libraries, and documentation resources.
+A Model Context Protocol server for querying RunWhen Skills Registry data
+(Skill Templates, Tools, libraries, and documentation resources).
 """
 import asyncio
 import json
@@ -33,7 +33,7 @@ async def list_tools() -> List[Tool]:
         Tool(
             name="list_codebundles",
             description=(
-                "List all codebundles and codecollections. "
+                "List all Skill Templates (formerly 'CodeBundles') and CodeCollections. "
                 "Supports filtering by collection and output formatting."
             ),
             inputSchema={
@@ -47,7 +47,7 @@ async def list_tools() -> List[Tool]:
                     },
                     "collection_slug": {
                         "type": "string",
-                        "description": "Filter by codecollection slug (optional)"
+                        "description": "Filter by CodeCollection slug (optional)"
                     }
                 }
             }
@@ -55,8 +55,8 @@ async def list_tools() -> List[Tool]:
         Tool(
             name="search_codebundles",
             description=(
-                "Search for codebundles by keywords, tags, or use case. "
-                "Returns relevant codebundles with relevance scoring."
+                "Search for Skill Templates (formerly 'CodeBundles') by keywords, tags, or use case. "
+                "Returns relevant Skill Templates with relevance scoring."
             ),
             inputSchema={
                 "type": "object",
@@ -85,13 +85,13 @@ async def list_tools() -> List[Tool]:
         ),
         Tool(
             name="get_codebundle_details",
-            description="Get detailed information about a specific codebundle",
+            description="Get detailed information about a specific Skill Template (formerly 'CodeBundle')",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slug": {
                         "type": "string",
-                        "description": "Codebundle slug"
+                        "description": "Skill Template slug"
                     },
                     "collection_slug": {
                         "type": "string",
@@ -103,7 +103,7 @@ async def list_tools() -> List[Tool]:
         ),
         Tool(
             name="list_codecollections",
-            description="List all available codecollections",
+            description="List all available CodeCollections",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -206,16 +206,16 @@ async def handle_list_codebundles(arguments: Dict[str, Any]) -> List[TextContent
         }, indent=2)
     
     elif format_type == "summary":
-        result = f"# RunWhen Registry Summary\n\n"
+        result = f"# RunWhen Skills Registry Summary\n\n"
         result += f"**Total CodeCollections:** {len(collections)}\n"
-        result += f"**Total CodeBundles:** {len(codebundles)}\n\n"
+        result += f"**Total Skill Templates:** {len(codebundles)}\n\n"
         
         for cc in collections:
             cc_bundles = [cb for cb in codebundles if cb.get("collection_slug") == cc["slug"]]
-            result += f"- **{cc['name']}** ({cc['slug']}): {len(cc_bundles)} codebundles\n"
+            result += f"- **{cc['name']}** ({cc['slug']}): {len(cc_bundles)} Skill Templates\n"
     
     else:  # markdown
-        result = "# RunWhen CodeCollections and CodeBundles\n\n"
+        result = "# RunWhen CodeCollections and Skill Templates\n\n"
         
         # Group codebundles by collection
         for cc in collections:
@@ -225,7 +225,7 @@ async def handle_list_codebundles(arguments: Dict[str, Any]) -> List[TextContent
             result += f"**Slug:** `{cc['slug']}`\n\n"
             result += f"**Description:** {cc.get('description', 'N/A')}\n\n"
             result += f"**Repository:** {cc.get('git_url', 'N/A')}\n\n"
-            result += f"**CodeBundles ({len(cc_bundles)}):**\n\n"
+            result += f"**Skill Templates ({len(cc_bundles)}):**\n\n"
             
             if cc_bundles:
                 for cb in cc_bundles:
@@ -237,14 +237,14 @@ async def handle_list_codebundles(arguments: Dict[str, Any]) -> List[TextContent
                     result += f"- **Use Cases:** {', '.join(cb.get('use_cases', []))}\n"
                     
                     if cb.get('tasks'):
-                        result += f"- **Tasks:** {len(cb['tasks'])} task(s)\n"
+                        result += f"- **Tools:** {len(cb['tasks'])} Runbook(s)\n"
                     
                     if cb.get('documentation_url'):
                         result += f"- **Documentation:** {cb['documentation_url']}\n"
                     
                     result += "\n"
             else:
-                result += "*No codebundles found*\n\n"
+                result += "*No Skill Templates found*\n\n"
     
     return [TextContent(type="text", text=result)]
 
@@ -270,10 +270,10 @@ async def handle_search_codebundles(arguments: Dict[str, Any]) -> List[TextConte
     
     # Format results
     if not results:
-        return [TextContent(type="text", text=f"No codebundles found matching query: {query}")]
+        return [TextContent(type="text", text=f"No Skill Templates found matching query: {query}")]
     
     output = f"# Search Results for: {query}\n\n"
-    output += f"Found {len(results)} relevant codebundle(s):\n\n"
+    output += f"Found {len(results)} relevant Skill Template(s):\n\n"
     
     for i, cb in enumerate(results, 1):
         output += f"## {i}. {cb.get('display_name', cb.get('name'))}\n\n"
@@ -286,8 +286,8 @@ async def handle_search_codebundles(arguments: Dict[str, Any]) -> List[TextConte
         output += f"- **Access Level:** {cb.get('access_level', 'unknown')}\n"
         
         if cb.get('tasks'):
-            output += f"- **Tasks ({len(cb['tasks'])}):**\n"
-            for task in cb['tasks'][:3]:  # Show first 3 tasks
+            output += f"- **Runbooks ({len(cb['tasks'])}):**\n"
+            for task in cb['tasks'][:3]:  # Show first 3 Runbooks
                 task_name = task.get('name', task) if isinstance(task, dict) else task
                 output += f"  - {task_name}\n"
             if len(cb['tasks']) > 3:
@@ -313,7 +313,7 @@ async def handle_get_codebundle_details(arguments: Dict[str, Any]) -> List[TextC
     cb = data_loader.get_codebundle_by_slug(slug, collection_slug)
     
     if not cb:
-        return [TextContent(type="text", text=f"Codebundle not found: {slug}")]
+        return [TextContent(type="text", text=f"Skill Template not found: {slug}")]
     
     # Format detailed output
     output = f"# {cb.get('display_name', cb.get('name'))}\n\n"
@@ -328,8 +328,11 @@ async def handle_get_codebundle_details(arguments: Dict[str, Any]) -> List[TextC
     output += f"- **Support Tags:** {', '.join(cb.get('support_tags', []))}\n"
     output += f"- **Use Cases:** {', '.join(cb.get('use_cases', []))}\n\n"
     
+    # Internal field names `tasks` and `slis` are kept for backward
+    # compatibility; the markdown labels use the new display vocabulary
+    # (Runbook = TaskSet, Monitor = SLI). See mcp-server/utils/terminology.py.
     if cb.get('tasks'):
-        output += f"## Tasks ({len(cb['tasks'])})\n\n"
+        output += f"## Runbooks ({len(cb['tasks'])})\n\n"
         for task in cb['tasks']:
             if isinstance(task, dict):
                 output += f"### {task.get('name')}\n\n"
@@ -341,7 +344,7 @@ async def handle_get_codebundle_details(arguments: Dict[str, Any]) -> List[TextC
         output += "\n"
     
     if cb.get('slis'):
-        output += f"## SLIs (Service Level Indicators)\n\n"
+        output += f"## Monitors\n\n"
         for sli in cb['slis']:
             output += f"- {sli}\n"
         output += "\n"
@@ -391,7 +394,7 @@ async def handle_list_codecollections(arguments: Dict[str, Any]) -> List[TextCon
             result += f"- **Owner:** {cc.get('owner', 'N/A')}\n"
             result += f"- **Primary Language:** {cc.get('primary_language', 'N/A')}\n"
             result += f"- **Tags:** {', '.join(cc.get('tags', []))}\n"
-            result += f"- **Codebundle Count:** {cc.get('codebundle_count', 0)}\n\n"
+            result += f"- **Skill Template Count:** {cc.get('codebundle_count', 0)}\n\n"
     
     return [TextContent(type="text", text=result)]
 

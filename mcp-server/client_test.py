@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test client for RunWhen Registry MCP Server
+Test client for RunWhen Skills Registry MCP Server
 
 This script tests the MCP server by sending various queries and displaying results.
 """
@@ -151,7 +151,7 @@ async def test_list_tools():
 
 async def main():
     """Run all tests"""
-    print("\n🚀 RunWhen Registry MCP Server - Test Suite")
+    print("\n🚀 RunWhen Skills Registry MCP Server - Test Suite")
     print("="*80)
     
     try:

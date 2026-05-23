@@ -2,7 +2,7 @@
 set -e
 
 echo "============================================================"
-echo "Starting CodeCollection Registry Backend"
+echo "Starting RunWhen Skills Registry Backend"
 echo "============================================================"
 
 # Run database migrations

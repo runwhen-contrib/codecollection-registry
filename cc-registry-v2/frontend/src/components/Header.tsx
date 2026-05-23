@@ -173,10 +173,10 @@ const Header: React.FC = () => {
                 CodeCollections
               </MenuItem>
               <MenuItem onClick={() => handleMenuNavigate('/codebundles')}>
-                CodeBundles
+                Skill Templates
               </MenuItem>
               <MenuItem onClick={() => handleMenuNavigate('/all-tasks')}>
-                All Tasks
+                All Skills
               </MenuItem>
             </Menu>
 

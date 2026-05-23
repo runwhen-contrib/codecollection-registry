@@ -70,6 +70,13 @@ frontend/.env.development.local
 frontend/.env.test.local
 frontend/.env.production.local
 
+# The bare `lib/` and `lib64/` rules above (Python setuptools build dirs)
+# are unanchored, so they accidentally match `frontend/src/lib/`. Un-ignore
+# the frontend source tree explicitly. Anything we add under
+# `frontend/src/lib/` (e.g. terminology.ts) must be committed.
+!frontend/src/lib/
+!frontend/src/lib/**
+
 # Testing
 .coverage
 .pytest_cache/

@@ -26,7 +26,7 @@ from app.models import *
 # /docs against a local-only backend; update bookmarks to /api/docs.
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Interactive CodeCollection Registry API — see /api/openapi.yaml for the full spec.",
+    description="Interactive RunWhen Skills Registry API — see /api/openapi.yaml for the full spec.",
     version="2.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -78,7 +78,7 @@ async def openapi_yaml():
 async def root():
     """Root endpoint"""
     return {
-        "message": "CodeCollection Registry API",
+        "message": "RunWhen Skills Registry API",
         "version": "2.0.0",
         "docs": "/api/docs",
         "redoc": "/api/redoc",
@@ -263,7 +263,12 @@ async def get_all_tasks(
     limit: int = 100,
     offset: int = 0
 ):
-    """Get all tasks with filtering and pagination"""
+    """Search Tools (formerly "tasks") across all Skill Templates (codebundles) with filtering and pagination.
+
+    The path `/api/v1/registry/tasks` and the JSON field `tasks[]` are kept for backward
+    compatibility. Each returned item carries a `type` field of `"TaskSet"` (Runbook) or
+    `"SLI"` (Monitor). User-facing surfaces (UI, MCP markdown, chat) map these to the
+    new vocabulary (Skill Template, Tool, Runbook, Monitor)."""
     try:
         from app.core.database import SessionLocal
         from app.models import CodeCollection, Codebundle
@@ -274,7 +279,7 @@ async def get_all_tasks(
         try:
             from app.core.visibility import public_only
             # Build the query — always join CodeCollection so we can scope to
-            # public-visibility collections (hidden CCs and their codebundles
+            # public-visibility collections (hidden CCs and their Skill Templates
             # do not appear on the public registry website).
             query = (
                 db.query(Codebundle)
@@ -804,7 +809,9 @@ async def get_recent_codebundles():
 
 @app.get("/api/v1/registry/recent-tasks")
 async def get_recent_tasks():
-    """Get the 10 most recently added tasks based on git update date"""
+    """Get the 10 most recently added Tools (Runbooks / Monitors) based on git update date.
+
+    Path and response field names retained for backward compatibility; `tasks` → `Tools`."""
     try:
         from app.core.database import SessionLocal
         from app.models import CodeCollection, Codebundle

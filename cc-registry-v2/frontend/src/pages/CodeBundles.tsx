@@ -103,7 +103,7 @@ const CodeBundles: React.FC = () => {
         setCodebundles(codebundlesData.codebundles);
         setTotalCount(codebundlesData.total_count);
       } catch (err) {
-        setError('Failed to load codebundles');
+        setError('Failed to load Skill Templates');
         console.error('Error fetching data:', err);
       } finally {
         setInitialLoading(false);
@@ -156,12 +156,12 @@ const CodeBundles: React.FC = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          All CodeBundles
+          All Skill Templates
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {searching && <CircularProgress size={16} />}
           <Typography variant="body1" color="text.secondary">
-            {searching ? 'Searching...' : `${totalCount} codebundle${totalCount !== 1 ? 's' : ''} found`}
+            {searching ? 'Searching...' : `${totalCount} Skill Template${totalCount !== 1 ? 's' : ''} found`}
           </Typography>
         </Box>
       </Box>
@@ -182,7 +182,7 @@ const CodeBundles: React.FC = () => {
         {/* Row 1: Search and Collection */}
         <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <TextField
-            placeholder="Search codebundles..."
+            placeholder="Search Skill Templates..."
             value={searchTerm}
             onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
             InputProps={{
@@ -228,7 +228,7 @@ const CodeBundles: React.FC = () => {
             >
               <MenuItem value="name">Name (A-Z)</MenuItem>
               <MenuItem value="updated">Recently Updated</MenuItem>
-              <MenuItem value="tasks">Most Tasks</MenuItem>
+              <MenuItem value="tasks">Most Tools</MenuItem>
             </Select>
           </FormControl>
         </Box>
@@ -340,10 +340,10 @@ const CodeBundles: React.FC = () => {
 
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2" color="text.secondary">
-                      {(codebundle.task_count || 0) + (codebundle.sli_count || 0)} task{((codebundle.task_count || 0) + (codebundle.sli_count || 0)) !== 1 ? 's' : ''}
+                      {(codebundle.task_count || 0) + (codebundle.sli_count || 0)} Tool{((codebundle.task_count || 0) + (codebundle.sli_count || 0)) !== 1 ? 's' : ''}
                       {codebundle.sli_count > 0 && (
                         <Typography component="span" variant="caption" sx={{ ml: 0.5 }}>
-                          ({codebundle.sli_count} SLI)
+                          ({codebundle.sli_count} Monitor{codebundle.sli_count !== 1 ? 's' : ''})
                         </Typography>
                       )}
                     </Typography>
@@ -363,7 +363,7 @@ const CodeBundles: React.FC = () => {
       {codebundles.length === 0 && !searching && (
         <Box sx={{ textAlign: 'center', mt: 4 }}>
           <Typography variant="h6" color="text.secondary">
-            No codebundles found
+            No Skill Templates found
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             Try adjusting your filters or search terms

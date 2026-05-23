@@ -1,12 +1,14 @@
-# AGENTS.md — CodeCollection Registry v2
+# AGENTS.md — RunWhen Skills Registry v2
 
 Instructions for AI coding agents working in this codebase.
+
+Note: the directory name (`cc-registry-v2`) and GitHub repo (`codecollection-registry`) retain the legacy "codecollection" identifier for path/URL stability. The product itself is now branded **RunWhen Skills Registry**.
 
 ---
 
 ## Project Overview
 
-The CodeCollection Registry is a public-facing web app for browsing, searching, and configuring RunWhen automation (CodeBundles). It consists of 8 Docker services:
+The RunWhen Skills Registry is a public-facing web app for browsing, searching, and configuring RunWhen automation (Skill Templates, formerly "CodeBundles"). It consists of 8 Docker services:
 
 | Service | Stack | Port | Purpose |
 |---------|-------|------|---------|
@@ -23,15 +25,48 @@ The CodeCollection Registry is a public-facing web app for browsing, searching, 
 
 ## Terminology
 
-Use these exact terms — never abbreviate or paraphrase:
+The codecollection-registry uses **two parallel vocabularies**: a new user-facing vocabulary that aligns with industry/agent terminology, and a legacy internal vocabulary that remains in source code, JSON `type` enums, DB columns, MCP tool function names, and API paths. **All display surfaces — UI, MCP markdown output, chat replies, docs, GitHub issue templates — should use the new vocabulary.** Internal identifiers stay byte-identical for backward compatibility with existing integrations (workspace platform, MCP clients, runner, external scripts).
 
-- **CodeCollection** — a git repo containing multiple CodeBundles
-- **CodeBundle** — a folder within a CodeCollection containing automation tasks
-- **Task** — an individual automation script (either `TaskSet` or `SLI` type)
+### Vocabulary mapping (2026)
+
+| Internal name (unchanged) | New display name | Behavioral definition |
+|---|---|---|
+| `Task` (registry concept) | **Tool** | Any invocable unit. Parent concept covering both sub-types. Maps to MCP/OpenAI/Anthropic "Tool". |
+| `CodeBundle` | **Skill Template** | Reusable, parameterizable package containing one or more Tools. Lives in the registry. Vars and secrets are unresolved placeholders. |
+| (no internal equivalent — runtime concept) | **Skill** | The runtime instantiation of a Skill Template inside a workspace, with vars/secrets materialized against real infrastructure. The registry itself never holds Skills — only Skill Templates. "Skill" is also used colloquially as the umbrella word in user-facing page titles (e.g. "All Skills") because it reads naturally and aligns with Anthropic Agent Skills / industry usage. |
+| `SLI` (`type: "SLI"`) | **Monitor** | A Tool that runs on a schedule, continuously, in the background. Emits a 0–1 numeric value. |
+| `TaskSet` (`type: "TaskSet"`) | **Runbook** | A Tool that is invoked on demand in response to an event or request. Emits structured findings with next-steps. |
+| `CodeCollection` | **CodeCollection** (unchanged) | Git-repo-level grouping of Skill Templates. |
+
+Tagline (for chat/docs/intro copy): *"A Skill Template packages Tools. Workspaces render Skill Templates into Skills at runtime. Monitors are Tools that run themselves on a schedule. Runbooks are Tools that run on demand."*
+
+#### Skill vs Skill Template — when to use which
+
+- Use **Skill Template** when referring to the registry-side artifact: search results, browse pages, "request a new Skill Template" copy, GitHub issue templates, OpenAPI descriptions, MCP markdown output that describes what the registry holds.
+- Use **Skill** when referring to the runtime/workspace artifact, or as the colloquial umbrella term in short page titles (e.g. "All Skills"). When in doubt in long-form copy, prefer **Skill Template** for precision.
+
+### Where each vocabulary applies
+
+| Surface | Vocabulary | Notes |
+|---|---|---|
+| React UI labels, page titles, badges, tabs, hero copy | **NEW** | Routed through `frontend/src/lib/terminology.ts` |
+| MCP server markdown output (`get_codebundle_details`, `find_codebundle`, etc.) | **NEW** | Strings are user-facing in chat clients |
+| Chat system prompt + LLM-generated replies | **NEW** (with legacy aliases) | System prompt teaches both vocabularies so legacy queries still resolve |
+| GitHub issue templates (`codebundle-wanted.yaml`) user-facing copy | **NEW** | "Request a Skill Template" |
+| Docs (`AGENTS.md`, `ARCHITECTURE.md`, `MCP_WORKFLOW.md`, `sources.yaml`, indexed glossaries) | **NEW** (with parenthetical legacy term on first mention) | Feeds chat indexing |
+| OpenAPI summaries/descriptions | **NEW** (with parenthetical legacy term) | Paths and schemas unchanged |
+| **MCP tool function names** (`find_codebundle`, `list_codebundles`, `search_codebundles`, `get_codebundle_details`, `request_codebundle`) | **LEGACY** | External AI integrations depend on these identifiers |
+| **API paths** (`/api/v1/codebundles`, `/api/v1/registry/tasks`, `/collections/{slug}/codebundles/{slug}`) | **LEGACY** | Client compatibility |
+| **DB tables/columns** (`codebundles`, `codecollections`, `vector_codebundles`, `tasks`, `slis`, `task_count`, `sli_count`, `task_index`, `sli_path`) | **LEGACY** | Schema stability; requires alembic migration to rename |
+| **JSON `type` enum values** (`"TaskSet"`, `"SLI"`, `"CodeBundle"`) | **LEGACY** | Frontend `TYPE_LABELS` maps these to display names at render time |
+| Python class names, TypeScript interface names, route paths | **LEGACY** | Internal-only |
+
+### Other unchanged terms
+
 - **RunWhen Platform** — the orchestration platform (not "RunWhen Core")
 - **Workspace Chat** — the AI chat feature (not "AI Chat" or "Eager Edgar Chat")
-- **Support Tags** — metadata tags on CodeBundles (e.g., `kubernetes`, `aws`, `azure`)
-- **Data Tags** — per-task data classification tags (`data:config`, `data:logs-regexp`, etc.)
+- **Support Tags** — metadata tags on Skill Templates (e.g., `kubernetes`, `aws`, `azure`)
+- **Data Tags** — per-Tool data classification tags (`data:config`, `data:logs-regexp`, etc.)
 
 ---
 

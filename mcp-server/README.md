@@ -1,6 +1,7 @@
-# RunWhen Registry MCP Server
+# RunWhen Skills Registry MCP Server
 
-A minimal HTTP/REST API server for querying RunWhen codecollection data.
+A minimal HTTP/REST API server for querying RunWhen Skills Registry data
+(Skill Templates, Tools, CodeCollections, and documentation).
 
 ## Quick Start
 
