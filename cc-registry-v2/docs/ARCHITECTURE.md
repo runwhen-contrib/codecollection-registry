@@ -1,6 +1,6 @@
 # Architecture
 
-System architecture for the CodeCollection Registry v2.
+System architecture for the RunWhen Skills Registry v2.
 
 ## Service Overview
 

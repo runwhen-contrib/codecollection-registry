@@ -1,4 +1,6 @@
-# AI Agent Guidelines for CodeCollection Registry
+# AI Agent Guidelines for RunWhen Skills Registry
+
+Note: the directory and repo retain the legacy `codecollection-registry` identifier for path/URL stability. The product itself is now branded **RunWhen Skills Registry**.
 
 ## 🗣️ Terminology (2026 — read this first)
 
@@ -85,7 +87,7 @@ codecollection-registry/
 
 ## 🏗️ Project Structure
 
-### CodeCollection Registry v2 Architecture
+### RunWhen Skills Registry v2 Architecture
 
 ```
 codecollection-registry/

@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     
     # API Settings
     API_V1_STR: str = "/api/v1"
-    PROJECT_NAME: str = "CodeCollection Registry"
+    PROJECT_NAME: str = "RunWhen Skills Registry"
 
     # Config-file paths (codecollections.yaml, schedules.yaml, sources.yaml).
     #

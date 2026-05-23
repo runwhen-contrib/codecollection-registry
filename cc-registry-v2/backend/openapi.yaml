@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: RunWhen CodeCollection Registry API
+  title: RunWhen Skills Registry API
   description: |
-    Backend API for the RunWhen CodeCollection Registry. Manages CodeCollections,
+    Backend API for the RunWhen Skills Registry. Manages CodeCollections,
     Skill Templates (formerly "codebundles"), Tools (formerly "tasks"),
     documentation, AI enhancement, Helm charts, and chat.
 

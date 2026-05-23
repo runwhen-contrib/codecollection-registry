@@ -1,4 +1,4 @@
-# CodeCollection Registry v2 Documentation
+# RunWhen Skills Registry v2 Documentation
 
 All project documentation, organized by topic.
 

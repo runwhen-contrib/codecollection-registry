@@ -315,7 +315,7 @@ def _build_minimal_issue_body(req: SubmitRequest) -> str:
 
     parts.extend([
         "---",
-        f"*Created via CodeCollection Registry intake at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.*",
+        f"*Created via RunWhen Skills Registry intake at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.*",
     ])
     return "\n".join(parts)
 

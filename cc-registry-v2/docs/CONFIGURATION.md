@@ -1,6 +1,6 @@
 # Configuration Guide
 
-Environment variables, secrets, and configuration files for the CodeCollection Registry.
+Environment variables, secrets, and configuration files for the RunWhen Skills Registry.
 
 ## Secrets File (`az.secret`)
 

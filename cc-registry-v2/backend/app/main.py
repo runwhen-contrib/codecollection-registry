@@ -26,7 +26,7 @@ from app.models import *
 # /docs against a local-only backend; update bookmarks to /api/docs.
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Interactive CodeCollection Registry API — see /api/openapi.yaml for the full spec.",
+    description="Interactive RunWhen Skills Registry API — see /api/openapi.yaml for the full spec.",
     version="2.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -78,7 +78,7 @@ async def openapi_yaml():
 async def root():
     """Root endpoint"""
     return {
-        "message": "CodeCollection Registry API",
+        "message": "RunWhen Skills Registry API",
         "version": "2.0.0",
         "docs": "/api/docs",
         "redoc": "/api/redoc",

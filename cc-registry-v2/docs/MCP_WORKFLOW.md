@@ -1,6 +1,6 @@
 # MCP Server Workflow: Search and Indexing
 
-How data ingestion, embedding generation, and search work in the CodeCollection Registry.
+How data ingestion, embedding generation, and search work in the RunWhen Skills Registry.
 
 ## Unified Pipeline
 

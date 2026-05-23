@@ -71,7 +71,7 @@ async def create_task_request_issue(request: TaskRequestIssue):
             "- [ ] Test the codebundle functionality",
             "",
             "---",
-            "*This issue was automatically created from the CodeCollection Registry chat interface.*"
+            "*This issue was automatically created from the RunWhen Skills Registry chat interface.*"
         ])
 
         body = "\n".join(body_parts)

@@ -1,4 +1,4 @@
--- Initialize CodeCollection Registry Database
+-- Initialize RunWhen Skills Registry Database
 -- This script runs when the PostgreSQL container starts for the first time
 
 -- Create database (already created by POSTGRES_DB env var)
@@ -12,5 +12,5 @@ CREATE EXTENSION IF NOT EXISTS vector;  -- pgvector for semantic search
 GRANT ALL PRIVILEGES ON DATABASE codecollection_registry TO "user";
 
 -- Log initialization
-SELECT 'CodeCollection Registry database initialized successfully (with pgvector)' AS status;
+SELECT 'RunWhen Skills Registry database initialized successfully (with pgvector)' AS status;
 

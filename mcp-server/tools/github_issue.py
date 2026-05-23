@@ -201,7 +201,7 @@ class GitHubIssueClient:
         sections.append(f"## Contact\n{contact}")
         
         # Footer
-        sections.append("---\n*This issue was automatically created via the CodeCollection Registry chat interface.*")
+        sections.append("---\n*This issue was automatically created via the RunWhen Skills Registry chat interface.*")
         
         return "\n\n".join(sections)
     

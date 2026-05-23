@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-RunWhen Registry MCP Server
+RunWhen Skills Registry MCP Server
 
-A Model Context Protocol server for querying RunWhen codecollection data,
-libraries, and documentation resources.
+A Model Context Protocol server for querying RunWhen Skills Registry data
+(Skill Templates, Tools, libraries, and documentation resources).
 """
 import asyncio
 import json
@@ -206,7 +206,7 @@ async def handle_list_codebundles(arguments: Dict[str, Any]) -> List[TextContent
         }, indent=2)
     
     elif format_type == "summary":
-        result = f"# RunWhen Registry Summary\n\n"
+        result = f"# RunWhen Skills Registry Summary\n\n"
         result += f"**Total CodeCollections:** {len(collections)}\n"
         result += f"**Total Skill Templates:** {len(codebundles)}\n\n"
         

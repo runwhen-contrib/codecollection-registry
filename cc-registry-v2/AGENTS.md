@@ -1,12 +1,14 @@
-# AGENTS.md — CodeCollection Registry v2
+# AGENTS.md — RunWhen Skills Registry v2
 
 Instructions for AI coding agents working in this codebase.
+
+Note: the directory name (`cc-registry-v2`) and GitHub repo (`codecollection-registry`) retain the legacy "codecollection" identifier for path/URL stability. The product itself is now branded **RunWhen Skills Registry**.
 
 ---
 
 ## Project Overview
 
-The CodeCollection Registry is a public-facing web app for browsing, searching, and configuring RunWhen automation (Skill Templates, formerly "CodeBundles"). It consists of 8 Docker services:
+The RunWhen Skills Registry is a public-facing web app for browsing, searching, and configuring RunWhen automation (Skill Templates, formerly "CodeBundles"). It consists of 8 Docker services:
 
 | Service | Stack | Port | Purpose |
 |---------|-------|------|---------|

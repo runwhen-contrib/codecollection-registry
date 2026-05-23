@@ -1,6 +1,8 @@
-# CodeCollection Registry v2 - Microservices Architecture
+# RunWhen Skills Registry v2 - Microservices Architecture
 
-A modern, scalable registry for RunWhen CodeCollections with AI-powered enhancement capabilities.
+A modern, scalable registry of safe-for-production Skills (Skill Templates and Tools) for AI agents, with AI-powered enhancement capabilities.
+
+> Note: the directory name (`cc-registry-v2`) retains the legacy "codecollection" identifier for path stability. The product is **RunWhen Skills Registry**.
 
 ## Architecture Overview
 

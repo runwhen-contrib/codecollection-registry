@@ -248,7 +248,7 @@ const Home: React.FC = () => {
               lineHeight: 1.2
             }}
           >
-            RunWhen Registry
+            RunWhen Skills Registry
           </Typography>
           
           <Typography 
@@ -264,7 +264,7 @@ const Home: React.FC = () => {
               mx: 'auto'
             }}
           >
-            Explore the largest open library of AI SRE tools. Describe your problem and the assistant will suggest the right automation to run securely in your own environment.
+            Grow your team's capability with safe-for-production skills for AI agents — across SRE, DevOps, FinOps, release engineering, and beyond. Describe your problem and the assistant will suggest the right skill to run securely in your own environment.
           </Typography>
 
           {/* Search Bar that routes to Registry Chat */}
