@@ -50,10 +50,20 @@ _STREAM_CHUNK_BYTES = 64 * 1024
 # Only ``info/refs`` and the two smart-HTTP service endpoints reach the
 # git CGI. Anything else returns 404 so we don't accidentally expose
 # raw refs / loose objects under unauthenticated HTTP.
+#
+# ``.git`` is optional in the URL path. GitHub/GitLab accept clone URLs
+# with or without the suffix; platform consumers (sobow gitget) often
+# normalize to the bare form before ``git ls-remote``. Bare repos on disk
+# are still ``<slug>.git`` — we rewrite PATH_INFO before http-backend.
 _PATH_RE = re.compile(
-    r"^/(?P<slug>[A-Za-z0-9][A-Za-z0-9._-]{0,199})\.git"
+    r"^/(?P<slug>[A-Za-z0-9][A-Za-z0-9._-]{0,199})(?:\.git)?"
     r"(?P<rest>/info/refs|/git-upload-pack|/git-receive-pack|/HEAD)$"
 )
+
+
+def _canonical_path_info(slug: str, rest: str) -> str:
+    """Return PATH_INFO with ``<slug>.git`` for ``git http-backend``."""
+    return f"/{slug}.git{rest}"
 
 
 def is_valid_slug(slug: str) -> bool:
@@ -208,6 +218,11 @@ def make_git_wsgi_app(
             return _send_not_found(start_response, "not a smart git HTTP path")
 
         slug = match.group("slug")
+        if slug.endswith(".git"):
+            slug = slug[:-4]
+        if not is_valid_slug(slug):
+            return _send_not_found(start_response, "not a smart git HTTP path")
+
         if allowed is not None and slug not in allowed:
             logger.info("git HTTP: 404 for unallowed slug %r", slug)
             return _send_not_found(start_response, "unknown git mirror")
@@ -215,7 +230,10 @@ def make_git_wsgi_app(
         if not repo_exists(data_dir, slug):
             return _send_not_found(start_response, "git mirror not found on disk")
 
-        cmd_env = _git_http_backend_environ(data_dir, environ)
+        # git http-backend expects PATH_INFO like /{slug}.git/info/refs.
+        backend_environ = dict(environ)
+        backend_environ["PATH_INFO"] = _canonical_path_info(slug, match.group("rest"))
+        cmd_env = _git_http_backend_environ(data_dir, backend_environ)
         body_in = b""
         if environ.get("REQUEST_METHOD") in ("POST", "PUT", "PATCH"):
             body_in = environ["wsgi.input"].read()
