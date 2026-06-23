@@ -112,7 +112,18 @@ class CodeCollectionConfig(BaseModel):
 class SourceAuth(BaseModel):
     """Auth for an OCI-style source.
 
-    Set EITHER ``token_env`` OR ``user_env``+``pass_env`` — not both.
+    Set EXACTLY ONE OR NONE of:
+
+    * ``token_env``               — Bearer token (JFrog access token, GHCR PAT)
+    * ``user_env`` + ``pass_env`` — HTTP Basic
+    * ``dockerconfigjson_env``    — env var holding the path to a Docker
+                                    config.json file (handy for reusing
+                                    an existing ``kubernetes.io/dockerconfigjson``
+                                    pull-secret verbatim; the catalog looks
+                                    up the source's ``image_registry`` host
+                                    in the file's ``auths`` map and uses
+                                    HTTP Basic)
+
     Unset = anonymous; the OCI source falls back to the public-GHCR
     bearer-realm dance so this still works against public registries.
 
@@ -135,14 +146,31 @@ class SourceAuth(BaseModel):
         description="Env var name holding the HTTP Basic password "
         "(or an access token used as a password).",
     )
+    dockerconfigjson_env: Optional[str] = Field(
+        None,
+        description=(
+            "Env var name holding the path to a Docker config.json file. "
+            "Catalog looks up the source's image_registry host in the "
+            "file's `auths` map and uses the entry's credentials as "
+            "HTTP Basic. Lets operators reuse an existing "
+            "kubernetes.io/dockerconfigjson pull-secret without "
+            "maintaining a parallel Opaque Secret."
+        ),
+    )
 
     @model_validator(mode="after")
     def _exactly_one_or_none(self) -> "SourceAuth":
         token = bool(self.token_env)
         basic_any = bool(self.user_env) or bool(self.pass_env)
         basic_both = bool(self.user_env) and bool(self.pass_env)
-        if token and basic_any:
-            raise ValueError("source.auth: set EITHER token_env OR user_env+pass_env, not both")
+        docker = bool(self.dockerconfigjson_env)
+
+        modes = int(token) + int(basic_any) + int(docker)
+        if modes > 1:
+            raise ValueError(
+                "source.auth: set AT MOST ONE of token_env, "
+                "user_env+pass_env, or dockerconfigjson_env"
+            )
         if basic_any and not basic_both:
             raise ValueError("source.auth: user_env and pass_env must be set together")
         return self
@@ -285,7 +313,22 @@ class SchedulerConfig(BaseModel):
 
 
 class GitAuth(BaseModel):
-    """Auth for fetching upstream git repos (GitHub PAT, etc.)."""
+    """Auth for fetching upstream git repos (GitHub PAT, etc.).
+
+    Set EXACTLY ONE OR NONE of:
+
+    * ``token_env``               — Bearer/PAT
+    * ``user_env`` + ``pass_env`` — HTTP Basic
+    * ``dockerconfigjson_env``    — env var holding the path to a Docker
+                                    config.json file; catalog looks up
+                                    each upstream ``git_url`` host in the
+                                    file's ``auths`` map and uses HTTP
+                                    Basic. Useful when the same auth
+                                    Secret covers both an OCI registry
+                                    and a colocated git host
+                                    (e.g. Artifactory's Git LFS / VCS
+                                    repos behind the same SSO).
+    """
 
     token_env: Optional[str] = Field(
         None,
@@ -299,14 +342,28 @@ class GitAuth(BaseModel):
         None,
         description="Env var holding HTTP Basic password or token-as-password.",
     )
+    dockerconfigjson_env: Optional[str] = Field(
+        None,
+        description=(
+            "Env var name holding the path to a Docker config.json file. "
+            "Catalog looks up each upstream git_url host in the file's "
+            "`auths` map and uses the entry's credentials as HTTP Basic."
+        ),
+    )
 
     @model_validator(mode="after")
     def _exactly_one_or_none(self) -> "GitAuth":
         token = bool(self.token_env)
         basic_any = bool(self.user_env) or bool(self.pass_env)
         basic_both = bool(self.user_env) and bool(self.pass_env)
-        if token and basic_any:
-            raise ValueError("git.auth: set EITHER token_env OR user_env+pass_env, not both")
+        docker = bool(self.dockerconfigjson_env)
+
+        modes = int(token) + int(basic_any) + int(docker)
+        if modes > 1:
+            raise ValueError(
+                "git.auth: set AT MOST ONE of token_env, "
+                "user_env+pass_env, or dockerconfigjson_env"
+            )
         if basic_any and not basic_both:
             raise ValueError("git.auth: user_env and pass_env must be set together")
         return self

@@ -31,7 +31,9 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select
+from urllib.parse import urlparse
 
+from app.auth_dockerconfigjson import resolve_basic_pair_from_env
 from app.config import AppConfig, GitAuth, GitServiceConfig, get_config
 from app.db import session_scope
 from app.git_http import (
@@ -293,6 +295,7 @@ def sync_one_repo(slug: str, upstream_url: str, git_cfg: GitServiceConfig) -> st
             ["clone", "--mirror", upstream_url, dest],
             git_cfg.auth,
             timeout=git_cfg.clone_timeout_seconds,
+            upstream_url=upstream_url,
         )
     else:
         # If the configured upstream_url changed since the last clone
@@ -303,8 +306,11 @@ def sync_one_repo(slug: str, upstream_url: str, git_cfg: GitServiceConfig) -> st
             ["-C", dest, "remote", "update", "--prune"],
             git_cfg.auth,
             timeout=git_cfg.fetch_timeout_seconds,
+            upstream_url=upstream_url,
         )
 
+    # rev-parse is a local op; no upstream_url needed (no network call,
+    # so auth is moot and the host lookup would be a no-op).
     head = _run_git(
         ["--git-dir", dest, "rev-parse", "HEAD"],
         git_cfg.auth,
@@ -335,9 +341,7 @@ def populate_baked_head_commits(cfg: Optional[AppConfig] = None) -> int:
 
     touched = 0
     with session_scope() as db:
-        rows_by_slug = {
-            r.slug: r for r in db.execute(select(CodeCollection)).scalars().all()
-        }
+        rows_by_slug = {r.slug: r for r in db.execute(select(CodeCollection)).scalars().all()}
         for slug, _ in repos_to_sync(app_cfg):
             if slug not in on_disk:
                 continue
@@ -360,7 +364,16 @@ def populate_baked_head_commits(cfg: Optional[AppConfig] = None) -> int:
     return touched
 
 
-def _git_auth_args(auth: GitAuth) -> list[str]:
+def _git_auth_args(auth: GitAuth, upstream_url: Optional[str] = None) -> list[str]:
+    """Render ``-c http.extraHeader=...`` args for ``git`` to use.
+
+    ``upstream_url`` is only consulted when ``auth.dockerconfigjson_env``
+    is set — the catalog needs the host to look up in the file's
+    ``auths`` map. For ``token_env`` / ``user_env``+``pass_env`` the URL
+    is irrelevant (env-var values apply to every git call equally).
+    Callers that don't have a URL (e.g. local ``git rev-parse``) can
+    omit it; those operations don't talk to a remote so auth is moot.
+    """
     args: list[str] = []
     token = os.environ.get(auth.token_env, "") if auth.token_env else ""
     if token:
@@ -377,6 +390,37 @@ def _git_auth_args(auth: GitAuth) -> list[str]:
     password = os.environ.get(auth.pass_env, "") if auth.pass_env else ""
     if user and password:
         args.extend(["-c", f"http.extraHeader=Authorization: Basic {_basic_auth(user, password)}"])
+        return args
+
+    if auth.dockerconfigjson_env and upstream_url:
+        try:
+            host = urlparse(upstream_url).hostname
+        except ValueError:
+            host = None
+        if host:
+            pair = resolve_basic_pair_from_env(auth.dockerconfigjson_env, host)
+            if pair is not None:
+                dc_user, dc_pwd = pair
+                args.extend(
+                    [
+                        "-c",
+                        f"http.extraHeader=Authorization: Basic {_basic_auth(dc_user, dc_pwd)}",
+                    ]
+                )
+                return args
+            logger.warning(
+                "git mirror: dockerconfigjson_env=%s yielded no creds for host %s "
+                "(upstream_url=%s); falling back to anonymous",
+                auth.dockerconfigjson_env,
+                host,
+                upstream_url,
+            )
+        else:
+            logger.warning(
+                "git mirror: dockerconfigjson_env set but upstream_url=%r has no parseable host; "
+                "falling back to anonymous",
+                upstream_url,
+            )
     return args
 
 
@@ -392,8 +436,9 @@ def _run_git(
     auth: GitAuth,
     *,
     timeout: int,
+    upstream_url: Optional[str] = None,
 ) -> subprocess.CompletedProcess[str]:
-    cmd = ["git", *_git_auth_args(auth), *args]
+    cmd = ["git", *_git_auth_args(auth, upstream_url=upstream_url), *args]
     # Never log the full command — auth args may embed secrets indirectly.
     logger.debug("running git %s", " ".join(args))
     proc = subprocess.run(

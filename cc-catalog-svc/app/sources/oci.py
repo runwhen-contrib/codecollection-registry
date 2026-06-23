@@ -35,6 +35,7 @@ from typing import Optional
 
 import httpx
 
+from app.auth_dockerconfigjson import resolve_basic_pair_from_env
 from app.sources.base import DiscoveredImageRef, ImageSource
 
 logger = logging.getLogger(__name__)
@@ -84,9 +85,7 @@ class OCISource(ImageSource):
         # Single httpx.Client so the bearer dance, manifest GETs, and
         # config-blob fetches reuse the same TCP connection / token.
         with httpx.Client(timeout=self.timeout, follow_redirects=True) as client:
-            tags = self._list_tags(
-                client, host, repo, auth_header=auth_header, auth_mode=auth_mode
-            )
+            tags = self._list_tags(client, host, repo, auth_header=auth_header, auth_mode=auth_mode)
 
             discovered: list[DiscoveredImageRef] = []
             for tag in tags:
@@ -147,14 +146,15 @@ class OCISource(ImageSource):
         host, _, repo = url.partition("/")
         return host, repo
 
-    @staticmethod
-    def _resolve_auth_header(cc: dict) -> tuple[Optional[str], str]:
+    @classmethod
+    def _resolve_auth_header(cls, cc: dict) -> tuple[Optional[str], str]:
         """Build the Authorization header for outbound requests.
 
         Returns ``(header_value, mode)`` where ``mode`` is one of:
 
         * ``"bearer"``    — explicit Bearer token in token_env
         * ``"basic"``     — explicit Basic from user_env + pass_env
+                            OR from a dockerconfigjson lookup
         * ``"anonymous"`` — no creds; caller will fall back to the
                             bearer-realm dance for public-GHCR-style reads
 
@@ -163,6 +163,17 @@ class OCISource(ImageSource):
         separately so the caller knows whether a subsequent 401 is a
         real auth failure (explicit) or a signal to start the dance
         (anonymous).
+
+        dockerconfigjson note
+        ---------------------
+        When ``dockerconfigjson_env`` is set, the catalog opens the
+        Docker config.json file pointed at by that env var and looks
+        up the source's ``image_registry`` host in the file's ``auths``
+        map. A hit returns Basic (treated identically to explicit
+        ``user_env``+``pass_env`` from this point on — including the
+        bearer-realm dance behavior). A miss falls back to anonymous
+        — so a Secret that doesn't cover the target host degrades
+        gracefully against public registries instead of hard-failing.
         """
         auth = cc.get("_source_auth") or {}
         slug = cc.get("slug")
@@ -191,6 +202,40 @@ class OCISource(ImageSource):
                 slug,
                 user_env,
                 pass_env,
+            )
+
+        dockerconfigjson_env = auth.get("dockerconfigjson_env")
+        if dockerconfigjson_env:
+            registry_url = cc.get("image_registry")
+            if not registry_url:
+                logger.warning(
+                    "oci source: %s requested dockerconfigjson_env=%s but cc has no "
+                    "image_registry to look up; falling back to anonymous",
+                    slug,
+                    dockerconfigjson_env,
+                )
+                return None, "anonymous"
+            try:
+                host, _ = cls._split_registry_url(registry_url)
+            except ValueError:
+                logger.warning(
+                    "oci source: %s image_registry=%r could not be parsed; "
+                    "dockerconfigjson lookup skipped, falling back to anonymous",
+                    slug,
+                    registry_url,
+                )
+                return None, "anonymous"
+            pair = resolve_basic_pair_from_env(dockerconfigjson_env, host)
+            if pair is not None:
+                user, pwd = pair
+                creds = base64.b64encode(f"{user}:{pwd}".encode("utf-8")).decode("ascii")
+                return f"Basic {creds}", "basic"
+            logger.warning(
+                "oci source: %s dockerconfigjson_env=%s yielded no creds for host %s; "
+                "falling back to anonymous",
+                slug,
+                dockerconfigjson_env,
+                host,
             )
 
         return None, "anonymous"
@@ -327,20 +372,13 @@ class OCISource(ImageSource):
         by_ref: dict[str, list[DiscoveredImageRef]] = {}
         for r in refs:
             by_ref.setdefault(r.ref, []).append(r)
-        ambiguous_tags = {
-            r.image_tag
-            for group in by_ref.values()
-            if len(group) > 1
-            for r in group
-        }
+        ambiguous_tags = {r.image_tag for group in by_ref.values() if len(group) > 1 for r in group}
         if not ambiguous_tags:
             return refs
 
         built_at_by_tag: dict[str, datetime] = {}
         for tag in ambiguous_tags:
-            built_at = self._fetch_built_at_for_tag(
-                client, host, repo, tag, auth_header, auth_mode
-            )
+            built_at = self._fetch_built_at_for_tag(client, host, repo, tag, auth_header, auth_mode)
             if built_at is not None:
                 built_at_by_tag[tag] = built_at
 
@@ -348,9 +386,11 @@ class OCISource(ImageSource):
             return refs
 
         return [
-            dataclasses.replace(r, built_at=built_at_by_tag[r.image_tag])
-            if r.image_tag in built_at_by_tag
-            else r
+            (
+                dataclasses.replace(r, built_at=built_at_by_tag[r.image_tag])
+                if r.image_tag in built_at_by_tag
+                else r
+            )
             for r in refs
         ]
 

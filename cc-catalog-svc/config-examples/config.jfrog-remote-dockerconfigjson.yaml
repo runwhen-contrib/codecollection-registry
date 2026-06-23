@@ -1,0 +1,123 @@
+# cc-catalog-svc — JFrog Remote (pull-only) reusing a dockerconfigjson Secret.
+#
+# Same shape as `config.jfrog-remote.yaml` (sources behind a JFrog Remote
+# Docker repo, no destinations), but auth is resolved by looking up the
+# source host inside a Docker `config.json` file rather than reading
+# separate `JFROG_USER` / `JFROG_PASS` env vars.
+#
+# Why this exists
+# ---------------
+# Most clusters already have a `kubernetes.io/dockerconfigjson` Secret
+# for kubelet image pulls. Maintaining a second Opaque Secret with the
+# same user+password just to feed cc-catalog-svc is redundant and an
+# easy place for the two to drift. When `dockerconfigjson_env` is set,
+# the catalog opens the Docker config.json pointed at by that env var,
+# looks up the source's `image_registry` host in the file's `auths`
+# map, and uses HTTP Basic on the resulting credentials — identical to
+# `user_env`+`pass_env` from that point on, including the bearer-realm
+# dance against JFrog/Artifactory.
+#
+# Deployment expectations
+# -----------------------
+#   1. Mount your existing `kubernetes.io/dockerconfigjson` Secret as
+#      a file in the cc-catalog-svc pod, e.g. at
+#      `/var/run/secrets/dockerconfigjson/.dockerconfigjson`.
+#   2. Set the env var named below (e.g. `JCR_DOCKERCONFIGJSON`) to
+#      that path. The catalog reads the env var to find the file.
+#   3. The Secret must contain an `auths` entry whose key exactly
+#      matches the source's image_registry host (e.g.
+#      `artifactory.example.com`). A miss soft-fails to anonymous —
+#      use this only when you've confirmed the entry is present.
+#
+# This file is safe to commit: nothing in it is secret. Only env var
+# NAMES and paths appear; the actual config.json is mounted at runtime.
+
+storage:
+  # Leave commented to use CC_CATALOG_DB_URL env var (recommended).
+  # url: postgresql+psycopg2://catalog:secret@catalog-db:5432/catalog
+
+catalog_api:
+  prefix: /api/v1/catalog
+
+scheduler:
+  catalog_poll_minutes: 5
+
+# ------------------------------------------------------------------------
+# Source — JFrog Remote, queried via OCI Distribution v2. Auth is the
+# only difference vs config.jfrog-remote.yaml:
+#
+#   auth:
+#     dockerconfigjson_env: JCR_DOCKERCONFIGJSON
+#
+# instead of
+#
+#   auth:
+#     user_env: JFROG_USER
+#     pass_env: JFROG_PASS
+# ------------------------------------------------------------------------
+sources:
+  - name: jfrog-remote-runwhen
+    type: oci
+    auth:
+      # Env var holding the PATH to a Docker config.json file. The
+      # deployment mounts the K8s pull-secret here:
+      #
+      #   volumeMounts:
+      #     - name: docker-config
+      #       mountPath: /var/run/secrets/dockerconfigjson
+      #       readOnly: true
+      #   volumes:
+      #     - name: docker-config
+      #       secret:
+      #         secretName: jcr-pull-secret      # type: kubernetes.io/dockerconfigjson
+      #
+      # env:
+      #   - name: JCR_DOCKERCONFIGJSON
+      #     value: /var/run/secrets/dockerconfigjson/.dockerconfigjson
+      dockerconfigjson_env: JCR_DOCKERCONFIGJSON
+
+    codecollections:
+      - slug: rw-cli-codecollection
+        name: RunWhen CLI CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-cli-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-cli-codecollection
+
+      - slug: rw-public-codecollection
+        name: RunWhen Public CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-public-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-public-codecollection
+
+      - slug: rw-generic-codecollection
+        name: RunWhen Generic CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-generic-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-generic-codecollection
+
+      - slug: rw-workspace-utils
+        name: RunWhen Workspace Utilities CodeCollection
+        git_url: https://github.com/runwhen-contrib/rw-workspace-utils
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/rw-workspace-utils
+
+      - slug: aws-c7n-codecollection
+        name: AWS CloudCustodian CodeCollection
+        git_url: https://github.com/runwhen-contrib/aws-c7n-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/aws-c7n-codecollection
+
+      - slug: azure-c7n-codecollection
+        name: Azure CloudCustodian CodeCollection
+        git_url: https://github.com/runwhen-contrib/azure-c7n-codecollection
+        image_registry: artifactory.example.com/docker-ghcr/runwhen-contrib/azure-c7n-codecollection
+
+# ------------------------------------------------------------------------
+# Optional: same dockerconfigjson can feed the git mirror too, when
+# `git.enabled: true` AND `runtime_sync: true` (e.g. an internal Git
+# host colocated with the JFrog Docker registry behind the same SSO).
+# For air-gap with baked mirrors, leave runtime_sync=false and skip
+# this block entirely.
+# ------------------------------------------------------------------------
+# git:
+#   enabled: true
+#   data_dir: /opt/cc-catalog/git
+#   mount_path: /git
+#   runtime_sync: true
+#   auth:
+#     dockerconfigjson_env: JCR_DOCKERCONFIGJSON

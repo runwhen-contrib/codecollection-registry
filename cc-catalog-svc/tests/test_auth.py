@@ -48,7 +48,9 @@ class TestSourceAuthValidators:
     def test_token_plus_basic_rejected(self):
         with pytest.raises(pydantic.ValidationError) as exc:
             SourceAuth(token_env="T", user_env="U", pass_env="P")
-        assert "EITHER token_env OR user_env+pass_env" in str(exc.value)
+        # Validator now covers three modes (token / basic / dockerconfigjson);
+        # message updated to "AT MOST ONE" to match.
+        assert "AT MOST ONE" in str(exc.value)
 
     def test_token_plus_half_basic_rejected(self):
         with pytest.raises(pydantic.ValidationError):
@@ -445,3 +447,396 @@ class TestJFrogDestinationBasicAuth:
         d = JFrogDestination()
         assert d._http_auth({"name": "x", "auth": {}}) is None
         assert d._http_auth({"name": "x"}) is None
+
+
+# ---------------------------------------------------------------------------
+# Shared dockerconfigjson lookup helper
+# ---------------------------------------------------------------------------
+class TestDockerconfigjsonResolveBasicPair:
+    """Direct tests of app.auth_dockerconfigjson.resolve_basic_pair.
+
+    The OCI source + git mirror service both funnel through this helper,
+    so per-edge-case coverage lives here rather than being duplicated in
+    each call site's test class.
+    """
+
+    def _write_config(self, tmp_path, payload):
+        from json import dumps
+
+        p = tmp_path / ".dockerconfigjson"
+        p.write_text(dumps(payload))
+        return str(p)
+
+    def test_base64_auth_field_wins(self, tmp_path):
+        from app.auth_dockerconfigjson import resolve_basic_pair
+
+        encoded = base64.b64encode(b"alice:s3cr3t!").decode()
+        path = self._write_config(
+            tmp_path,
+            {
+                "auths": {
+                    "artifactory.example.com": {"auth": encoded},
+                }
+            },
+        )
+        assert resolve_basic_pair(path, "artifactory.example.com") == ("alice", "s3cr3t!")
+
+    def test_explicit_username_password_fallback(self, tmp_path):
+        from app.auth_dockerconfigjson import resolve_basic_pair
+
+        path = self._write_config(
+            tmp_path,
+            {
+                "auths": {
+                    "ghcr.io": {"username": "u", "password": "p"},
+                }
+            },
+        )
+        assert resolve_basic_pair(path, "ghcr.io") == ("u", "p")
+
+    def test_auth_field_preferred_over_username_password(self, tmp_path):
+        """Docker CLI writes ``auth``; if both encodings appear, base64
+        is canonical. Match that behavior."""
+        from app.auth_dockerconfigjson import resolve_basic_pair
+
+        encoded = base64.b64encode(b"from-auth:pwd1").decode()
+        path = self._write_config(
+            tmp_path,
+            {
+                "auths": {
+                    "example.com": {
+                        "auth": encoded,
+                        "username": "from-fields",
+                        "password": "pwd2",
+                    },
+                }
+            },
+        )
+        assert resolve_basic_pair(path, "example.com") == ("from-auth", "pwd1")
+
+    def test_missing_host_returns_none(self, tmp_path):
+        from app.auth_dockerconfigjson import resolve_basic_pair
+
+        path = self._write_config(
+            tmp_path,
+            {"auths": {"artifactory.example.com": {"username": "u", "password": "p"}}},
+        )
+        assert resolve_basic_pair(path, "ghcr.io") is None
+
+    def test_missing_file_returns_none(self, tmp_path):
+        from app.auth_dockerconfigjson import resolve_basic_pair
+
+        assert resolve_basic_pair(str(tmp_path / "nope.json"), "x.com") is None
+
+    def test_empty_path_returns_none(self):
+        from app.auth_dockerconfigjson import resolve_basic_pair
+
+        assert resolve_basic_pair("", "x.com") is None
+
+    def test_malformed_json_returns_none(self, tmp_path):
+        from app.auth_dockerconfigjson import resolve_basic_pair
+
+        p = tmp_path / ".dockerconfigjson"
+        p.write_text("not-valid-json{")
+        assert resolve_basic_pair(str(p), "x.com") is None
+
+    def test_malformed_base64_auth_returns_none(self, tmp_path):
+        from app.auth_dockerconfigjson import resolve_basic_pair
+
+        path = self._write_config(
+            tmp_path,
+            {"auths": {"x.com": {"auth": "***-not-base64-***"}}},
+        )
+        assert resolve_basic_pair(path, "x.com") is None
+
+    def test_auth_without_colon_returns_none(self, tmp_path):
+        """``auth`` must decode to ``user:password``; otherwise it's not
+        a Basic credential and we shouldn't pretend it is."""
+        from app.auth_dockerconfigjson import resolve_basic_pair
+
+        encoded = base64.b64encode(b"no-colon-here").decode()
+        path = self._write_config(tmp_path, {"auths": {"x.com": {"auth": encoded}}})
+        assert resolve_basic_pair(path, "x.com") is None
+
+    def test_empty_user_or_pwd_returns_none(self, tmp_path):
+        from app.auth_dockerconfigjson import resolve_basic_pair
+
+        encoded_empty_user = base64.b64encode(b":pwd").decode()
+        path = self._write_config(tmp_path, {"auths": {"x.com": {"auth": encoded_empty_user}}})
+        assert resolve_basic_pair(path, "x.com") is None
+
+    def test_resolve_from_env_reads_path_from_env_var(self, tmp_path, monkeypatch):
+        from app.auth_dockerconfigjson import resolve_basic_pair_from_env
+
+        path = self._write_config(
+            tmp_path, {"auths": {"x.com": {"username": "u", "password": "p"}}}
+        )
+        monkeypatch.setenv("MY_DC_PATH", path)
+        assert resolve_basic_pair_from_env("MY_DC_PATH", "x.com") == ("u", "p")
+
+    def test_resolve_from_env_unset_returns_none(self, monkeypatch):
+        from app.auth_dockerconfigjson import resolve_basic_pair_from_env
+
+        monkeypatch.delenv("MISSING_DC", raising=False)
+        assert resolve_basic_pair_from_env("MISSING_DC", "x.com") is None
+
+    def test_resolve_from_env_empty_name_returns_none(self):
+        from app.auth_dockerconfigjson import resolve_basic_pair_from_env
+
+        assert resolve_basic_pair_from_env("", "x.com") is None
+
+
+# ---------------------------------------------------------------------------
+# SourceAuth + GitAuth dockerconfigjson_env validators
+# ---------------------------------------------------------------------------
+class TestDockerconfigjsonValidators:
+    def test_source_auth_dockerconfigjson_alone_ok(self):
+        a = SourceAuth(dockerconfigjson_env="JCR_DOCKERCONFIGJSON")
+        assert a.dockerconfigjson_env == "JCR_DOCKERCONFIGJSON"
+
+    def test_source_auth_dockerconfigjson_plus_token_rejected(self):
+        with pytest.raises(pydantic.ValidationError) as exc:
+            SourceAuth(token_env="T", dockerconfigjson_env="DC")
+        assert "AT MOST ONE" in str(exc.value)
+
+    def test_source_auth_dockerconfigjson_plus_basic_rejected(self):
+        with pytest.raises(pydantic.ValidationError) as exc:
+            SourceAuth(user_env="U", pass_env="P", dockerconfigjson_env="DC")
+        assert "AT MOST ONE" in str(exc.value)
+
+    def test_git_auth_dockerconfigjson_alone_ok(self):
+        from app.config import GitAuth
+
+        a = GitAuth(dockerconfigjson_env="GIT_DC")
+        assert a.dockerconfigjson_env == "GIT_DC"
+
+    def test_git_auth_dockerconfigjson_plus_token_rejected(self):
+        from app.config import GitAuth
+
+        with pytest.raises(pydantic.ValidationError):
+            GitAuth(token_env="T", dockerconfigjson_env="DC")
+
+
+# ---------------------------------------------------------------------------
+# OCISource._resolve_auth_header — dockerconfigjson mode
+# ---------------------------------------------------------------------------
+class TestOCISourceDockerconfigjsonAuth:
+    """OCI-source-level integration of the lookup helper.
+
+    Coverage notes:
+
+    - Happy path: env var points at a file, host present, returns Basic.
+    - Mode is "basic" — the bearer-realm dance behavior is shared with
+      the explicit user_env+pass_env code path. Once resolved, the
+      catalog can't tell the two apart, which is intentional.
+    - Soft-fallback on every "can't resolve" case (missing image_registry,
+      malformed image_registry, env unset, file missing, host not in
+      file). The catalog should degrade to anonymous so a partial config
+      against public sources still works, not hard-fail the whole poll.
+    """
+
+    def _write_config(self, tmp_path, payload):
+        from json import dumps
+
+        p = tmp_path / ".dockerconfigjson"
+        p.write_text(dumps(payload))
+        return str(p)
+
+    def test_resolves_basic_when_host_present(self, tmp_path, monkeypatch):
+        encoded = base64.b64encode(b"alice:s3cr3t!").decode()
+        path = self._write_config(
+            tmp_path,
+            {"auths": {"artifactory.example.com": {"auth": encoded}}},
+        )
+        monkeypatch.setenv("JCR_DC", path)
+        header, mode = OCISource._resolve_auth_header(
+            {
+                "slug": "x",
+                "image_registry": "artifactory.example.com/docker-ghcr/rw/foo",
+                "_source_auth": {"dockerconfigjson_env": "JCR_DC"},
+            }
+        )
+        assert mode == "basic"
+        assert header == "Basic " + encoded
+
+    def test_host_miss_falls_back_to_anonymous(self, tmp_path, monkeypatch):
+        path = self._write_config(
+            tmp_path,
+            {"auths": {"some-other-host.example.com": {"username": "u", "password": "p"}}},
+        )
+        monkeypatch.setenv("JCR_DC", path)
+        header, mode = OCISource._resolve_auth_header(
+            {
+                "slug": "x",
+                "image_registry": "artifactory.example.com/docker-ghcr/rw/foo",
+                "_source_auth": {"dockerconfigjson_env": "JCR_DC"},
+            }
+        )
+        assert mode == "anonymous"
+        assert header is None
+
+    def test_env_var_unset_falls_back_to_anonymous(self, monkeypatch):
+        monkeypatch.delenv("JCR_DC", raising=False)
+        header, mode = OCISource._resolve_auth_header(
+            {
+                "slug": "x",
+                "image_registry": "artifactory.example.com/docker-ghcr/rw/foo",
+                "_source_auth": {"dockerconfigjson_env": "JCR_DC"},
+            }
+        )
+        assert mode == "anonymous"
+
+    def test_missing_image_registry_falls_back_to_anonymous(self, tmp_path, monkeypatch):
+        path = self._write_config(
+            tmp_path,
+            {"auths": {"x.com": {"username": "u", "password": "p"}}},
+        )
+        monkeypatch.setenv("JCR_DC", path)
+        header, mode = OCISource._resolve_auth_header(
+            {
+                "slug": "x",
+                # No image_registry — we can't derive a host to look up.
+                "_source_auth": {"dockerconfigjson_env": "JCR_DC"},
+            }
+        )
+        assert mode == "anonymous"
+
+    def test_malformed_image_registry_falls_back_to_anonymous(self, tmp_path, monkeypatch):
+        path = self._write_config(
+            tmp_path,
+            {"auths": {"x.com": {"username": "u", "password": "p"}}},
+        )
+        monkeypatch.setenv("JCR_DC", path)
+        header, mode = OCISource._resolve_auth_header(
+            {
+                "slug": "x",
+                "image_registry": "no-slash-host-only",  # _split_registry_url raises
+                "_source_auth": {"dockerconfigjson_env": "JCR_DC"},
+            }
+        )
+        assert mode == "anonymous"
+
+    @respx.mock
+    def test_end_to_end_dockerconfigjson_sends_basic_header(self, tmp_path, monkeypatch):
+        """Full discover_refs path uses the resolved Basic header on the
+        first /tags/list request (same as explicit user_env+pass_env).
+        """
+        encoded = base64.b64encode(b"alice:s3cr3t!").decode()
+        path = self._write_config(
+            tmp_path,
+            {"auths": {"artifactory.example.com": {"auth": encoded}}},
+        )
+        monkeypatch.setenv("JCR_DC", path)
+        src = OCISource()
+        cc = {
+            "slug": "rw-cli-codecollection",
+            "image_registry": (
+                "artifactory.example.com/docker-ghcr/runwhen-contrib/rw-cli-codecollection"
+            ),
+            "_source_auth": {"dockerconfigjson_env": "JCR_DC"},
+        }
+        route = respx.get(
+            "https://artifactory.example.com/v2/docker-ghcr/runwhen-contrib/"
+            "rw-cli-codecollection/tags/list"
+        ).mock(return_value=httpx.Response(200, json={"tags": ["main-c1a2b3d-e4f5a6b"]}))
+
+        refs = src.discover_refs(cc)
+
+        assert len(refs) == 1
+        assert route.call_count == 1
+        assert route.calls[0].request.headers["authorization"] == "Basic " + encoded
+
+
+# ---------------------------------------------------------------------------
+# git_mirror._git_auth_args — dockerconfigjson mode
+# ---------------------------------------------------------------------------
+class TestGitAuthArgsDockerconfigjson:
+    """``_git_auth_args`` needs an upstream_url to derive the host for
+    the dockerconfigjson lookup. The other auth modes (token_env,
+    user_env+pass_env) ignore upstream_url — covered here for regression
+    safety.
+    """
+
+    def _write_config(self, tmp_path, payload):
+        from json import dumps
+
+        p = tmp_path / ".dockerconfigjson"
+        p.write_text(dumps(payload))
+        return str(p)
+
+    def test_resolves_basic_for_known_host(self, tmp_path, monkeypatch):
+        from app.config import GitAuth
+        from app.services.git_mirror import _git_auth_args
+
+        encoded = base64.b64encode(b"alice:s3cr3t!").decode()
+        path = self._write_config(tmp_path, {"auths": {"git.example.com": {"auth": encoded}}})
+        monkeypatch.setenv("GIT_DC", path)
+        args = _git_auth_args(
+            GitAuth(dockerconfigjson_env="GIT_DC"),
+            upstream_url="https://git.example.com/runwhen/x.git",
+        )
+        assert args == [
+            "-c",
+            f"http.extraHeader=Authorization: Basic {encoded}",
+        ]
+
+    def test_unknown_host_falls_back_to_no_auth(self, tmp_path, monkeypatch):
+        from app.config import GitAuth
+        from app.services.git_mirror import _git_auth_args
+
+        path = self._write_config(
+            tmp_path, {"auths": {"git.example.com": {"username": "u", "password": "p"}}}
+        )
+        monkeypatch.setenv("GIT_DC", path)
+        args = _git_auth_args(
+            GitAuth(dockerconfigjson_env="GIT_DC"),
+            upstream_url="https://github.com/runwhen/x.git",
+        )
+        assert args == []
+
+    def test_missing_upstream_url_falls_back_to_no_auth(self, tmp_path, monkeypatch):
+        """rev-parse and other local ops call without upstream_url; that
+        path must not crash and must not block local-only operations."""
+        from app.config import GitAuth
+        from app.services.git_mirror import _git_auth_args
+
+        path = self._write_config(
+            tmp_path, {"auths": {"git.example.com": {"username": "u", "password": "p"}}}
+        )
+        monkeypatch.setenv("GIT_DC", path)
+        args = _git_auth_args(GitAuth(dockerconfigjson_env="GIT_DC"))
+        assert args == []
+
+    def test_token_env_still_works_when_upstream_url_passed(self, monkeypatch):
+        """Regression guard: existing token_env path must ignore the new
+        upstream_url parameter."""
+        from app.config import GitAuth
+        from app.services.git_mirror import _git_auth_args
+
+        monkeypatch.setenv("GH_TOKEN", "ghp_abc")
+        args = _git_auth_args(
+            GitAuth(token_env="GH_TOKEN"),
+            upstream_url="https://github.com/runwhen/x.git",
+        )
+        # token path encodes as Basic x-access-token:<token>
+        expected = base64.b64encode(b"x-access-token:ghp_abc").decode()
+        assert args == [
+            "-c",
+            f"http.extraHeader=Authorization: Basic {expected}",
+        ]
+
+    def test_basic_pair_still_works_when_upstream_url_passed(self, monkeypatch):
+        from app.config import GitAuth
+        from app.services.git_mirror import _git_auth_args
+
+        monkeypatch.setenv("GIT_USER", "alice")
+        monkeypatch.setenv("GIT_PASS", "s3cr3t!")
+        args = _git_auth_args(
+            GitAuth(user_env="GIT_USER", pass_env="GIT_PASS"),
+            upstream_url="https://github.com/runwhen/x.git",
+        )
+        expected = base64.b64encode(b"alice:s3cr3t!").decode()
+        assert args == [
+            "-c",
+            f"http.extraHeader=Authorization: Basic {expected}",
+        ]
