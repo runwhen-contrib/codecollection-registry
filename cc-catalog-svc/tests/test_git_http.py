@@ -133,6 +133,48 @@ def test_info_refs_via_a2wsgi_mount(tmp_path):
     assert b"refs/heads/" in resp.content
 
 
+def test_info_refs_without_dot_git_suffix(tmp_path):
+    """Platform gitget calls ls-remote with URLs that omit the ``.git`` suffix."""
+    bare = repo_bare_path(str(tmp_path), "demo-cc")
+    _init_bare_repo(bare)
+
+    api = FastAPI()
+    api.mount("/git", WSGIMiddleware(make_git_wsgi_app(str(tmp_path))))
+
+    with TestClient(api) as client:
+        resp = client.get(
+            "/git/demo-cc/info/refs",
+            params={"service": "git-upload-pack"},
+            headers={"Accept": "*/*"},
+        )
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/x-git-upload-pack-advertisement")
+    assert b"refs/heads/" in resp.content
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git binary required")
+def test_ls_remote_without_dot_git_suffix(tmp_path):
+    bare = repo_bare_path(str(tmp_path), "demo-cc")
+    _init_bare_repo(bare)
+
+    _, port = _mount_test_server(str(tmp_path))
+    result = subprocess.run(
+        [
+            "git",
+            "ls-remote",
+            "--heads",
+            "--tags",
+            f"http://127.0.0.1:{port}/git/demo-cc",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "refs/heads/" in result.stdout
+
+
 @pytest.mark.skipif(shutil.which("git") is None, reason="git binary required")
 def test_git_clone_via_a2wsgi_mount(tmp_path):
     bare = repo_bare_path(str(tmp_path), "many-branches")
