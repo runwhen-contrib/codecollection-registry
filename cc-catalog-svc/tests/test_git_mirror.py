@@ -160,9 +160,7 @@ def test_run_git_sync_allow_runtime_sync_overrides_air_gap(
         "app.services.git_mirror.sync_one_repo",
         lambda slug, url, git_cfg: "deadbeef",
     )
-    summary = run_git_sync(
-        git_enabled_config, force=True, allow_runtime_sync=True
-    )
+    summary = run_git_sync(git_enabled_config, force=True, allow_runtime_sync=True)
     assert summary["repos_updated"] == 1
     assert "skipped" not in summary
 
@@ -170,7 +168,7 @@ def test_run_git_sync_allow_runtime_sync_overrides_air_gap(
 def test_run_git_sync_clone_and_update(git_enabled_config, monkeypatch):
     calls: list[list[str]] = []
 
-    def fake_run(cmd, auth, *, timeout):
+    def fake_run(cmd, auth, *, timeout, upstream_url=None):
         calls.append(cmd)
         if cmd[:2] == ["clone", "--mirror"]:
             dest = cmd[3]
@@ -186,6 +184,7 @@ def test_run_git_sync_clone_and_update(git_enabled_config, monkeypatch):
         raise AssertionError(f"unexpected git args: {cmd}")
 
     monkeypatch.setattr("app.services.git_mirror._run_git", fake_run)
+
     # ``sync_one_repo`` calls subprocess.run directly to peek at the
     # existing origin URL before deciding to fetch; stub it to a no-op
     # that reports the current upstream so no set-url is issued.
@@ -273,9 +272,7 @@ def test_admin_sync_git_allow_runtime_sync_flag(git_enabled_config, client, monk
 # ---------------------------------------------------------------------------
 # Bugbot regressions
 # ---------------------------------------------------------------------------
-def test_sync_one_repo_recovers_from_incomplete_bare_clone(
-    git_enabled_config, monkeypatch
-):
+def test_sync_one_repo_recovers_from_incomplete_bare_clone(git_enabled_config, monkeypatch):
     """A bare dir without HEAD must be removed and re-cloned."""
     from app.services import git_mirror
 
@@ -285,7 +282,7 @@ def test_sync_one_repo_recovers_from_incomplete_bare_clone(
 
     cloned: list[list[str]] = []
 
-    def fake_run(cmd, auth, *, timeout):
+    def fake_run(cmd, auth, *, timeout, upstream_url=None):
         cloned.append(cmd)
         if cmd[:2] == ["clone", "--mirror"]:
             clone_dest = cmd[3]
@@ -308,9 +305,7 @@ def test_sync_one_repo_recovers_from_incomplete_bare_clone(
     assert cloned[0][:2] == ["clone", "--mirror"]
 
 
-def test_sync_one_repo_resets_origin_when_upstream_changes(
-    git_enabled_config, monkeypatch
-):
+def test_sync_one_repo_resets_origin_when_upstream_changes(git_enabled_config, monkeypatch):
     """Existing mirror whose origin no longer matches config gets reset."""
     from app.services import git_mirror
 
@@ -325,14 +320,16 @@ def test_sync_one_repo_resets_origin_when_upstream_changes(
     def fake_run(cmd, check=False, capture_output=False, text=False, timeout=None, env=None):
         issued.append(cmd)
         if cmd[:4] == ["git", "--git-dir", dest, "remote"] and cmd[4] == "get-url":
-            return subprocess.CompletedProcess(cmd, 0, stdout="https://old.example.com/x\n", stderr="")
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="https://old.example.com/x\n", stderr=""
+            )
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(git_mirror.subprocess, "run", fake_run)
     monkeypatch.setattr(
         git_mirror,
         "_run_git",
-        lambda cmd, auth, *, timeout: subprocess.CompletedProcess(
+        lambda cmd, auth, *, timeout, upstream_url=None: subprocess.CompletedProcess(
             cmd, 0, stdout="abc1234\n", stderr=""
         ),
     )
@@ -392,16 +389,12 @@ def test_populate_baked_head_commits_backfills_from_disk(
     with open(os.path.join(bare, "HEAD"), "w") as f:
         f.write("ref: refs/heads/main\n")
 
-    monkeypatch.setattr(
-        git_mirror, "_head_commit_from_disk", lambda path: "feedface"
-    )
+    monkeypatch.setattr(git_mirror, "_head_commit_from_disk", lambda path: "feedface")
     touched = git_mirror.populate_baked_head_commits(git_enabled_config)
     assert touched == 1
 
     statuses = git_mirror.list_repo_status(git_enabled_config)
-    assert any(
-        s.slug == "demo-cc" and s.head_commit == "feedface" for s in statuses
-    )
+    assert any(s.slug == "demo-cc" and s.head_commit == "feedface" for s in statuses)
 
 
 def test_init_db_adds_missing_git_columns(tmp_path, monkeypatch):
