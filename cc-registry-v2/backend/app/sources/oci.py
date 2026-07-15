@@ -104,14 +104,17 @@ class OCISource(ImageSource):
                     continue
                 discovered.append(ref)
 
-            # When multiple canonical tags share a ref (e.g. two builds
-            # of `main`) we MUST pick the newer one. Lex sort on
-            # image_tag is wrong: cc_sha7 is hex, so `main-1...` sorts
-            # before `main-d...` even when the `1...` push happened
-            # later. Fetch the real build timestamp from the registry
-            # so the existing (built_at, image_tag) sort picks the
-            # right tag. We only enrich tags that actually compete —
-            # single-tag-per-ref polls do zero extra HTTP work.
+            # CI publishes moving-pointer aliases (`latest`, `main`, `pr-N`,
+            # …) alongside the immutable canonical tag. Trust those pointers
+            # instead of fetching manifests for every historical build of a
+            # ref — rw-cli-codecollection alone has thousands of `main-*`
+            # tags and only one row per ref in the catalog DB.
+            discovered = self._collapse_via_pointer_tags(
+                session, host, repo, tags, discovered, cc
+            )
+
+            # Fallback when no moving pointer exists (or digest lookup failed):
+            # fetch config.created for competing canonical tags.
             discovered = self._enrich_built_at_for_tiebreaks(
                 session, host, repo, discovered
             )
@@ -234,6 +237,125 @@ class OCISource(ImageSource):
             timeout=self.timeout,
             headers=retry_headers,
         )
+
+    # ------------------------------------------------------------------
+    # moving-pointer collapse (latest / branch aliases)
+    # ------------------------------------------------------------------
+    def _collapse_via_pointer_tags(
+        self,
+        session: requests.Session,
+        host: str,
+        repo: str,
+        raw_tags: list[str],
+        refs: list[DiscoveredImageRef],
+        cc: dict,
+    ) -> list[DiscoveredImageRef]:
+        """Keep one canonical tag per ref using registry pointer aliases.
+
+        The codecollection build workflow tags every push with both the
+        immutable ``<ref>-<cc_sha7>-<rt_sha7>`` tag AND a moving alias
+        (``latest`` on main, ``main`` for the branch, ``pr-N`` for PRs).
+        Those aliases point at the same manifest as the current build, so
+        we resolve the winner with digest equality instead of scanning
+        thousands of historical builds.
+        """
+        raw_set = set(raw_tags)
+        default_ref = cc.get("default_ref", "main")
+        by_ref: dict[str, list[DiscoveredImageRef]] = {}
+        for r in refs:
+            by_ref.setdefault(r.ref, []).append(r)
+
+        collapsed: list[DiscoveredImageRef] = []
+        for ref, group in by_ref.items():
+            if len(group) == 1:
+                collapsed.append(group[0])
+                continue
+
+            pointers: list[str] = []
+            if ref == default_ref and "latest" in raw_set:
+                pointers.append("latest")
+            if ref in raw_set:
+                pointers.append(ref)
+
+            winner: Optional[DiscoveredImageRef] = None
+            pointer_used: Optional[str] = None
+            for pointer in pointers:
+                winner = self._pick_canonical_via_pointer(
+                    session, host, repo, pointer, group
+                )
+                if winner is not None:
+                    pointer_used = pointer
+                    break
+
+            if winner is None:
+                collapsed.extend(group)
+                continue
+
+            built_at = self._fetch_built_at_for_tag(
+                session, host, repo, pointer_used or winner.image_tag
+            )
+            if built_at is not None:
+                winner = dataclasses.replace(winner, built_at=built_at)
+            collapsed.append(winner)
+
+        return collapsed
+
+    def _pick_canonical_via_pointer(
+        self,
+        session: requests.Session,
+        host: str,
+        repo: str,
+        pointer_tag: str,
+        candidates: list[DiscoveredImageRef],
+    ) -> Optional[DiscoveredImageRef]:
+        """Return the candidate canonical tag that shares ``pointer_tag``'s digest."""
+        pointer_digest = self._manifest_digest(session, host, repo, pointer_tag)
+        if not pointer_digest:
+            return None
+        for candidate in candidates:
+            cand_digest = self._manifest_digest(
+                session, host, repo, candidate.image_tag
+            )
+            if cand_digest == pointer_digest:
+                return candidate
+        return None
+
+    def _manifest_digest(
+        self,
+        session: requests.Session,
+        host: str,
+        repo: str,
+        tag: str,
+    ) -> Optional[str]:
+        """Best-effort manifest digest for an OCI tag (one GET, no blob fetch)."""
+        manifest_url = f"https://{host}/v2/{repo}/manifests/{tag}"
+        try:
+            resp = self._get_with_token(
+                session,
+                host,
+                repo,
+                manifest_url,
+                params={},
+                accept=_MANIFEST_ACCEPT,
+            )
+            if resp.status_code != 200:
+                return None
+            digest = resp.headers.get("Docker-Content-Digest")
+            if digest:
+                return digest
+            manifest = resp.json()
+            child_manifests = manifest.get("manifests")
+            if child_manifests:
+                return (child_manifests[0] or {}).get("digest")
+            return None
+        except Exception:
+            logger.debug(
+                "oci source: failed to fetch digest for %s:%s",
+                repo,
+                tag,
+                exc_info=True,
+            )
+            return None
 
     # ------------------------------------------------------------------
     # tiebreak enrichment
