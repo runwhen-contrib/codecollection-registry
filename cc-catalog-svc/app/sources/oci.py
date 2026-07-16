@@ -86,22 +86,52 @@ class OCISource(ImageSource):
         # config-blob fetches reuse the same TCP connection / token.
         with httpx.Client(timeout=self.timeout, follow_redirects=True) as client:
             tags = self._list_tags(client, host, repo, auth_header=auth_header, auth_mode=auth_mode)
+            raw_set = set(tags)
+            default_ref = cc.get("default_ref", "main")
+
+            # Resolve moving pointers (`latest`, `main`, `pr-N`, …) up front.
+            # The build workflow stamps OCI labels on every image so we can
+            # derive the canonical tag from a single pointer manifest — no
+            # digest scan across thousands of historical `main-*` builds.
+            pointer_resolved: dict[str, DiscoveredImageRef] = {}
+            for pointer in self._pointer_tags_for_ref(default_ref, raw_set, default_ref):
+                winner = self._resolve_via_pointer(
+                    client,
+                    host,
+                    repo,
+                    pointer,
+                    default_ref,
+                    raw_set,
+                    auth_header,
+                    auth_mode,
+                )
+                if winner is not None:
+                    pointer_resolved[default_ref] = winner
+                    break
 
             discovered: list[DiscoveredImageRef] = []
             for tag in tags:
                 parsed = self._parse_tag(tag)
                 if parsed is None:
                     continue
+                if parsed.ref in pointer_resolved:
+                    continue
                 discovered.append(parsed)
 
-            # When multiple canonical tags share a ref (e.g. `main-<a>-<x>`
-            # AND `main-<b>-<y>`) we MUST pick the newer one. Lexicographic
-            # sort on `image_tag` is wrong: the cc_sha7 prefix is hex, so
-            # `main-1...` sorts before `main-d...` even when the `1...` push
-            # happened a week later. Fetch the real build timestamp from the
-            # registry so the existing (built_at, image_tag) sort produces a
-            # correct order. We only do this for tags that actually compete
-            # — most polls touch zero extra endpoints.
+            discovered.extend(pointer_resolved.values())
+
+            discovered = self._collapse_via_pointer_tags(
+                client,
+                host,
+                repo,
+                tags,
+                discovered,
+                cc,
+                auth_header,
+                auth_mode,
+                pointer_resolved=pointer_resolved,
+            )
+
             discovered = self._enrich_built_at_for_tiebreaks(
                 client, host, repo, discovered, auth_header, auth_mode
             )
@@ -348,6 +378,226 @@ class OCISource(ImageSource):
         return client.get(url, params=params, headers=retry_headers)
 
     # ------------------------------------------------------------------
+    # moving-pointer collapse (latest / branch aliases)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _pointer_tags_for_ref(
+        ref: str, raw_set: set[str], default_ref: str = "main"
+    ) -> list[str]:
+        """Moving aliases the build workflow publishes for ``ref``."""
+        pointers: list[str] = []
+        if ref == default_ref and "latest" in raw_set:
+            pointers.append("latest")
+        if ref in raw_set:
+            pointers.append(ref)
+        return pointers
+
+    def _resolve_via_pointer(
+        self,
+        client: httpx.Client,
+        host: str,
+        repo: str,
+        pointer_tag: str,
+        ref_name: str,
+        raw_set: set[str],
+        auth_header: Optional[str],
+        auth_mode: str,
+        candidate_tags: Optional[list[str]] = None,
+    ) -> Optional[DiscoveredImageRef]:
+        """Map a moving pointer to its canonical tag in O(1) registry calls.
+
+        Prefers OCI config labels (``io.runwhen.codecollection.commit``,
+        ``io.runwhen.runtime.commit``) baked in by the build workflow. Falls
+        back to a digest compare only when labels are missing (older images).
+        """
+        canonical_tag, built_at = self._canonical_tag_from_pointer_labels(
+            client,
+            host,
+            repo,
+            pointer_tag,
+            ref_name,
+            auth_header,
+            auth_mode,
+        )
+        if canonical_tag:
+            parsed = self._parse_tag(canonical_tag)
+            if parsed is not None and parsed.ref == ref_name:
+                if built_at is not None:
+                    parsed = dataclasses.replace(parsed, built_at=built_at)
+                logger.info(
+                    "oci source: resolved %s via %s labels -> %s",
+                    ref_name,
+                    pointer_tag,
+                    canonical_tag,
+                )
+                return parsed
+
+        if not candidate_tags:
+            return None
+
+        pointer_digest = self._manifest_digest(
+            client, host, repo, pointer_tag, auth_header, auth_mode
+        )
+        if not pointer_digest:
+            return None
+        for tag in candidate_tags:
+            parsed = self._parse_tag(tag)
+            if parsed is None or parsed.ref != ref_name:
+                continue
+            cand_digest = self._manifest_digest(
+                client, host, repo, tag, auth_header, auth_mode
+            )
+            if cand_digest == pointer_digest:
+                if built_at is not None:
+                    parsed = dataclasses.replace(parsed, built_at=built_at)
+                return parsed
+        return None
+
+    def _canonical_tag_from_pointer_labels(
+        self,
+        client: httpx.Client,
+        host: str,
+        repo: str,
+        pointer_tag: str,
+        ref_name: str,
+        auth_header: Optional[str],
+        auth_mode: str,
+    ) -> tuple[Optional[str], Optional[datetime]]:
+        """Read build labels from a pointer manifest and derive canonical tag."""
+        manifest_url = f"https://{host}/v2/{repo}/manifests/{pointer_tag}"
+        try:
+            resp = self._get_with_auth(
+                client,
+                host,
+                repo,
+                manifest_url,
+                params={},
+                auth_header=auth_header,
+                auth_mode=auth_mode,
+                accept=_MANIFEST_ACCEPT,
+            )
+            if resp.status_code != 200:
+                return None, None
+            manifest = resp.json()
+            blob = self._fetch_config_blob_from_manifest(
+                client, host, repo, manifest, auth_header, auth_mode
+            )
+            if blob is None:
+                return None, None
+            built_at = self._parse_created_timestamp(blob.get("created"))
+            labels = (blob.get("config") or {}).get("Labels") or {}
+            cc_sha = labels.get("io.runwhen.codecollection.commit") or labels.get(
+                "org.opencontainers.image.revision"
+            )
+            rt_sha = labels.get("io.runwhen.runtime.commit")
+            if not cc_sha or not rt_sha:
+                return None, built_at
+            canonical = f"{ref_name}-{cc_sha[:7]}-{rt_sha[:7]}"
+            return canonical, built_at
+        except Exception:
+            logger.debug(
+                "oci source: failed to read labels from pointer %s:%s",
+                repo,
+                pointer_tag,
+                exc_info=True,
+            )
+            return None, None
+
+    def _collapse_via_pointer_tags(
+        self,
+        client: httpx.Client,
+        host: str,
+        repo: str,
+        raw_tags: list[str],
+        refs: list[DiscoveredImageRef],
+        cc: dict,
+        auth_header: Optional[str],
+        auth_mode: str,
+        pointer_resolved: Optional[dict[str, DiscoveredImageRef]] = None,
+    ) -> list[DiscoveredImageRef]:
+        """Keep one canonical tag per ref using registry pointer aliases."""
+        raw_set = set(raw_tags)
+        default_ref = cc.get("default_ref", "main")
+        already_resolved = pointer_resolved or {}
+        by_ref: dict[str, list[DiscoveredImageRef]] = {}
+        for r in refs:
+            by_ref.setdefault(r.ref, []).append(r)
+
+        collapsed: list[DiscoveredImageRef] = []
+        for ref, group in by_ref.items():
+            if ref in already_resolved:
+                collapsed.append(already_resolved[ref])
+                continue
+            if len(group) == 1:
+                collapsed.append(group[0])
+                continue
+
+            winner: Optional[DiscoveredImageRef] = None
+            group_tags = [r.image_tag for r in group]
+            for pointer in self._pointer_tags_for_ref(ref, raw_set, default_ref):
+                winner = self._resolve_via_pointer(
+                    client,
+                    host,
+                    repo,
+                    pointer,
+                    ref,
+                    raw_set,
+                    auth_header,
+                    auth_mode,
+                    candidate_tags=group_tags,
+                )
+                if winner is not None:
+                    break
+
+            if winner is None:
+                collapsed.extend(group)
+            else:
+                collapsed.append(winner)
+
+        return collapsed
+
+    def _manifest_digest(
+        self,
+        client: httpx.Client,
+        host: str,
+        repo: str,
+        tag: str,
+        auth_header: Optional[str],
+        auth_mode: str,
+    ) -> Optional[str]:
+        """Best-effort manifest digest for an OCI tag (one GET, no blob fetch)."""
+        manifest_url = f"https://{host}/v2/{repo}/manifests/{tag}"
+        try:
+            resp = self._get_with_auth(
+                client,
+                host,
+                repo,
+                manifest_url,
+                params={},
+                auth_header=auth_header,
+                auth_mode=auth_mode,
+                accept=_MANIFEST_ACCEPT,
+            )
+            if resp.status_code != 200:
+                return None
+            digest = resp.headers.get("Docker-Content-Digest")
+            if digest:
+                return digest
+            manifest = resp.json()
+            child_manifests = manifest.get("manifests")
+            if child_manifests:
+                return (child_manifests[0] or {}).get("digest")
+            return None
+        except Exception:
+            logger.debug(
+                "oci source: failed to fetch digest for %s:%s",
+                repo,
+                tag,
+                exc_info=True,
+            )
+            return None
+
+    # ------------------------------------------------------------------
     # tiebreak enrichment
     # ------------------------------------------------------------------
     def _enrich_built_at_for_tiebreaks(
@@ -448,9 +698,12 @@ class OCISource(ImageSource):
                 return None
 
             manifest = resp.json()
-            return self._fetch_created_from_manifest(
+            blob = self._fetch_config_blob_from_manifest(
                 client, host, repo, manifest, auth_header, auth_mode
             )
+            if blob is None:
+                return None
+            return self._parse_created_timestamp(blob.get("created"))
         except Exception:
             logger.debug(
                 "oci source: failed to fetch built_at for %s:%s",
@@ -460,7 +713,7 @@ class OCISource(ImageSource):
             )
             return None
 
-    def _fetch_created_from_manifest(
+    def _fetch_config_blob_from_manifest(
         self,
         client: httpx.Client,
         host: str,
@@ -468,15 +721,8 @@ class OCISource(ImageSource):
         manifest: dict,
         auth_header: Optional[str],
         auth_mode: str,
-    ) -> Optional[datetime]:
-        """Resolve a manifest doc to its config-blob ``created`` timestamp.
-
-        Handles both single-platform manifests (``config.digest`` is on
-        the top-level) and image indices / manifest lists (we descend into
-        the first child manifest, which is the conventional approach since
-        all platforms of a multi-arch build share the same buildkit
-        timestamp anyway).
-        """
+    ) -> Optional[dict]:
+        """Return the image config blob JSON for a manifest document."""
         config_digest: Optional[str] = None
         child_manifests = manifest.get("manifests")
         if child_manifests:
@@ -515,16 +761,35 @@ class OCISource(ImageSource):
         )
         if blob_resp.status_code != 200:
             return None
-        created = blob_resp.json().get("created")
+        return blob_resp.json()
+
+    @staticmethod
+    def _parse_created_timestamp(created: Optional[str]) -> Optional[datetime]:
         if not created:
             return None
-        # OCI uses RFC 3339; normalize "Z" suffix for fromisoformat (<3.11).
         if created.endswith("Z"):
             created = created[:-1] + "+00:00"
         try:
             return datetime.fromisoformat(created)
         except ValueError:
             return None
+
+    def _fetch_created_from_manifest(
+        self,
+        client: httpx.Client,
+        host: str,
+        repo: str,
+        manifest: dict,
+        auth_header: Optional[str],
+        auth_mode: str,
+    ) -> Optional[datetime]:
+        """Resolve a manifest doc to its config-blob ``created`` timestamp."""
+        blob = self._fetch_config_blob_from_manifest(
+            client, host, repo, manifest, auth_header, auth_mode
+        )
+        if blob is None:
+            return None
+        return self._parse_created_timestamp(blob.get("created"))
 
     @staticmethod
     def _parse_next_link(link_header: str, host: str) -> Optional[str]:

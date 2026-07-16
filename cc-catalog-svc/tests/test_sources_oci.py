@@ -463,3 +463,108 @@ def test_discover_refs_enrichment_tolerates_per_tag_failure():
     # a known built_at outranks the bare-image_tag fallback (epoch_min).
     latest = src.resolve_latest({"default_ref": "main"}, refs)
     assert latest == "main-1111111-bbbbbbb"
+
+
+@respx.mock
+def test_discover_refs_uses_latest_labels_when_canonical_tag_not_listed():
+    """GHCR tag lists can omit canonical tags; trust pointer labels anyway."""
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-cli-codecollection"
+    cc = {
+        "slug": "rw-cli-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "tags": [
+                    "latest",
+                    "main-aaaaaaa-bbbbbbb",
+                    "main-cccccccc-bbbbbbb",
+                ],
+            },
+        )
+    )
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/latest").mock(
+        return_value=httpx.Response(
+            200,
+            json={"config": {"digest": "sha256:current-cfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:current-cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": "2026-05-21T17:00:00Z",
+                "config": {
+                    "Labels": {
+                        "io.runwhen.codecollection.commit": "1111111deadbeef",
+                        "io.runwhen.runtime.commit": "bbbbbbb0000000",
+                    }
+                },
+            },
+        )
+    )
+
+    refs = src.discover_refs(cc)
+    main_refs = [r for r in refs if r.ref == "main"]
+    assert len(main_refs) == 1
+    assert main_refs[0].image_tag == "main-1111111-bbbbbbb"
+    assert src.resolve_latest({"default_ref": "main"}, refs) == "main-1111111-bbbbbbb"
+
+
+@respx.mock
+def test_discover_refs_uses_latest_pointer_without_mass_enrichment():
+    """When ``latest`` exists, read OCI labels — do not scan every ``main-*`` tag."""
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-cli-codecollection"
+    cc = {
+        "slug": "rw-cli-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "tags": [
+                    "latest",
+                    "main",
+                    "main-aaaaaaa-bbbbbbb",
+                    "main-1111111-bbbbbbb",
+                ],
+            },
+        )
+    )
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/latest").mock(
+        return_value=httpx.Response(
+            200,
+            json={"config": {"digest": "sha256:current-cfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:current-cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": "2026-05-21T17:00:00Z",
+                "config": {
+                    "Labels": {
+                        "io.runwhen.codecollection.commit": "1111111deadbeef",
+                        "io.runwhen.runtime.commit": "bbbbbbb0000000",
+                    }
+                },
+            },
+        )
+    )
+
+    refs = src.discover_refs(cc)
+    assert len(refs) == 1
+    assert refs[0].image_tag == "main-1111111-bbbbbbb"
+    assert refs[0].built_at is not None
+
+    latest = src.resolve_latest({"default_ref": "main"}, refs)
+    assert latest == "main-1111111-bbbbbbb"
