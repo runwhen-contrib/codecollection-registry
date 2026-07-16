@@ -467,12 +467,7 @@ def test_discover_refs_enrichment_tolerates_per_tag_failure():
 
 @respx.mock
 def test_discover_refs_uses_latest_pointer_without_mass_enrichment():
-    """When ``latest`` exists, trust it to pick the canonical tag.
-
-    The build workflow re-points ``:latest`` on every main push. We should
-    not fetch config blobs for every historical ``main-*`` build when the
-    registry already tells us which manifest is current.
-    """
+    """When ``latest`` exists, read OCI labels — do not scan every ``main-*`` tag."""
     src = OCISource()
     repo_path = "runwhen-contrib/rw-cli-codecollection"
     cc = {
@@ -497,27 +492,22 @@ def test_discover_refs_uses_latest_pointer_without_mass_enrichment():
     respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/latest").mock(
         return_value=httpx.Response(
             200,
-            headers={"Docker-Content-Digest": "sha256:current"},
             json={"config": {"digest": "sha256:current-cfg"}},
         )
     )
-    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main-1111111-bbbbbbb").mock(
-        return_value=httpx.Response(
-            200,
-            headers={"Docker-Content-Digest": "sha256:current"},
-            json={"config": {"digest": "sha256:current-cfg"}},
-        )
-    )
-    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main-aaaaaaa-bbbbbbb").mock(
-        return_value=httpx.Response(
-            200,
-            headers={"Docker-Content-Digest": "sha256:stale"},
-            json={"config": {"digest": "sha256:stale-cfg"}},
-        )
-    )
-    # built_at comes from the pointer manifest only (one blob fetch).
     respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:current-cfg").mock(
-        return_value=httpx.Response(200, json={"created": "2026-05-21T17:00:00Z"})
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": "2026-05-21T17:00:00Z",
+                "config": {
+                    "Labels": {
+                        "io.runwhen.codecollection.commit": "1111111deadbeef",
+                        "io.runwhen.runtime.commit": "bbbbbbb0000000",
+                    }
+                },
+            },
+        )
     )
 
     refs = src.discover_refs(cc)
