@@ -268,21 +268,31 @@ class OCISource(ImageSource):
         pointer_tag: str,
         ref_name: str,
         raw_set: set[str],
+        candidate_tags: Optional[list[str]] = None,
     ) -> Optional[DiscoveredImageRef]:
         canonical_tag, built_at = self._canonical_tag_from_pointer_labels(
             session, host, repo, pointer_tag, ref_name
         )
-        if canonical_tag and canonical_tag in raw_set:
+        if canonical_tag:
             parsed = self._parse_tag(canonical_tag)
             if parsed is not None and parsed.ref == ref_name:
                 if built_at is not None:
                     parsed = dataclasses.replace(parsed, built_at=built_at)
+                logger.info(
+                    "oci source: resolved %s via %s labels -> %s",
+                    ref_name,
+                    pointer_tag,
+                    canonical_tag,
+                )
                 return parsed
+
+        if not candidate_tags:
+            return None
 
         pointer_digest = self._manifest_digest(session, host, repo, pointer_tag)
         if not pointer_digest:
             return None
-        for tag in raw_set:
+        for tag in candidate_tags:
             parsed = self._parse_tag(tag)
             if parsed is None or parsed.ref != ref_name:
                 continue
@@ -358,9 +368,11 @@ class OCISource(ImageSource):
                 continue
 
             winner: Optional[DiscoveredImageRef] = None
+            group_tags = [r.image_tag for r in group]
             for pointer in self._pointer_tags_for_ref(ref, raw_set, default_ref):
                 winner = self._resolve_via_pointer(
-                    session, host, repo, pointer, ref, raw_set
+                    session, host, repo, pointer, ref, raw_set,
+                    candidate_tags=group_tags,
                 )
                 if winner is not None:
                     break

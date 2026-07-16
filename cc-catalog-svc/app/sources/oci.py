@@ -402,6 +402,7 @@ class OCISource(ImageSource):
         raw_set: set[str],
         auth_header: Optional[str],
         auth_mode: str,
+        candidate_tags: Optional[list[str]] = None,
     ) -> Optional[DiscoveredImageRef]:
         """Map a moving pointer to its canonical tag in O(1) registry calls.
 
@@ -418,19 +419,28 @@ class OCISource(ImageSource):
             auth_header,
             auth_mode,
         )
-        if canonical_tag and canonical_tag in raw_set:
+        if canonical_tag:
             parsed = self._parse_tag(canonical_tag)
             if parsed is not None and parsed.ref == ref_name:
                 if built_at is not None:
                     parsed = dataclasses.replace(parsed, built_at=built_at)
+                logger.info(
+                    "oci source: resolved %s via %s labels -> %s",
+                    ref_name,
+                    pointer_tag,
+                    canonical_tag,
+                )
                 return parsed
+
+        if not candidate_tags:
+            return None
 
         pointer_digest = self._manifest_digest(
             client, host, repo, pointer_tag, auth_header, auth_mode
         )
         if not pointer_digest:
             return None
-        for tag in raw_set:
+        for tag in candidate_tags:
             parsed = self._parse_tag(tag)
             if parsed is None or parsed.ref != ref_name:
                 continue
@@ -523,6 +533,7 @@ class OCISource(ImageSource):
                 continue
 
             winner: Optional[DiscoveredImageRef] = None
+            group_tags = [r.image_tag for r in group]
             for pointer in self._pointer_tags_for_ref(ref, raw_set, default_ref):
                 winner = self._resolve_via_pointer(
                     client,
@@ -533,6 +544,7 @@ class OCISource(ImageSource):
                     raw_set,
                     auth_header,
                     auth_mode,
+                    candidate_tags=group_tags,
                 )
                 if winner is not None:
                     break
