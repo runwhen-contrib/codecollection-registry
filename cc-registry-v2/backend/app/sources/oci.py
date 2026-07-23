@@ -264,11 +264,12 @@ class OCISource(ImageSource):
     def _pointer_tags_for_ref(
         ref: str, raw_set: set[str], default_ref: str = "main"
     ) -> list[str]:
+        """Branch alias before ``:latest`` — dispatch rebuilds move ``:main`` only."""
         pointers: list[str] = []
-        if ref == default_ref and "latest" in raw_set:
-            pointers.append("latest")
         if ref in raw_set:
             pointers.append(ref)
+        if ref == default_ref and "latest" in raw_set:
+            pointers.append("latest")
         return pointers
 
     def _resolve_via_pointer(
