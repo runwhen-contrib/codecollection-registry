@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'cc-registry-v2/**'
+      - 'cc-catalog-svc/**'
       - 'mcp-server/**'
       - '.github/workflows/release.yaml'
 
@@ -14,6 +15,7 @@ on:
 env:
   GCP_PROJECT_ID: runwhen-nonprod-shared
   GCR_REGISTRY: us-docker.pkg.dev/runwhen-nonprod-shared/public-images
+  GHCR_CC_CATALOG_IMAGE: ghcr.io/runwhen-contrib/cc-catalog-svc
 
 permissions:
   contents: write
@@ -226,13 +228,68 @@ jobs:
             GITHUB_REF=${{ github.ref }}
 
   # ---------------------------------------------------------------------------
+  # cc-catalog-svc image (GHCR — runwhen-env deploy surface)
+  # ---------------------------------------------------------------------------
+
+  build-cc-catalog-svc:
+    name: Build cc-catalog-svc
+    runs-on: ubuntu-latest
+    needs: [create-release]
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_PROVIDER }}
+          service_account: ${{ secrets.RUNWHEN_NONPROD_SHARED_WI_SA }}
+
+      - name: Configure Docker for GCR
+        run: gcloud --quiet auth configure-docker us-docker.pkg.dev
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push cc-catalog-svc
+        uses: docker/build-push-action@v5
+        with:
+          context: cc-catalog-svc
+          file: cc-catalog-svc/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.GHCR_CC_CATALOG_IMAGE }}:${{ needs.create-release.outputs.release_tag }}
+            ${{ env.GHCR_CC_CATALOG_IMAGE }}:latest
+            ${{ env.GCR_REGISTRY }}/cc-catalog-svc:${{ needs.create-release.outputs.release_tag }}
+            ${{ env.GCR_REGISTRY }}/cc-catalog-svc:latest
+          cache-from: type=gha,scope=cc-catalog-svc
+          cache-to: type=gha,mode=max,scope=cc-catalog-svc
+          build-args: |
+            GITHUB_SHA=${{ github.sha }}
+            GITHUB_REF=${{ github.ref }}
+            BAKE_GIT_MIRRORS=true
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
   # Deploy all images to prod with the same tag
   # ---------------------------------------------------------------------------
 
   deploy-to-prod:
     name: Deploy Release to Prod
     runs-on: ubuntu-latest
-    needs: [create-release, build-backend, build-frontend, build-worker, build-mcp-server]
+    needs: [create-release, build-backend, build-frontend, build-worker, build-mcp-server, build-cc-catalog-svc]
     steps:
       # NOTE: `infra-flux-nonprod-shared` is intentionally the *single* Flux
       # hub for both the test and the prod registry clusters — there is no
@@ -272,7 +329,7 @@ jobs:
   summary:
     name: Release Summary
     runs-on: ubuntu-latest
-    needs: [create-release, build-backend, build-frontend, build-worker, build-mcp-server, deploy-to-prod]
+    needs: [create-release, build-backend, build-frontend, build-worker, build-mcp-server, build-cc-catalog-svc, deploy-to-prod]
     if: always()
     steps:
       - name: Build summary
@@ -287,13 +344,15 @@ jobs:
           echo "| Frontend | ${{ needs.build-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Worker | ${{ needs.build-worker.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| MCP Server | ${{ needs.build-mcp-server.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| cc-catalog-svc | ${{ needs.build-cc-catalog-svc.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Prod Deploy | ${{ needs.deploy-to-prod.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           REGISTRY="us-docker.pkg.dev/runwhen-nonprod-shared/public-images"
           ALL_OK=true
           for result in "${{ needs.build-backend.result }}" "${{ needs.build-frontend.result }}" \
-                        "${{ needs.build-worker.result }}" "${{ needs.build-mcp-server.result }}"; do
+                        "${{ needs.build-worker.result }}" "${{ needs.build-mcp-server.result }}" \
+                        "${{ needs.build-cc-catalog-svc.result }}"; do
             [ "$result" != "success" ] && ALL_OK=false
           done
 
@@ -304,6 +363,8 @@ jobs:
             echo "${REGISTRY}/cc-registry-v2-frontend:${TAG}" >> $GITHUB_STEP_SUMMARY
             echo "${REGISTRY}/cc-registry-v2-worker:${TAG}" >> $GITHUB_STEP_SUMMARY
             echo "${REGISTRY}/runwhen-mcp-server:${TAG}" >> $GITHUB_STEP_SUMMARY
+            echo "${{ env.GHCR_CC_CATALOG_IMAGE }}:${TAG}" >> $GITHUB_STEP_SUMMARY
+            echo "${REGISTRY}/cc-catalog-svc:${TAG}" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Some builds failed" >> $GITHUB_STEP_SUMMARY

@@ -1,24 +1,13 @@
-name: Build cc-catalog-svc
+name: Build cc-catalog-svc (PR / dev)
 
-# Standalone build pipeline for the cc-catalog-svc microservice.
+# PR validation and ad-hoc dev builds only.
 #
-# Kept separate from build-images.yaml / release.yaml on purpose:
-#   * cc-catalog-svc is its own deployable; pinning it to the cc-registry-v2
-#     release cadence would be wrong.
-#
-# Registries:
-#   * GAR — internal dev/test (every PR + main push)
-#   * GHCR — public release surface (main push only, date-tagged)
+# Date-tagged releases (YYYY-MM-DD.N) are cut by release.yaml together with
+# cc-registry-v2 and mcp-server. Every image in that release — including
+# ghcr.io/runwhen-contrib/cc-catalog-svc — shares the same tag.
 
 on:
   pull_request:
-    paths:
-      - 'cc-catalog-svc/**'
-      - '.github/workflows/cc-catalog-svc.yaml'
-
-  push:
-    branches:
-      - main
     paths:
       - 'cc-catalog-svc/**'
       - '.github/workflows/cc-catalog-svc.yaml'
@@ -37,19 +26,10 @@ on:
         description: 'Custom image tag (default: <branch>-<sha8>)'
         required: false
         type: string
-      cut_release:
-        description: 'Cut date-based release + push to GHCR (main behaviour)'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'true'
-          - 'false'
 
 env:
   GCP_PROJECT_ID: runwhen-nonprod-shared
   GCR_REGISTRY: us-docker.pkg.dev/runwhen-nonprod-shared/public-images
-  GHCR_IMAGE: ghcr.io/runwhen-contrib/cc-catalog-svc
   IMAGE_NAME: cc-catalog-svc
 
 permissions:
@@ -59,63 +39,15 @@ permissions:
   actions: read
 
 jobs:
-  create-release:
-    name: Create Release Tag
-    runs-on: ubuntu-latest
-    if: >-
-      (github.event_name == 'push' && github.ref_name == 'main') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.cut_release == 'true')
-    permissions:
-      contents: write
-    outputs:
-      release_tag: ${{ steps.create_release.outputs.release_tag }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Create date-based tag and GitHub Release
-        id: create_release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-          git config --global user.name "${GITHUB_ACTOR}"
-
-          # Same YYYY-MM-DD.N scheme as release.yaml; image name disambiguates.
-          # Use `git tag --list` (not grep): with set -e, grep exits 1 when there
-          # are no tags for today yet and the step fails before tagging.
-          BASE_TAG=$(date "+%Y-%m-%d")
-          last=$(git tag --list "${BASE_TAG}.*" | awk -F '.' '{print $NF}' | sort -n | tail -1)
-          next=$([ -z "$last" ] && echo 1 || echo $((last + 1)))
-          NEW_TAG="${BASE_TAG}.${next}"
-
-          git tag "${NEW_TAG}"
-          git push origin "${NEW_TAG}"
-
-          gh release create "${NEW_TAG}" \
-            --title "cc-catalog-svc ${NEW_TAG}" \
-            --generate-notes
-
-          echo "release_tag=${NEW_TAG}" >> "$GITHUB_OUTPUT"
-          echo "Created release ${NEW_TAG}"
-
   build:
     name: Build & Push
     runs-on: ubuntu-latest
-    needs: [create-release]
-    if: >-
-      always() &&
-      (needs.create-release.result == 'success' || needs.create-release.result == 'skipped')
     permissions:
       contents: read
       id-token: write
-      packages: write
       pull-requests: write
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
-      release_tag: ${{ needs.create-release.outputs.release_tag }}
       should_push: ${{ steps.push.outputs.should_push }}
     steps:
       - uses: actions/checkout@v4
@@ -140,35 +72,6 @@ jobs:
             echo "should_push=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Compute image tags
-        id: tags
-        run: |
-          set -euo pipefail
-          TAGS=""
-          append() { TAGS="${TAGS}${TAGS:+$'\n'}${1}"; }
-
-          # GAR (internal CI)
-          append "${GCR_REGISTRY}/${IMAGE_NAME}:${{ steps.tag.outputs.tag }}"
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" = "main" ]; then
-            append "${GCR_REGISTRY}/${IMAGE_NAME}:main"
-            append "${GCR_REGISTRY}/${IMAGE_NAME}:latest"
-          fi
-
-          # GHCR (public release) — only when we cut a release tag on this run
-          RELEASE_TAG="${{ needs.create-release.outputs.release_tag }}"
-          if [ -n "${RELEASE_TAG}" ]; then
-            append "${GHCR_IMAGE}:${RELEASE_TAG}"
-            append "${GHCR_IMAGE}:latest"
-          fi
-
-          {
-            echo "tags<<EOF"
-            echo "${TAGS}"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          echo "Tags:"
-          echo "${TAGS}"
-
       - name: Authenticate to Google Cloud
         if: steps.push.outputs.should_push == 'true'
         uses: google-github-actions/auth@v2
@@ -180,16 +83,6 @@ jobs:
         if: steps.push.outputs.should_push == 'true'
         run: gcloud --quiet auth configure-docker us-docker.pkg.dev
 
-      - name: Log in to GHCR
-        if: >-
-          steps.push.outputs.should_push == 'true' &&
-          needs.create-release.outputs.release_tag != ''
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -200,7 +93,8 @@ jobs:
           file: cc-catalog-svc/Dockerfile
           platforms: linux/amd64
           push: ${{ steps.push.outputs.should_push == 'true' }}
-          tags: ${{ steps.tags.outputs.tags }}
+          tags: |
+            ${{ env.GCR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
           cache-from: type=gha,scope=cc-catalog-svc
           cache-to: type=gha,mode=max,scope=cc-catalog-svc
           build-args: |
@@ -209,20 +103,6 @@ jobs:
             BAKE_GIT_MIRRORS=true
           secrets: |
             github_token=${{ secrets.GITHUB_TOKEN }}
-
-      - name: Release summary
-        if: needs.create-release.outputs.release_tag != ''
-        run: |
-          TAG="${{ needs.create-release.outputs.release_tag }}"
-          {
-            echo "## cc-catalog-svc release: \`${TAG}\`"
-            echo ""
-            echo "| Registry | Image |"
-            echo "|----------|-------|"
-            echo "| GHCR | \`${GHCR_IMAGE}:${TAG}\` |"
-            echo "| GHCR (floating) | \`${GHCR_IMAGE}:latest\` |"
-            echo "| GAR (CI) | \`${GCR_REGISTRY}/${IMAGE_NAME}:${{ steps.tag.outputs.tag }}\` |"
-          } >> "$GITHUB_STEP_SUMMARY"
 
   comment-on-pr:
     name: PR Comment
@@ -246,7 +126,8 @@ jobs:
               `| Image | Tag |\n` +
               `|-------|-----|\n` +
               `| \`${image}\` | \`${tag}\` |\n\n` +
-              `\`\`\`\n${registry}/${image}:${tag}\n\`\`\``;
+              `\`\`\`\n${registry}/${image}:${tag}\n\`\`\`\n\n` +
+              `> Date-tagged GHCR releases are published by \`release.yaml\` on merge to \`main\`.`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
