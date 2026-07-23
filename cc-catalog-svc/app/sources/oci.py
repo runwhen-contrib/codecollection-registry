@@ -32,6 +32,7 @@ import os
 import re
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
@@ -60,6 +61,10 @@ _MANIFEST_ACCEPT = ",".join(
 
 class OCISource(ImageSource):
     name = "oci"
+
+    # Match crane / go-containerregistry. GHCR tag listing breaks when n=200:
+    # Link headers can carry n=0 and pagination loops over the same page.
+    TAGS_PAGE_SIZE = 1000
 
     def __init__(self, timeout: float = 10.0, max_pages: int = 50):
         # Defensive caps. A misbehaving registry shouldn't be able to
@@ -280,8 +285,9 @@ class OCISource(ImageSource):
     ) -> list[str]:
         """Walk /v2/<repo>/tags/list with Link-header pagination."""
         url = f"https://{host}/v2/{repo}/tags/list"
-        params: dict = {"n": 200}
+        params: dict = {"n": self.TAGS_PAGE_SIZE}
         all_tags: list[str] = []
+        seen: set[str] = set()
         for _ in range(self.max_pages):
             resp = self._get_with_auth(
                 client,
@@ -294,12 +300,17 @@ class OCISource(ImageSource):
             )
             resp.raise_for_status()
             payload = resp.json()
-            all_tags.extend(payload.get("tags") or [])
+            page_tags = payload.get("tags") or []
+            new_tags = [tag for tag in page_tags if tag not in seen]
+            if page_tags and not new_tags:
+                break
+            seen.update(new_tags)
+            all_tags.extend(new_tags)
             link = resp.headers.get("Link") or ""
             next_url = self._parse_next_link(link, host)
             if not next_url:
                 break
-            url, params = next_url, {}
+            url, params = self._next_tags_page_request(next_url)
         return all_tags
 
     def _get_with_auth(
@@ -801,6 +812,24 @@ class OCISource(ImageSource):
         if path.startswith("http"):
             return path
         return f"https://{host}{path}"
+
+    @classmethod
+    def _next_tags_page_request(cls, next_url: str) -> tuple[str, dict]:
+        """Turn a registry ``Link: ... rel=next`` URL into the next GET.
+
+        GHCR has been observed to emit ``n=0`` on subsequent pages when the
+        initial request used ``n=200``, which makes pagination loop forever.
+        We always send our own ``n=TAGS_PAGE_SIZE`` and carry forward only
+        the ``last`` cursor — matching crane / go-containerregistry.
+        """
+        parsed = urlparse(next_url)
+        query = parse_qs(parsed.query)
+        params: dict = {"n": cls.TAGS_PAGE_SIZE}
+        last_values = query.get("last") or []
+        if last_values:
+            params["last"] = last_values[0]
+        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        return base_url, params
 
     @staticmethod
     def _parse_tag(tag: str) -> Optional[DiscoveredImageRef]:
