@@ -94,7 +94,7 @@ class OCISource(ImageSource):
             raw_set = set(tags)
             default_ref = cc.get("default_ref", "main")
 
-            # Resolve moving pointers (`latest`, `main`, `pr-N`, …) up front.
+            # Resolve moving pointers (`main`, `latest`, `pr-N`, …) up front.
             # The build workflow stamps OCI labels on every image so we can
             # derive the canonical tag from a single pointer manifest — no
             # digest scan across thousands of historical `main-*` builds.
@@ -395,12 +395,17 @@ class OCISource(ImageSource):
     def _pointer_tags_for_ref(
         ref: str, raw_set: set[str], default_ref: str = "main"
     ) -> list[str]:
-        """Moving aliases the build workflow publishes for ``ref``."""
+        """Moving aliases the build workflow publishes for ``ref``.
+
+        Branch aliases (``:main``) are tried before ``:latest``. The build
+        workflow updates ``:main`` on every main build (push or dispatch),
+        while ``:latest`` is only repointed on push — so ``:latest`` can lag.
+        """
         pointers: list[str] = []
-        if ref == default_ref and "latest" in raw_set:
-            pointers.append("latest")
         if ref in raw_set:
             pointers.append(ref)
+        if ref == default_ref and "latest" in raw_set:
+            pointers.append("latest")
         return pointers
 
     def _resolve_via_pointer(

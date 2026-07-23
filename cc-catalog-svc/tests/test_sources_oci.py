@@ -38,6 +38,15 @@ def test_parse_tag_rejects_non_schema_tags():
     assert src._parse_tag("1.2.3") is None
 
 
+def test_pointer_tags_for_ref_prefers_branch_over_latest():
+    raw = {"latest", "main", "main-aaaaaaa-bbbbbbb"}
+    assert OCISource._pointer_tags_for_ref("main", raw) == ["main", "latest"]
+    # Fall back to :latest only when the branch alias tag is absent.
+    assert OCISource._pointer_tags_for_ref("main", {"latest", "main-aaaaaaa-bbbbbbb"}) == [
+        "latest"
+    ]
+
+
 def test_resolve_latest_picks_default_ref():
     src = OCISource()
     refs = [
@@ -517,8 +526,81 @@ def test_discover_refs_uses_latest_labels_when_canonical_tag_not_listed():
 
 
 @respx.mock
+def test_discover_refs_prefers_main_pointer_over_stale_latest():
+    """workflow_dispatch rebuilds update :main but not :latest."""
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-cli-codecollection"
+    cc = {
+        "slug": "rw-cli-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "tags": [
+                    "latest",
+                    "main",
+                    "main-b3fd306-d286953",
+                    "main-b3fd306-4d7e73c",
+                ],
+            },
+        )
+    )
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main").mock(
+        return_value=httpx.Response(
+            200,
+            json={"config": {"digest": "sha256:main-cfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:main-cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": "2026-07-23T03:09:00Z",
+                "config": {
+                    "Labels": {
+                        "io.runwhen.codecollection.commit": "b3fd306deadbeef",
+                        "io.runwhen.runtime.commit": "4d7e73c0000000",
+                    }
+                },
+            },
+        )
+    )
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/latest").mock(
+        return_value=httpx.Response(
+            200,
+            json={"config": {"digest": "sha256:latest-cfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:latest-cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": "2026-07-20T03:14:00Z",
+                "config": {
+                    "Labels": {
+                        "io.runwhen.codecollection.commit": "b3fd306deadbeef",
+                        "io.runwhen.runtime.commit": "d2869530000000",
+                    }
+                },
+            },
+        )
+    )
+
+    refs = src.discover_refs(cc)
+    main_refs = [r for r in refs if r.ref == "main"]
+    assert len(main_refs) == 1
+    assert main_refs[0].image_tag == "main-b3fd306-4d7e73c"
+    assert src.resolve_latest({"default_ref": "main"}, refs) == "main-b3fd306-4d7e73c"
+
+
+@respx.mock
 def test_discover_refs_uses_latest_pointer_without_mass_enrichment():
-    """When ``latest`` exists, read OCI labels — do not scan every ``main-*`` tag."""
+    """When branch and latest pointers exist, read OCI labels — no mass scan."""
     src = OCISource()
     repo_path = "runwhen-contrib/rw-cli-codecollection"
     cc = {
@@ -540,6 +622,12 @@ def test_discover_refs_uses_latest_pointer_without_mass_enrichment():
         )
     )
 
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main").mock(
+        return_value=httpx.Response(
+            200,
+            json={"config": {"digest": "sha256:current-cfg"}},
+        )
+    )
     respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/latest").mock(
         return_value=httpx.Response(
             200,
