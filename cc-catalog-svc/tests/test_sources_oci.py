@@ -568,3 +568,95 @@ def test_discover_refs_uses_latest_pointer_without_mass_enrichment():
 
     latest = src.resolve_latest({"default_ref": "main"}, refs)
     assert latest == "main-1111111-bbbbbbb"
+
+
+@respx.mock
+def test_list_tags_requests_page_size_1000():
+    """Match crane / go-containerregistry: GHCR returns all tags in one page at n=1000."""
+    src = OCISource()
+    host = "ghcr.io"
+    repo = "runwhen-contrib/rw-cli-codecollection"
+    list_url = f"https://{host}/v2/{repo}/tags/list"
+    seen_params: list[dict] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        seen_params.append(dict(request.url.params))
+        return httpx.Response(
+            200,
+            json={"tags": ["main-c1a2b3d-e4f5a6b", "image-test-d86d320-7309089"]},
+        )
+
+    respx.get(list_url).mock(side_effect=capture)
+
+    with httpx.Client() as client:
+        tags = src._list_tags(client, host, repo)
+
+    assert seen_params[0]["n"] == "1000"
+    assert "image-test-d86d320-7309089" in tags
+
+
+@respx.mock
+def test_list_tags_rewrites_ghcr_zero_n_next_link():
+    """Regression: GHCR Link headers with n=0 must not loop or drop tail tags."""
+    src = OCISource()
+    host = "ghcr.io"
+    repo = "runwhen-contrib/rw-cli-codecollection"
+    list_url = f"https://{host}/v2/{repo}/tags/list"
+
+    first_page = [f"tag-{i:03d}-aaaaaaa-bbbbbbb" for i in range(200)]
+    tail_tags = ["image-test-d86d320-7309089", "image-test"]
+
+    def route_handler(request: httpx.Request) -> httpx.Response:
+        params = request.url.params
+        if "last" not in params:
+            return httpx.Response(
+                200,
+                json={"tags": first_page},
+                headers={
+                    "Link": (
+                        f'</v2/{repo}/tags/list?last=tag-199-aaaaaaa-bbbbbbb&n=0>; '
+                        'rel="next"'
+                    )
+                },
+            )
+        assert params.get("n") == "1000"
+        assert params.get("last") == "tag-199-aaaaaaa-bbbbbbb"
+        return httpx.Response(200, json={"tags": tail_tags})
+
+    respx.get(url=list_url).mock(side_effect=route_handler)
+    respx.get(url__regex=rf"{list_url}\?.*").mock(side_effect=route_handler)
+
+    with httpx.Client() as client:
+        tags = src._list_tags(client, host, repo)
+
+    assert "image-test-d86d320-7309089" in tags
+    assert "image-test" in tags
+    assert len(tags) == len(first_page) + len(tail_tags)
+
+
+@respx.mock
+def test_list_tags_stops_on_duplicate_page():
+    """If a registry keeps returning the same page, stop instead of spinning."""
+    src = OCISource(max_pages=10)
+    host = "ghcr.io"
+    repo = "runwhen-contrib/example"
+    list_url = f"https://{host}/v2/{repo}/tags/list"
+    page_tags = ["main-c1a2b3d-e4f5a6b", "main-aaaaaaa-bbbbbbb"]
+    call_count = {"n": 0}
+
+    def loop_handler(_request: httpx.Request) -> httpx.Response:
+        call_count["n"] += 1
+        return httpx.Response(
+            200,
+            json={"tags": page_tags},
+            headers={"Link": f'</v2/{repo}/tags/list?last=main-aaaaaaa-bbbbbbb&n=0>; rel="next"'},
+        )
+
+    respx.get(url=list_url).mock(side_effect=loop_handler)
+    respx.get(url__regex=rf"{list_url}\?.*").mock(side_effect=loop_handler)
+
+    with httpx.Client() as client:
+        tags = src._list_tags(client, host, repo)
+
+    assert tags == page_tags
+    assert call_count["n"] == 2
