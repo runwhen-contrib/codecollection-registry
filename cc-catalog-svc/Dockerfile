@@ -21,7 +21,7 @@
 # Read-only-rootfs friendly: the only writable path the service needs is
 # /data (SQLite DB + crane's auth cache). Mount a volume there in k8s.
 
-ARG PYTHON_VERSION=3.12.14-slim
+ARG PYTHON_VERSION=3.14.7-slim
 ARG CRANE_VERSION=v0.21.8
 ARG BAKE_GIT_MIRRORS=true
 ARG BAKE_CONFIG=config-examples/config.bake.yaml
