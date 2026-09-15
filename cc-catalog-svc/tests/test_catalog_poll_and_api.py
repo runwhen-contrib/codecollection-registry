@@ -4,11 +4,16 @@ the catalog HTTP endpoints expose it correctly.
 We don't need real OCI infra — we register a tiny in-process source
 plugin and point a config at it.
 """
+
 from __future__ import annotations
 
+import base64
 from datetime import datetime
 
+import httpx
 import pytest
+import respx
+import yaml
 
 from app import config as config_mod
 from app.config import (
@@ -98,9 +103,7 @@ def test_catalog_poll_upserts_cc_and_refs(cfg_with_fake_cc, db_session):
     cc = db_session.execute(
         select(CodeCollection).where(CodeCollection.slug == "rw-cli-codecollection")
     ).scalar_one()
-    refs = db_session.execute(
-        select(ImageRef).where(ImageRef.cc_id == cc.id)
-    ).scalars().all()
+    refs = db_session.execute(select(ImageRef).where(ImageRef.cc_id == cc.id)).scalars().all()
     assert {r.ref_name for r in refs} == {"main", "v1.2.0"}
     assert any(r.is_latest for r in refs if r.ref_name == "main")
     assert any(r.is_stable for r in refs if r.ref_name == "v1.2.0")
@@ -131,22 +134,17 @@ def test_catalog_api_resolve_pointer(client, cfg_with_fake_cc):
 
 def test_catalog_api_resolve_specific_ref(client, cfg_with_fake_cc):
     run_catalog_poll(cfg_with_fake_cc)
-    resp = client.get(
-        "/api/v1/catalog/codecollections/rw-cli-codecollection/resolve?ref=main"
-    )
+    resp = client.get("/api/v1/catalog/codecollections/rw-cli-codecollection/resolve?ref=main")
     assert resp.status_code == 200
     assert resp.json()["image_tag"] == "main-c1a2b3d-e4f5a6b"
 
 
 def test_catalog_api_resolve_requires_exactly_one(client, cfg_with_fake_cc):
     run_catalog_poll(cfg_with_fake_cc)
-    resp = client.get(
-        "/api/v1/catalog/codecollections/rw-cli-codecollection/resolve"
-    )
+    resp = client.get("/api/v1/catalog/codecollections/rw-cli-codecollection/resolve")
     assert resp.status_code == 400
     resp = client.get(
-        "/api/v1/catalog/codecollections/rw-cli-codecollection/"
-        "resolve?pointer=latest&ref=main"
+        "/api/v1/catalog/codecollections/rw-cli-codecollection/" "resolve?pointer=latest&ref=main"
     )
     assert resp.status_code == 400
 
@@ -327,6 +325,268 @@ def test_upsert_refs_picks_newest_by_built_at_not_lex(monkeypatch, db_session):
     assert main_row.is_latest is True
 
 
+def _manifest_label(capability: str, version: str) -> str:
+    text = yaml.safe_dump({"capability": capability, "version": version})
+    return base64.b64encode(text.encode("utf-8")).decode("ascii")
+
+
+@pytest.fixture
+def cfg_mixed_kind(engine) -> AppConfig:
+    """One `type: oci` source with a Robot entry and a capability entry."""
+    cfg = AppConfig(
+        storage=StorageConfig(),
+        scheduler=SchedulerConfig(),
+        sources=[
+            SourceConfig(
+                name="ghcr-mixed",
+                type="oci",
+                codecollections=[
+                    CodeCollectionConfig(
+                        slug="rw-cli-codecollection",
+                        name="RunWhen CLI CodeCollection",
+                        git_url="https://github.com/runwhen-contrib/rw-cli-codecollection",
+                        image_registry="ghcr.io/runwhen-contrib/rw-cli-codecollection",
+                    ),
+                    CodeCollectionConfig(
+                        slug="rw-checks-codecollection",
+                        kind="capability",
+                        git_url="https://github.com/runwhen-contrib/rw-checks-codecollection",
+                        image_registry="ghcr.io/runwhen-contrib/rw-checks-codecollection",
+                    ),
+                ],
+            )
+        ],
+    )
+    config_mod._CONFIG_CACHE = cfg
+    return cfg
+
+
+@respx.mock
+def test_capability_entry_and_robot_entry_in_same_source_dont_leak(client, cfg_mixed_kind):
+    """A Robot CC and a capability CC under the *same* oci source both sync,
+    and neither shows up on the other's endpoint."""
+    robot_repo = "runwhen-contrib/rw-cli-codecollection"
+    cap_repo = "runwhen-contrib/rw-checks-codecollection"
+
+    respx.get(f"https://ghcr.io/v2/{robot_repo}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["main-c1a2b3d-e4f5a6b"]})
+    )
+    respx.get(f"https://ghcr.io/v2/{cap_repo}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["main", "main-287377c"]})
+    )
+    respx.get(f"https://ghcr.io/v2/{cap_repo}/manifests/main").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Docker-Content-Digest": "sha256:indexdigest"},
+            json={
+                "manifests": [
+                    {
+                        "digest": "sha256:amd64digest",
+                        "platform": {"architecture": "amd64", "os": "linux"},
+                    },
+                ]
+            },
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{cap_repo}/manifests/sha256:amd64digest").mock(
+        return_value=httpx.Response(200, json={"config": {"digest": "sha256:amd64cfg"}})
+    )
+    respx.get(f"https://ghcr.io/v2/{cap_repo}/blobs/sha256:amd64cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "config": {
+                    "Labels": {
+                        "com.runwhen.capability.manifest.v1": _manifest_label("rw-checks", "0.2.0"),
+                        "io.runwhen.codecollection.commit": "287377caaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    }
+                }
+            },
+        )
+    )
+
+    summary = run_catalog_poll(cfg_mixed_kind)
+    assert summary["errors"] == []
+    assert summary["collections_processed"] == 1
+    assert summary["refs_upserted"] == 1
+    assert summary["capabilities_processed"] == 1
+    assert summary["capability_refs_upserted"] == 1
+
+    # Robot listing: only the codecollection-kind slug, never the capability one.
+    resp = client.get("/api/v1/catalog/codecollections")
+    assert resp.status_code == 200
+    assert {e["slug"] for e in resp.json()} == {"rw-cli-codecollection"}
+
+    resp = client.get("/api/v1/catalog/codecollections/rw-checks-codecollection")
+    assert resp.status_code == 404
+
+    resp = client.get("/api/v1/catalog/codecollections/rw-cli-codecollection/refs")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+
+    # Capability listing: only the capability-kind slug.
+    resp = client.get("/api/v1/catalog/capabilities")
+    assert resp.status_code == 200
+    caps = resp.json()["capabilities"]
+    assert len(caps) == 1
+    entry = caps[0]
+    assert entry["capability"] == "rw-checks"
+    assert entry["version"] == "0.2.0"
+    assert entry["codecollection"] == "rw-checks-codecollection"
+    assert entry["ref"] == "main"
+    assert entry["ref_type"] == "branch"
+    assert entry["commit_hash"] == "287377c"
+    assert entry["image_tag"] == "main-287377c"
+    assert entry["image_digest"] == "sha256:indexdigest"
+    assert entry["image"] == f"ghcr.io/{cap_repo}@sha256:indexdigest"
+    assert entry["manifest"] == {"capability": "rw-checks", "version": "0.2.0"}
+    assert "capability: rw-checks" in entry["manifest_text"]
+
+
+def test_capabilities_endpoint_filters_by_capability_id(client, db_session):
+    from app.services.catalog_poll import _upsert_capability_versions
+    from app.sources.capability import DiscoveredCapability
+
+    cap_a = DiscoveredCapability(
+        capability="rw-checks",
+        version="0.1.0",
+        ref="main",
+        ref_type="branch",
+        commit_hash="aaaaaaa",
+        image_tag="main-aaaaaaa",
+        image_digest="sha256:aaa",
+        image="ghcr.io/runwhen-contrib/rw-checks-codecollection@sha256:aaa",
+        manifest_text="capability: rw-checks\nversion: 0.1.0\n",
+    )
+    cap_b = DiscoveredCapability(
+        capability="rw-worktree",
+        version="1.0.0",
+        ref="v1.0.0",
+        ref_type="tag",
+        commit_hash="bbbbbbb",
+        image_tag="v1.0.0",
+        image_digest="sha256:bbb",
+        image="ghcr.io/runwhen-contrib/rw-worktree-codecollection@sha256:bbb",
+        manifest_text="capability: rw-worktree\nversion: 1.0.0\n",
+    )
+    _upsert_capability_versions(db_session, "rw-checks-codecollection", [cap_a])
+    _upsert_capability_versions(db_session, "rw-worktree-codecollection", [cap_b])
+    db_session.commit()
+
+    resp = client.get("/api/v1/catalog/capabilities")
+    assert resp.status_code == 200
+    assert {c["capability"] for c in resp.json()["capabilities"]} == {
+        "rw-checks",
+        "rw-worktree",
+    }
+
+    resp = client.get("/api/v1/catalog/capabilities?capability=rw-checks")
+    assert resp.status_code == 200
+    caps = resp.json()["capabilities"]
+    assert len(caps) == 1
+    assert caps[0]["codecollection"] == "rw-checks-codecollection"
+
+
+def test_upsert_capability_versions_replaces_and_prunes_stale_refs(db_session):
+    """Re-poll replaces existing (slug, ref) rows in place, prunes refs that
+    dropped out of a *non-empty* listing, and never wipes rows on an empty
+    listing (mirrors _upsert_refs's caution around transient hiccups)."""
+    from app.services.catalog_poll import _upsert_capability_versions
+    from app.models import CapabilityVersion
+    from app.sources.capability import DiscoveredCapability
+    from sqlalchemy import select
+
+    cap_main_v1 = DiscoveredCapability(
+        capability="rw-checks",
+        version="0.1.0",
+        ref="main",
+        ref_type="branch",
+        commit_hash="aaaaaaa",
+        image_tag="main-aaaaaaa",
+        image_digest="sha256:aaa",
+        image="ghcr.io/x/y@sha256:aaa",
+        manifest_text="capability: rw-checks\nversion: 0.1.0\n",
+    )
+    upserted, removed = _upsert_capability_versions(
+        db_session, "rw-checks-codecollection", [cap_main_v1]
+    )
+    db_session.commit()
+    assert (upserted, removed) == (1, 0)
+
+    cap_main_v2 = DiscoveredCapability(
+        capability="rw-checks",
+        version="0.2.0",
+        ref="main",
+        ref_type="branch",
+        commit_hash="bbbbbbb",
+        image_tag="main-bbbbbbb",
+        image_digest="sha256:bbb",
+        image="ghcr.io/x/y@sha256:bbb",
+        manifest_text="capability: rw-checks\nversion: 0.2.0\n",
+    )
+    cap_v1_tag = DiscoveredCapability(
+        capability="rw-checks",
+        version="1.0.0",
+        ref="v1.0.0",
+        ref_type="tag",
+        commit_hash="ccccccc",
+        image_tag="v1.0.0",
+        image_digest="sha256:ccc",
+        image="ghcr.io/x/y@sha256:ccc",
+        manifest_text="capability: rw-checks\nversion: 1.0.0\n",
+    )
+    upserted, removed = _upsert_capability_versions(
+        db_session, "rw-checks-codecollection", [cap_main_v2, cap_v1_tag]
+    )
+    db_session.commit()
+    assert (upserted, removed) == (2, 0)  # "main" replaced in place, "v1.0.0" is new
+
+    rows = (
+        db_session.execute(
+            select(CapabilityVersion).where(
+                CapabilityVersion.codecollection == "rw-checks-codecollection"
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert {r.ref for r in rows} == {"main", "v1.0.0"}
+    main_row = next(r for r in rows if r.ref == "main")
+    assert main_row.version == "0.2.0"
+
+    # A non-empty listing that drops "v1.0.0" prunes the stale row.
+    upserted, removed = _upsert_capability_versions(
+        db_session, "rw-checks-codecollection", [cap_main_v2]
+    )
+    db_session.commit()
+    assert (upserted, removed) == (1, 1)
+    rows = (
+        db_session.execute(
+            select(CapabilityVersion).where(
+                CapabilityVersion.codecollection == "rw-checks-codecollection"
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert {r.ref for r in rows} == {"main"}
+
+    # An empty listing (failed/empty source) never wipes existing rows.
+    upserted, removed = _upsert_capability_versions(db_session, "rw-checks-codecollection", [])
+    db_session.commit()
+    assert (upserted, removed) == (0, 0)
+    rows = (
+        db_session.execute(
+            select(CapabilityVersion).where(
+                CapabilityVersion.codecollection == "rw-checks-codecollection"
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert {r.ref for r in rows} == {"main"}
+
+
 def test_duplicate_cc_slug_across_sources_fails_loudly():
     cfg = AppConfig(
         sources=[
@@ -346,3 +606,47 @@ def test_duplicate_cc_slug_across_sources_fails_loudly():
 
     with pytest.raises(ValueError, match="Duplicate"):
         cfg.all_codecollections()
+
+
+def test_upsert_capability_versions_keeps_listed_but_unresolved_ref(db_session):
+    """A ref still present in the tag listing but unresolved this poll (a
+    transient manifest/blob failure) keeps its row; only refs that left the
+    listing are pruned."""
+    from app.services.catalog_poll import _upsert_capability_versions
+    from app.models import CapabilityVersion
+    from app.sources.capability import DiscoveredCapability
+    from sqlalchemy import select
+
+    def _cap(ref: str, ref_type: str, digest: str) -> DiscoveredCapability:
+        return DiscoveredCapability(
+            capability="rw-checks",
+            version="0.2.0",
+            ref=ref,
+            ref_type=ref_type,
+            commit_hash="aaaaaaa",
+            image_tag=ref,
+            image_digest=digest,
+            image=f"ghcr.io/x/y@{digest}",
+            manifest_text="capability: rw-checks\nversion: 0.2.0\n",
+        )
+
+    slug = "rw-checks-codecollection"
+    _upsert_capability_versions(
+        db_session,
+        slug,
+        [_cap("main", "branch", "sha256:aaa"), _cap("v1.0.0", "tag", "sha256:bbb")],
+    )
+    db_session.commit()
+
+    # "main" is listed but failed to resolve; "v1.0.0" left the listing.
+    _upsert_capability_versions(db_session, slug, [], listed_refs={"main"})
+    db_session.commit()
+    rows = (
+        db_session.execute(
+            select(CapabilityVersion).where(CapabilityVersion.codecollection == slug)
+        )
+        .scalars()
+        .all()
+    )
+    assert {r.ref for r in rows} == {"main"}
+    assert next(r for r in rows if r.ref == "main").image_digest == "sha256:aaa"

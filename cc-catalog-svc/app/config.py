@@ -88,6 +88,17 @@ class CodeCollectionConfig(BaseModel):
     """
 
     slug: str = Field(..., description="Stable identifier; matches the registry.")
+    kind: Literal["codecollection", "capability"] = Field(
+        "codecollection",
+        description=(
+            "'codecollection' (default) is the existing Robot CCV pipeline "
+            "(TAG_PATTERN two-sha scheme, tracked in codecollections/image_refs). "
+            "'capability' entries are polled by the capability discovery path "
+            "instead (branch-alias + semver tags, capability manifest label) "
+            "and served from /api/v1/catalog/capabilities — they never produce "
+            "a codecollections row."
+        ),
+    )
     name: Optional[str] = None
     git_url: Optional[str] = None
     image_registry: Optional[str] = Field(

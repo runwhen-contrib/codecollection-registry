@@ -13,6 +13,7 @@ the others.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -20,8 +21,10 @@ from sqlalchemy import select
 
 from app.config import AppConfig, CodeCollectionConfig, SourceConfig, get_config
 from app.db import session_scope
-from app.models import CodeCollection, ImageRef
+from app.models import CapabilityVersion, CodeCollection, ImageRef
 from app.sources import DiscoveredImageRef
+from app.sources.capability import DiscoveredCapability, discover_capabilities
+from app.sources.oci import OCISource
 from app.sources.registry import configure_source_from_options
 
 logger = logging.getLogger(__name__)
@@ -65,6 +68,9 @@ def run_catalog_poll(config: Optional[AppConfig] = None) -> dict:
         "collections_processed": 0,
         "refs_upserted": 0,
         "refs_deactivated": 0,
+        "capabilities_processed": 0,
+        "capability_refs_upserted": 0,
+        "capability_refs_removed": 0,
         "errors": [],
     }
 
@@ -77,6 +83,32 @@ def run_catalog_poll(config: Optional[AppConfig] = None) -> dict:
             continue
 
         for cc_cfg in src_cfg.codecollections:
+            # `kind: capability` entries never touch the Robot TAG_PATTERN
+            # path (codecollections/image_refs) — they're a different
+            # discovery pipeline entirely (see app.sources.capability).
+            if cc_cfg.kind == "capability":
+                try:
+                    upserted, removed = _sync_one_capability(src_cfg, source, cc_cfg)
+                except Exception as exc:
+                    logger.exception(
+                        "catalog poll: capability source %s failed for %s",
+                        src_cfg.name,
+                        cc_cfg.slug,
+                    )
+                    summary["errors"].append(
+                        {
+                            "source": src_cfg.name,
+                            "slug": cc_cfg.slug,
+                            "error": str(exc),
+                        }
+                    )
+                    continue
+
+                summary["capabilities_processed"] += 1
+                summary["capability_refs_upserted"] += upserted
+                summary["capability_refs_removed"] += removed
+                continue
+
             try:
                 upserted, deactivated = _sync_one_cc(src_cfg, source, cc_cfg)
             except Exception as exc:
@@ -257,6 +289,101 @@ def _upsert_refs(
         upserted += 1
 
     return upserted, deactivated
+
+
+def _sync_one_capability(
+    src_cfg: SourceConfig,
+    source,
+    cc_cfg: CodeCollectionConfig,
+) -> tuple[int, int]:
+    """Sync a single `kind: capability` entry. Returns (upserted, removed).
+
+    Only `type: oci` sources support capability discovery today (it needs
+    OCISource's auth + tag-listing + manifest-GET helpers). Anything else
+    is a config mistake we warn about and skip, rather than raise and
+    break the rest of the poll.
+    """
+    if src_cfg.type != "oci" or not isinstance(source, OCISource):
+        logger.warning(
+            "capability discovery skipped for %s: source type %r does not support capabilities",
+            cc_cfg.slug,
+            src_cfg.type,
+        )
+        return 0, 0
+
+    cc_dict = cc_cfg.model_dump()
+    for k, v in (src_cfg.options or {}).items():
+        cc_dict.setdefault(k, v)
+    cc_dict["_source_auth"] = src_cfg.auth.model_dump()
+
+    discovery = discover_capabilities(source, cc_dict)
+
+    with session_scope() as db:
+        upserted, removed = _upsert_capability_versions(
+            db,
+            cc_cfg.slug,
+            discovery.capabilities,
+            listed_refs=discovery.listed_refs,
+        )
+    return upserted, removed
+
+
+def _upsert_capability_versions(
+    db,
+    slug: str,
+    capabilities: list[DiscoveredCapability],
+    listed_refs: Optional[Iterable[str]] = None,
+) -> tuple[int, int]:
+    """Mirror discovered capability refs onto capability_versions.
+
+    One row per (slug, ref); a re-poll replaces it. Like `_upsert_refs`,
+    an empty listing never wipes existing rows — that's far more likely a
+    transient registry hiccup than "every ref vanished". Unlike
+    `_upsert_refs` there's no is_active flag to flip: refs missing from a
+    *non-empty* listing are deleted outright.
+
+    `listed_refs` is every ref the tag listing selected (resolved or not);
+    it defaults to the refs in `capabilities`. Only refs absent from it are
+    pruned, so a ref that is still tagged but failed to resolve this poll
+    keeps its last good row.
+    """
+    now = _utcnow()
+    by_ref = {c.ref: c for c in capabilities}
+    listed = set(by_ref) if listed_refs is None else set(listed_refs) | set(by_ref)
+
+    existing = (
+        db.execute(select(CapabilityVersion).where(CapabilityVersion.codecollection == slug))
+        .scalars()
+        .all()
+    )
+    existing_by_ref = {row.ref: row for row in existing}
+
+    upserted = 0
+    removed = 0
+
+    if listed:
+        for ref, row in existing_by_ref.items():
+            if ref not in listed:
+                db.delete(row)
+                removed += 1
+
+    for ref, cap in by_ref.items():
+        row = existing_by_ref.get(ref)
+        if row is None:
+            row = CapabilityVersion(codecollection=slug, ref=ref)
+            db.add(row)
+        row.capability = cap.capability
+        row.version = cap.version
+        row.ref_type = cap.ref_type
+        row.commit_hash = cap.commit_hash
+        row.image_tag = cap.image_tag
+        row.image_digest = cap.image_digest
+        row.image = cap.image
+        row.manifest_text = cap.manifest_text
+        row.synced_at = now
+        upserted += 1
+
+    return upserted, removed
 
 
 def _record_cc_error(slug: str, error: str) -> None:
