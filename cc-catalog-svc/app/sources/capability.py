@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import base64
 import dataclasses
+import hashlib
 import logging
 import re
 from typing import Optional
@@ -62,7 +63,22 @@ class DiscoveredCapability:
     manifest_text: str
 
 
-def discover_capabilities(source: OCISource, cc: dict) -> list[DiscoveredCapability]:
+@dataclasses.dataclass(frozen=True)
+class CapabilityDiscovery:
+    """Result of one `discover_capabilities` call.
+
+    `listed_refs` is every ref the tag listing selected, whether or not it
+    resolved. The poll layer prunes only rows whose ref dropped out of
+    `listed_refs`, so a ref that is still tagged but failed to resolve this
+    poll (a 429/5xx/timeout on its manifest or blob) keeps its last good
+    row instead of being deleted.
+    """
+
+    listed_refs: frozenset[str]
+    capabilities: list[DiscoveredCapability]
+
+
+def discover_capabilities(source: OCISource, cc: dict) -> CapabilityDiscovery:
     """Discover every capability ref for one `kind: capability` CC entry.
 
     `source` must be the configured `OCISource` instance for the entry's
@@ -77,7 +93,7 @@ def discover_capabilities(source: OCISource, cc: dict) -> list[DiscoveredCapabil
             "capability source skipping %s: no image_registry configured",
             slug,
         )
-        return []
+        return CapabilityDiscovery(listed_refs=frozenset(), capabilities=[])
 
     host, repo = source._split_registry_url(registry_url)
     auth_header, auth_mode = source._resolve_auth_header(cc)
@@ -88,18 +104,29 @@ def discover_capabilities(source: OCISource, cc: dict) -> list[DiscoveredCapabil
 
         discovered: list[DiscoveredCapability] = []
         for ref, ref_type in refs:
-            cap = _discover_one_ref(
-                source,
-                client,
-                host,
-                repo,
-                registry_url,
-                ref,
-                ref_type,
-                auth_header,
-                auth_mode,
-                slug,
-            )
+            # Any failure resolving one ref skips just that ref — it must
+            # never raise and poison the rest of the entry's listing.
+            try:
+                cap = _discover_one_ref(
+                    source,
+                    client,
+                    host,
+                    repo,
+                    registry_url,
+                    ref,
+                    ref_type,
+                    auth_header,
+                    auth_mode,
+                    slug,
+                )
+            except Exception:
+                logger.warning(
+                    "capability source: %s failed to resolve ref %s; skipping",
+                    slug,
+                    ref,
+                    exc_info=True,
+                )
+                cap = None
             if cap is not None:
                 discovered.append(cap)
 
@@ -109,7 +136,10 @@ def discover_capabilities(source: OCISource, cc: dict) -> list[DiscoveredCapabil
         len(tags),
         len(discovered),
     )
-    return discovered
+    return CapabilityDiscovery(
+        listed_refs=frozenset(ref for ref, _ in refs),
+        capabilities=discovered,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -158,30 +188,21 @@ def _discover_one_ref(
 ) -> Optional[DiscoveredCapability]:
     """Resolve one ref to a `DiscoveredCapability`, or None + a warning log.
 
-    Any failure here (missing digest, missing/undecodable label, unparseable
-    YAML, an unreachable child manifest) skips just this ref — it must never
-    raise and poison the rest of the entry's listing.
+    Expected gaps (non-200 responses, missing label, undecodable label,
+    unparseable YAML) return None here; unexpected errors (transport
+    failures, non-JSON bodies) raise and are skipped by the caller.
     """
     manifest_url = f"https://{host}/v2/{repo}/manifests/{ref}"
-    try:
-        resp = source._get_with_auth(
-            client,
-            host,
-            repo,
-            manifest_url,
-            params={},
-            auth_header=auth_header,
-            auth_mode=auth_mode,
-            accept=_MANIFEST_ACCEPT,
-        )
-    except Exception:
-        logger.warning(
-            "capability source: %s failed to fetch manifest for ref %s",
-            slug,
-            ref,
-            exc_info=True,
-        )
-        return None
+    resp = source._get_with_auth(
+        client,
+        host,
+        repo,
+        manifest_url,
+        params={},
+        auth_header=auth_header,
+        auth_mode=auth_mode,
+        accept=_MANIFEST_ACCEPT,
+    )
     if resp.status_code != 200:
         logger.warning(
             "capability source: %s manifest GET for ref %s returned %s",
@@ -191,13 +212,18 @@ def _discover_one_ref(
         )
         return None
 
-    image_digest = resp.headers.get("Docker-Content-Digest")
+    # The top-level digest (the index digest for multi-arch). A registry
+    # that omits Docker-Content-Digest still served these exact bytes, and a
+    # manifest's digest is by definition the sha256 of them — never fall back
+    # to a child digest, which would pin one platform's image.
+    image_digest = (
+        resp.headers.get("Docker-Content-Digest")
+        or f"sha256:{hashlib.sha256(resp.content).hexdigest()}"
+    )
     manifest = resp.json()
     child_manifests = manifest.get("manifests")
 
     if child_manifests:
-        if not image_digest:
-            image_digest = (child_manifests[0] or {}).get("digest")
         child = _select_linux_amd64_child(child_manifests)
         child_digest = (child or {}).get("digest")
         if not child_digest:
@@ -229,9 +255,9 @@ def _discover_one_ref(
     else:
         config_digest = (manifest.get("config") or {}).get("digest")
 
-    if not image_digest or not config_digest:
+    if not config_digest:
         logger.warning(
-            "capability source: %s ref %s is missing digest information",
+            "capability source: %s ref %s is missing its config digest",
             slug,
             ref,
         )

@@ -13,6 +13,7 @@ the others.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -315,10 +316,15 @@ def _sync_one_capability(
         cc_dict.setdefault(k, v)
     cc_dict["_source_auth"] = src_cfg.auth.model_dump()
 
-    capabilities = discover_capabilities(source, cc_dict)
+    discovery = discover_capabilities(source, cc_dict)
 
     with session_scope() as db:
-        upserted, removed = _upsert_capability_versions(db, cc_cfg.slug, capabilities)
+        upserted, removed = _upsert_capability_versions(
+            db,
+            cc_cfg.slug,
+            discovery.capabilities,
+            listed_refs=discovery.listed_refs,
+        )
     return upserted, removed
 
 
@@ -326,6 +332,7 @@ def _upsert_capability_versions(
     db,
     slug: str,
     capabilities: list[DiscoveredCapability],
+    listed_refs: Optional[Iterable[str]] = None,
 ) -> tuple[int, int]:
     """Mirror discovered capability refs onto capability_versions.
 
@@ -334,9 +341,15 @@ def _upsert_capability_versions(
     transient registry hiccup than "every ref vanished". Unlike
     `_upsert_refs` there's no is_active flag to flip: refs missing from a
     *non-empty* listing are deleted outright.
+
+    `listed_refs` is every ref the tag listing selected (resolved or not);
+    it defaults to the refs in `capabilities`. Only refs absent from it are
+    pruned, so a ref that is still tagged but failed to resolve this poll
+    keeps its last good row.
     """
     now = _utcnow()
     by_ref = {c.ref: c for c in capabilities}
+    listed = set(by_ref) if listed_refs is None else set(listed_refs) | set(by_ref)
 
     existing = (
         db.execute(select(CapabilityVersion).where(CapabilityVersion.codecollection == slug))
@@ -348,9 +361,9 @@ def _upsert_capability_versions(
     upserted = 0
     removed = 0
 
-    if by_ref:
+    if listed:
         for ref, row in existing_by_ref.items():
-            if ref not in by_ref:
+            if ref not in listed:
                 db.delete(row)
                 removed += 1
 

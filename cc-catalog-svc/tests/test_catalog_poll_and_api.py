@@ -606,3 +606,47 @@ def test_duplicate_cc_slug_across_sources_fails_loudly():
 
     with pytest.raises(ValueError, match="Duplicate"):
         cfg.all_codecollections()
+
+
+def test_upsert_capability_versions_keeps_listed_but_unresolved_ref(db_session):
+    """A ref still present in the tag listing but unresolved this poll (a
+    transient manifest/blob failure) keeps its row; only refs that left the
+    listing are pruned."""
+    from app.services.catalog_poll import _upsert_capability_versions
+    from app.models import CapabilityVersion
+    from app.sources.capability import DiscoveredCapability
+    from sqlalchemy import select
+
+    def _cap(ref: str, ref_type: str, digest: str) -> DiscoveredCapability:
+        return DiscoveredCapability(
+            capability="rw-checks",
+            version="0.2.0",
+            ref=ref,
+            ref_type=ref_type,
+            commit_hash="aaaaaaa",
+            image_tag=ref,
+            image_digest=digest,
+            image=f"ghcr.io/x/y@{digest}",
+            manifest_text="capability: rw-checks\nversion: 0.2.0\n",
+        )
+
+    slug = "rw-checks-codecollection"
+    _upsert_capability_versions(
+        db_session,
+        slug,
+        [_cap("main", "branch", "sha256:aaa"), _cap("v1.0.0", "tag", "sha256:bbb")],
+    )
+    db_session.commit()
+
+    # "main" is listed but failed to resolve; "v1.0.0" left the listing.
+    _upsert_capability_versions(db_session, slug, [], listed_refs={"main"})
+    db_session.commit()
+    rows = (
+        db_session.execute(
+            select(CapabilityVersion).where(CapabilityVersion.codecollection == slug)
+        )
+        .scalars()
+        .all()
+    )
+    assert {r.ref for r in rows} == {"main"}
+    assert next(r for r in rows if r.ref == "main").image_digest == "sha256:aaa"
