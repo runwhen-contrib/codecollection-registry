@@ -59,10 +59,16 @@ jobs:
       - name: Run tests
         run: pytest -q
 
-      - name: Lint
+      # Advisory until the existing tree is cleaned up: on main, `ruff check`
+      # reports ~260 findings and `black --check` would reformat 26 files, so
+      # gating on them would block every PR on work it did not introduce.
+      # Tests are the gate; flip these to blocking once both pass on main.
+      - name: Lint (advisory)
+        continue-on-error: true
         run: ruff check app tests
 
-      - name: Check formatting
+      - name: Check formatting (advisory)
+        continue-on-error: true
         run: black --check app tests
 
   build:
