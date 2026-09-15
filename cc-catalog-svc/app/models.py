@@ -142,6 +142,69 @@ class ImageRef(Base):
     )
 
 
+class CapabilityVersion(Base):
+    """One discovered capability image build.
+
+    Populated by `kind: capability` CodeCollection entries — a different
+    pipeline from `image_refs` (see `app.sources.capability`). One row per
+    `(codecollection slug, ref)`; a re-poll replaces it in place and deletes
+    rows for refs no longer present (see `_upsert_capability_versions`).
+    Unlike `image_refs` there's no is_active/deactivate dance: a listing
+    either succeeds (rows are replaced/pruned) or it doesn't touch the DB
+    at all, so there is nothing to reactivate.
+    """
+
+    __tablename__ = "capability_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    capability: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, index=True)
+    version: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    codecollection: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        index=True,
+        comment="CodeCollectionConfig.slug of the owning capability entry.",
+    )
+    ref: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+        comment="Git ref this build represents (branch alias or semver tag).",
+    )
+    ref_type: Mapped[str] = mapped_column(String(20), nullable=False, default="branch")
+
+    commit_hash: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    image_tag: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    image_digest: Mapped[str] = mapped_column(String(120), nullable=False)
+    image: Mapped[str] = mapped_column(
+        String(1000),
+        nullable=False,
+        comment="<image_registry>@<image_digest>",
+    )
+    manifest_text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        comment="Decoded com.runwhen.capability.manifest.v1 label, verbatim YAML.",
+    )
+
+    synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint("codecollection", "ref", name="uq_capability_versions_cc_ref"),
+        Index("ix_capability_versions_capability_ref", "capability", "ref"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Mirror tables
 # ---------------------------------------------------------------------------

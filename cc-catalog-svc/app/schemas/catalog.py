@@ -5,6 +5,7 @@ These shapes match cc-registry-v2's `app/schemas/cc_catalog.py` field-for-field
 so PAPI can point at either service without code changes. Keep field
 names stable; add new fields rather than renaming.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -62,6 +63,34 @@ class CatalogEntryDetail(CatalogEntry):
     """Catalog entry with the full set of known refs attached."""
 
     refs: list[ImageRef] = Field(default_factory=list)
+
+
+class CapabilityEntry(BaseModel):
+    """One discovered capability image build (1:1 with a capability_versions
+    row). Field names/shape are the K1/P1 contract — snake_case, stable."""
+
+    capability: Optional[str] = Field(None, description="Capability id from the parsed manifest.")
+    version: Optional[str] = Field(None, description="Capability version from the parsed manifest.")
+    codecollection: str = Field(..., description="Slug of the owning `kind: capability` entry.")
+    ref: str = Field(..., description="Branch alias or semver tag this build represents.")
+    ref_type: str = Field(..., description="'tag' for semver refs, else 'branch'.")
+    commit_hash: Optional[str] = Field(
+        None, description="First 7 chars of io.runwhen.codecollection.commit."
+    )
+    image_tag: Optional[str] = Field(
+        None, description="'<ref>-<commit_hash>' for branches, the tag itself for semver."
+    )
+    image_digest: str = Field(
+        ..., description="Top-level (index, for multi-arch) digest of the tag."
+    )
+    image: str = Field(..., description="'<image_registry>@<image_digest>'.")
+    manifest_text: str = Field(..., description="The decoded label, verbatim YAML.")
+    manifest: Optional[dict] = Field(None, description="manifest_text parsed to JSON.")
+    synced_at: Optional[datetime] = None
+
+
+class CapabilitiesResponse(BaseModel):
+    capabilities: list[CapabilityEntry] = Field(default_factory=list)
 
 
 class ResolveResponse(BaseModel):

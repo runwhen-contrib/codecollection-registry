@@ -124,6 +124,11 @@ Catalog (read-only, no auth — matches the existing
 | GET | `/api/v1/catalog/codecollections/{slug}/resolve?pointer=latest\|stable` |
 | GET | `/api/v1/catalog/codecollections/{slug}/resolve?ref=<git_ref>` |
 | GET | `/api/v1/catalog/codecollections/{slug}/resolve?...&destination=<name>` |
+| GET | `/api/v1/catalog/capabilities?capability=<id>` |
+
+`/capabilities` is a separate pipeline from `/codecollections` above — see
+[Capabilities](#capabilities) below. `kind: capability` entries never appear
+under `/codecollections*`.
 
 Mirror (read endpoints are anon; writes require `CC_CATALOG_ADMIN_TOKEN`):
 
@@ -183,6 +188,58 @@ Custom plugins drop in via `CC_CATALOG_EXTRA_SOURCES`. Contract is in
 
 ---
 
+## Capabilities
+
+A `codecollections:` entry can set `kind: capability` (default is
+`kind: codecollection`, the Robot CCV pipeline above). Capability entries
+are a different discovery path entirely — see
+[`app/sources/capability.py`](app/sources/capability.py) — and only
+`type: oci` sources support it:
+
+- The image config of every platform carries the capability's
+  `manifest.yaml` (verbatim YAML), base64-encoded, in the
+  `com.runwhen.capability.manifest.v1` label. `io.runwhen.codecollection.commit`
+  is still the commit source (same label the Robot pipeline reads).
+- Refs are every **branch alias tag** (a tag `T` for which some `T-<sha>`
+  tag also exists; `pr-*` and `latest` are excluded) plus every **semver
+  tag**. The label is read from the **linux/amd64** child manifest of a
+  multi-arch index (falling back to the first child if there's no
+  linux/amd64 entry).
+- A missing or undecodable label, or unparseable YAML, skips just that ref
+  with a warning — it never fails the rest of the entry's poll.
+- One row per `(codecollection slug, ref)`, replaced on every re-poll.
+  `kind: capability` entries never produce a `codecollections` row and
+  never appear under `/api/v1/catalog/codecollections*`.
+
+Served at `GET /api/v1/catalog/capabilities` (optionally `?capability=<id>`),
+sorted by `(capability, ref)`:
+
+```json
+{
+  "capabilities": [
+    {
+      "capability": "rw-checks",
+      "version": "0.2.0",
+      "codecollection": "rw-checks-codecollection",
+      "ref": "main",
+      "ref_type": "branch",
+      "commit_hash": "287377c",
+      "image_tag": "main-287377c",
+      "image_digest": "sha256:83b6…",
+      "image": "ghcr.io/runwhen-contrib/rw-checks-codecollection@sha256:83b6…",
+      "manifest_text": "<the decoded label, verbatim YAML>",
+      "manifest": { "...": "the same YAML parsed to JSON" },
+      "synced_at": "2026-09-16T10:00:00Z"
+    }
+  ]
+}
+```
+
+See the `kind: capability` entries in
+[config-examples/config.example.yaml](config-examples/config.example.yaml).
+
+---
+
 ## Destinations
 
 `config.yaml` `destinations:` is a list of destination instances. Each
@@ -207,7 +264,7 @@ auth via `crane_env()` and never touch `push()` itself.
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-pytest -v                  # 38 tests, no infra required
+pytest -v                  # 161 tests, no infra required
 ruff check app tests       # lint
 black --check app tests    # format check
 ```
