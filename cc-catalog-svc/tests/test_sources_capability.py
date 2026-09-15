@@ -52,6 +52,15 @@ def test_select_capability_refs_semver_tags():
     assert "not-semver" not in refs
 
 
+def test_select_capability_refs_version_named_branch_is_not_a_release():
+    # Branch `1.2.3` pushes both `1.2.3` and its canonical `1.2.3-287377c`.
+    raw = {"1.2.3", "1.2.3-287377c", "v2.0.0"}
+    refs = dict(_select_capability_refs(raw))
+    assert refs["1.2.3"] == "branch"
+    assert "1.2.3-287377c" not in refs
+    assert refs["v2.0.0"] == "tag"
+
+
 # ---------------------------------------------------------------------------
 # end-to-end discovery against a mocked registry
 # ---------------------------------------------------------------------------

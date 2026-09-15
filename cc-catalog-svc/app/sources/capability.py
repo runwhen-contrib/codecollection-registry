@@ -44,8 +44,10 @@ _ALIAS_SUFFIX = re.compile(r"^(?P<ref>.+)-(?P<sha>[0-9a-f]{7,40})$")
 
 # Full-match semver, unlike oci.SEMVER_TAG (a prefix match used to classify
 # already-parsed Robot refs). Capability tags are literal tag names, so we
-# require the whole tag to be a semver string.
-CAPABILITY_SEMVER_TAG = re.compile(r"^v?\d+\.\d+\.\d+([-+].*)?$")
+# require the whole tag to be a semver string. A trailing `-<7..40 hex>` is
+# excluded: that is the canonical build tag of a branch that happens to be
+# named like a version (branch `1.2.3` also pushes `1.2.3-287377c`).
+CAPABILITY_SEMVER_TAG = re.compile(r"^v?\d+\.\d+\.\d+(?!-[0-9a-f]{7,40}$)([-+].*)?$")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -152,7 +154,9 @@ def _select_capability_refs(raw_tags: set[str]) -> list[tuple[str, str]]:
       exists) whose name does not start with `pr-`. `latest` is never one,
       even if a `latest-<sha>` tag happened to exist.
     - Every semver tag (full match), regardless of a `pr-` prefix — the
-      `pr-` exclusion only applies to the branch-alias rule.
+      `pr-` exclusion only applies to the branch-alias rule. A version-shaped
+      name that has a `T-<sha>` companion is a branch, not a release: release
+      builds push the tag alone, branch builds always push the companion.
     """
     alias_bases = {m.group("ref") for t in raw_tags if (m := _ALIAS_SUFFIX.match(t)) is not None}
 
@@ -160,7 +164,7 @@ def _select_capability_refs(raw_tags: set[str]) -> list[tuple[str, str]]:
     for t in raw_tags:
         if t == "latest":
             continue
-        if CAPABILITY_SEMVER_TAG.match(t):
+        if CAPABILITY_SEMVER_TAG.match(t) and t not in alias_bases:
             refs[t] = "tag"
             continue
         if t.startswith("pr-"):
