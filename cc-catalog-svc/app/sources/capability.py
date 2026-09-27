@@ -80,13 +80,23 @@ class CapabilityDiscovery:
     capabilities: list[DiscoveredCapability]
 
 
-def discover_capabilities(source: OCISource, cc: dict) -> CapabilityDiscovery:
+def discover_capabilities(
+    source: OCISource,
+    cc: dict,
+    *,
+    known_refs: frozenset[str] = frozenset(),
+) -> CapabilityDiscovery:
     """Discover every capability ref for one `kind: capability` CC entry.
 
     `source` must be the configured `OCISource` instance for the entry's
     source (same one the catalog poll layer already built for the Robot
     path) — we reuse its auth resolution, tag listing, and 401-dance GET
     rather than reimplementing any of it.
+
+    `known_refs` is every ref this codecollection currently has a stored row
+    for (the poll layer's view of `capability_versions`). It's used only to
+    bridge the alias-tag race in `_pending_alias_refs` below — passing an
+    empty set is always safe, it just means that bridge does nothing.
     """
     registry_url = cc.get("image_registry")
     slug = cc.get("slug")
@@ -102,7 +112,9 @@ def discover_capabilities(source: OCISource, cc: dict) -> CapabilityDiscovery:
 
     with httpx.Client(timeout=source.timeout, follow_redirects=True) as client:
         tags = source._list_tags(client, host, repo, auth_header=auth_header, auth_mode=auth_mode)
-        refs = _select_capability_refs(set(tags))
+        raw_tags = set(tags)
+        refs = _select_capability_refs(raw_tags)
+        pending = _pending_alias_refs(raw_tags, known_refs)
 
         discovered: list[DiscoveredCapability] = []
         for ref, ref_type in refs:
@@ -132,6 +144,14 @@ def discover_capabilities(source: OCISource, cc: dict) -> CapabilityDiscovery:
             if cap is not None:
                 discovered.append(cap)
 
+    if pending:
+        logger.info(
+            "capability source: %s keeping previous resolution for alias(es) %s; "
+            "companion tag not seen this poll",
+            slug,
+            sorted(pending),
+        )
+
     logger.info(
         "capability source: %s -> %d tags, %d capability ref(s) discovered",
         slug,
@@ -139,7 +159,7 @@ def discover_capabilities(source: OCISource, cc: dict) -> CapabilityDiscovery:
         len(discovered),
     )
     return CapabilityDiscovery(
-        listed_refs=frozenset(ref for ref, _ in refs),
+        listed_refs=frozenset(ref for ref, _ in refs) | pending,
         capabilities=discovered,
     )
 
@@ -173,6 +193,34 @@ def _select_capability_refs(raw_tags: set[str]) -> list[tuple[str, str]]:
             refs[t] = "branch"
 
     return sorted(refs.items())
+
+
+def _pending_alias_refs(raw_tags: set[str], known_refs: frozenset[str]) -> frozenset[str]:
+    """Branch aliases we've resolved before whose `<ref>-<sha7>` companion
+    hasn't landed in this listing.
+
+    The build workflow moves an alias tag (e.g. `main`) and pushes its
+    `main-<sha7>` companion as a second, separate push. A poll that lands in
+    that window sees `main` in `raw_tags` but has no companion to classify it
+    as a branch alias, so `_select_capability_refs` won't select it — and
+    without this, `_upsert_capability_versions` would then prune it for
+    having dropped out of the listing, even though the previous resolution
+    is still perfectly good.
+
+    Only a ref we've already resolved (`known_refs`, the service's stored
+    state) is bridged this way; a tag we've never seen as an alias before is
+    a plain unknown tag and is skipped exactly as today.
+    """
+    alias_bases = {m.group("ref") for t in raw_tags if (m := _ALIAS_SUFFIX.match(t)) is not None}
+    return frozenset(
+        t
+        for t in raw_tags
+        if t in known_refs
+        and t != "latest"
+        and not t.startswith("pr-")
+        and t not in alias_bases
+        and not CAPABILITY_SEMVER_TAG.match(t)
+    )
 
 
 # ---------------------------------------------------------------------------

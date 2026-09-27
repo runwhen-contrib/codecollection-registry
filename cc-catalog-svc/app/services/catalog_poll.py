@@ -316,7 +316,20 @@ def _sync_one_capability(
         cc_dict.setdefault(k, v)
     cc_dict["_source_auth"] = src_cfg.auth.model_dump()
 
-    discovery = discover_capabilities(source, cc_dict)
+    # The alias-tag race bridge (`app.sources.capability._pending_alias_refs`)
+    # needs to know which refs we've already resolved for this
+    # codecollection. Read that before the (network-bound) discovery call
+    # rather than holding a session open across it.
+    with session_scope() as db:
+        known_refs = frozenset(
+            db.execute(
+                select(CapabilityVersion.ref).where(CapabilityVersion.codecollection == cc_cfg.slug)
+            )
+            .scalars()
+            .all()
+        )
+
+    discovery = discover_capabilities(source, cc_dict, known_refs=known_refs)
 
     with session_scope() as db:
         upserted, removed = _upsert_capability_versions(

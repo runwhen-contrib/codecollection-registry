@@ -15,6 +15,7 @@ import respx
 import yaml
 
 from app.sources.capability import (
+    _pending_alias_refs,
     _select_capability_refs,
     discover_capabilities,
 )
@@ -59,6 +60,33 @@ def test_select_capability_refs_version_named_branch_is_not_a_release():
     assert refs["1.2.3"] == "branch"
     assert "1.2.3-287377c" not in refs
     assert refs["v2.0.0"] == "tag"
+
+
+# ---------------------------------------------------------------------------
+# alias-tag race bridge (pure)
+# ---------------------------------------------------------------------------
+def test_pending_alias_refs_keeps_known_alias_missing_its_companion():
+    # "main" has no "main-<sha>" companion yet, but we've resolved it before.
+    raw = {"main", "v1.0.0"}
+    assert _pending_alias_refs(raw, known_refs=frozenset({"main"})) == {"main"}
+
+
+def test_pending_alias_refs_skips_unknown_tag_missing_a_companion():
+    # Never resolved before -> not bridged, same as today.
+    raw = {"main"}
+    assert _pending_alias_refs(raw, known_refs=frozenset()) == frozenset()
+
+
+def test_pending_alias_refs_ignores_alias_that_already_has_its_companion():
+    # "main" is already selected via its companion, so it's not "pending".
+    raw = {"main", "main-287377c"}
+    assert _pending_alias_refs(raw, known_refs=frozenset({"main"})) == frozenset()
+
+
+def test_pending_alias_refs_excludes_latest_pr_and_semver():
+    raw = {"latest", "pr-42", "v1.0.0"}
+    known = frozenset({"latest", "pr-42", "v1.0.0"})
+    assert _pending_alias_refs(raw, known_refs=known) == frozenset()
 
 
 # ---------------------------------------------------------------------------
@@ -435,3 +463,86 @@ def test_discover_capabilities_skips_ref_whose_child_fetch_raises():
     discovery = discover_capabilities(src, cc)
     assert [c.ref for c in discovery.capabilities] == ["v1.0.0"]
     assert discovery.listed_refs == {"main", "v1.0.0"}
+
+
+# ---------------------------------------------------------------------------
+# alias-tag race: companion tag not (yet) pushed
+# ---------------------------------------------------------------------------
+@respx.mock
+def test_discover_capabilities_keeps_known_alias_without_its_companion():
+    """`main`'s `main-<sha>` companion hasn't landed this poll. We've resolved
+    `main` before (`known_refs`), so it's kept listed (not pruned) and never
+    re-fetched -- no manifest route is mocked for it, so respx would raise if
+    the code tried."""
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-checks-codecollection"
+    cc = {
+        "slug": "rw-checks-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["main", "v1.0.0"]})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/v1.0.0").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Docker-Content-Digest": "sha256:v1index"},
+            json={"config": {"digest": "sha256:v1cfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:v1cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "config": {
+                    "Labels": {
+                        "com.runwhen.capability.manifest.v1": _manifest_label("rw-checks", "1.0.0"),
+                    }
+                }
+            },
+        )
+    )
+
+    discovery = discover_capabilities(src, cc, known_refs=frozenset({"main"}))
+    assert [c.ref for c in discovery.capabilities] == ["v1.0.0"]
+    assert discovery.listed_refs == {"main", "v1.0.0"}
+
+
+@respx.mock
+def test_discover_capabilities_drops_unknown_alias_without_its_companion():
+    """Same setup, but `main` has never resolved before -- it's dropped from
+    the listing exactly as it was before this fix."""
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-checks-codecollection"
+    cc = {
+        "slug": "rw-checks-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["main", "v1.0.0"]})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/v1.0.0").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Docker-Content-Digest": "sha256:v1index"},
+            json={"config": {"digest": "sha256:v1cfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:v1cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "config": {
+                    "Labels": {
+                        "com.runwhen.capability.manifest.v1": _manifest_label("rw-checks", "1.0.0"),
+                    }
+                }
+            },
+        )
+    )
+
+    discovery = discover_capabilities(src, cc)  # known_refs defaults to empty
+    assert [c.ref for c in discovery.capabilities] == ["v1.0.0"]
+    assert discovery.listed_refs == {"v1.0.0"}

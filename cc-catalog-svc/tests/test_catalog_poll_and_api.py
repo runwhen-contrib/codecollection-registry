@@ -443,6 +443,65 @@ def test_capability_entry_and_robot_entry_in_same_source_dont_leak(client, cfg_m
     assert "capability: rw-checks" in entry["manifest_text"]
 
 
+@respx.mock
+def test_capability_alias_survives_a_poll_missing_its_companion_tag(client, cfg_mixed_kind):
+    """M13 (#189 part): a branch alias (`main`) whose `<alias>-<sha7>`
+    companion tag hasn't landed yet in this poll must keep its previous
+    resolution instead of looking like the ref disappeared."""
+    cap_repo = "runwhen-contrib/rw-checks-codecollection"
+    robot_repo = "runwhen-contrib/rw-cli-codecollection"
+
+    respx.get(f"https://ghcr.io/v2/{robot_repo}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["main-c1a2b3d-e4f5a6b"]})
+    )
+    tags_route = respx.get(f"https://ghcr.io/v2/{cap_repo}/tags/list")
+    tags_route.mock(return_value=httpx.Response(200, json={"tags": ["main", "main-287377c"]}))
+    respx.get(f"https://ghcr.io/v2/{cap_repo}/manifests/main").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Docker-Content-Digest": "sha256:indexdigest"},
+            json={"config": {"digest": "sha256:maincfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{cap_repo}/blobs/sha256:maincfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "config": {
+                    "Labels": {
+                        "com.runwhen.capability.manifest.v1": _manifest_label("rw-checks", "0.2.0"),
+                        "io.runwhen.codecollection.commit": "287377caaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    }
+                }
+            },
+        )
+    )
+
+    # First poll: "main"'s companion tag is present, it resolves normally.
+    summary = run_catalog_poll(cfg_mixed_kind)
+    assert (summary["capability_refs_upserted"], summary["capability_refs_removed"]) == (1, 0)
+
+    resp = client.get("/api/v1/catalog/capabilities")
+    caps = resp.json()["capabilities"]
+    assert len(caps) == 1
+    assert caps[0]["ref"] == "main"
+    assert caps[0]["version"] == "0.2.0"
+
+    # Second poll: the companion tag hasn't landed yet -- "main" alone. No
+    # manifest/blob route is re-armed for it, so a fetch attempt would raise.
+    tags_route.mock(return_value=httpx.Response(200, json={"tags": ["main"]}))
+
+    summary = run_catalog_poll(cfg_mixed_kind)
+    assert summary["errors"] == []
+    assert (summary["capability_refs_upserted"], summary["capability_refs_removed"]) == (0, 0)
+
+    resp = client.get("/api/v1/catalog/capabilities")
+    caps = resp.json()["capabilities"]
+    assert len(caps) == 1
+    assert caps[0]["ref"] == "main"
+    assert caps[0]["version"] == "0.2.0"  # unchanged, not pruned
+
+
 def test_capabilities_endpoint_filters_by_capability_id(client, db_session):
     from app.services.catalog_poll import _upsert_capability_versions
     from app.sources.capability import DiscoveredCapability
