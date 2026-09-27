@@ -69,8 +69,8 @@ class CapabilityEntry(BaseModel):
     """One discovered capability image build (1:1 with a capability_versions
     row). Field names/shape are the K1/P1 contract — snake_case, stable."""
 
-    capability: Optional[str] = Field(None, description="Capability id from the parsed manifest.")
-    version: Optional[str] = Field(None, description="Capability version from the parsed manifest.")
+    capability: str = Field(..., description="Capability id from the parsed manifest.")
+    version: str = Field(..., description="Capability version from the parsed manifest.")
     codecollection: str = Field(..., description="Slug of the owning `kind: capability` entry.")
     ref: str = Field(..., description="Branch alias or semver tag this build represents.")
     ref_type: str = Field(..., description="'tag' for semver refs, else 'branch'.")

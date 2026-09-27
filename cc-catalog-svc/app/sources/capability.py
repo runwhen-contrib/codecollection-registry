@@ -52,10 +52,15 @@ CAPABILITY_SEMVER_TAG = re.compile(r"^v?\d+\.\d+\.\d+(?!-[0-9a-f]{7,40}$)([-+].*
 
 @dataclasses.dataclass(frozen=True)
 class DiscoveredCapability:
-    """One capability image build found for a `kind: capability` entry."""
+    """One capability image build found for a `kind: capability` entry.
 
-    capability: Optional[str]
-    version: Optional[str]
+    `capability` and `version` are required: a manifest missing either is
+    treated as invalid and the ref is skipped in `_discover_one_ref`, the
+    same as a missing/undecodable label or unparseable YAML.
+    """
+
+    capability: str
+    version: str
     ref: str
     ref_type: str  # "branch" | "tag"
     commit_hash: Optional[str]
@@ -241,8 +246,9 @@ def _discover_one_ref(
     """Resolve one ref to a `DiscoveredCapability`, or None + a warning log.
 
     Expected gaps (non-200 responses, missing label, undecodable label,
-    unparseable YAML) return None here; unexpected errors (transport
-    failures, non-JSON bodies) raise and are skipped by the caller.
+    unparseable YAML, a manifest missing required `capability`/`version`
+    fields) return None here; unexpected errors (transport failures,
+    non-JSON bodies) raise and are skipped by the caller.
     """
     manifest_url = f"https://{host}/v2/{repo}/manifests/{ref}"
     resp = source._get_with_auth(
@@ -369,14 +375,34 @@ def _discover_one_ref(
         )
         return None
 
+    # `capability` and `version` are required — see `DiscoveredCapability`.
+    # A manifest missing either is invalid, not merely unresolved: log it as
+    # such and skip the ref (kept alive via `listed_refs` like any other
+    # skip here, so it doesn't read as "the ref disappeared").
+    capability = parsed.get("capability")
+    version = parsed.get("version")
+    if (
+        not isinstance(capability, str)
+        or not capability
+        or not isinstance(version, str)
+        or not version
+    ):
+        logger.warning(
+            "capability source: %s ref %s manifest is missing a required 'capability' or "
+            "'version' string; skipping as invalid",
+            slug,
+            ref,
+        )
+        return None
+
     commit_full = labels.get("io.runwhen.codecollection.commit")
     commit_hash = commit_full[:7] if commit_full else None
 
     image_tag = ref if ref_type == "tag" else (f"{ref}-{commit_hash}" if commit_hash else ref)
 
     return DiscoveredCapability(
-        capability=parsed.get("capability"),
-        version=parsed.get("version"),
+        capability=capability,
+        version=version,
         ref=ref,
         ref_type=ref_type,
         commit_hash=commit_hash,

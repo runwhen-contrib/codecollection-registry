@@ -238,7 +238,22 @@ def resolve_image(
 # app.services.catalog_poll), so they're entirely absent from every
 # /codecollections* endpoint above. They're served here instead.
 # ---------------------------------------------------------------------------
-def _to_capability_entry(row: CapabilityVersion) -> CapabilityEntry:
+def _to_capability_entry(row: CapabilityVersion) -> Optional[CapabilityEntry]:
+    """Build the wire entry for one row, or None if it's invalid.
+
+    `capability`/`version` are required on `CapabilityEntry` (they're the
+    fields PAPI keys catalog rows on). A row missing either — a stale row
+    from before that requirement, or a future bug — is dropped from the
+    response with a warning rather than failing `response_model` validation
+    for every entry in the listing; valid entries stay unaffected.
+    """
+    if not row.capability or not row.version:
+        logger.warning(
+            "capability catalog: %s@%s is missing capability/version; omitting from the response",
+            row.codecollection,
+            row.ref,
+        )
+        return None
     manifest: Optional[dict] = None
     try:
         parsed = yaml.safe_load(row.manifest_text)
@@ -276,7 +291,8 @@ def list_capabilities(
         stmt = stmt.where(CapabilityVersion.capability == capability)
     stmt = stmt.order_by(CapabilityVersion.capability, CapabilityVersion.ref)
     rows = db.execute(stmt).scalars().all()
-    return CapabilitiesResponse(capabilities=[_to_capability_entry(r) for r in rows])
+    entries = [e for e in (_to_capability_entry(r) for r in rows) if e is not None]
+    return CapabilitiesResponse(capabilities=entries)
 
 
 def _attach_destination(

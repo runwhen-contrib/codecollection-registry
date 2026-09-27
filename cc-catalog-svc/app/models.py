@@ -157,6 +157,11 @@ class CapabilityVersion(Base):
     __tablename__ = "capability_versions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # Nullable at the DB level for backward compatibility with rows written
+    # before `capability`/`version` were required on `DiscoveredCapability`
+    # (see `app.sources.capability`); the discovery source now always fills
+    # both, and the API layer (`_to_capability_entry`) drops any row where
+    # either is missing rather than serving it as valid.
     capability: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, index=True)
     version: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     codecollection: Mapped[str] = mapped_column(

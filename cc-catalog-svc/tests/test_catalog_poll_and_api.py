@@ -546,6 +546,66 @@ def test_capabilities_endpoint_filters_by_capability_id(client, db_session):
     assert caps[0]["codecollection"] == "rw-checks-codecollection"
 
 
+def test_capabilities_endpoint_omits_entries_missing_capability_or_version(client, db_session):
+    """`capability`/`version` are required on the wire (`CapabilityEntry`).
+    A row missing either -- e.g. one written before that was enforced --
+    is dropped from the response with a warning instead of 500ing the
+    whole listing; a valid sibling entry is served normally."""
+    from app.services.catalog_poll import _upsert_capability_versions
+    from app.sources.capability import DiscoveredCapability
+
+    valid = DiscoveredCapability(
+        capability="rw-checks",
+        version="0.2.0",
+        ref="main",
+        ref_type="branch",
+        commit_hash="aaaaaaa",
+        image_tag="main-aaaaaaa",
+        image_digest="sha256:aaa",
+        image="ghcr.io/runwhen-contrib/rw-checks-codecollection@sha256:aaa",
+        manifest_text="capability: rw-checks\nversion: 0.2.0\n",
+    )
+    invalid = DiscoveredCapability(
+        capability=None,  # simulates a row from before capability was required
+        version="1.0.0",
+        ref="v1.0.0",
+        ref_type="tag",
+        commit_hash="bbbbbbb",
+        image_tag="v1.0.0",
+        image_digest="sha256:bbb",
+        image="ghcr.io/runwhen-contrib/rw-worktree-codecollection@sha256:bbb",
+        manifest_text="version: 1.0.0\n",
+    )
+    _upsert_capability_versions(db_session, "rw-checks-codecollection", [valid])
+    _upsert_capability_versions(db_session, "rw-worktree-codecollection", [invalid])
+    db_session.commit()
+
+    resp = client.get("/api/v1/catalog/capabilities")
+    assert resp.status_code == 200
+    caps = resp.json()["capabilities"]
+    assert len(caps) == 1
+    assert caps[0]["capability"] == "rw-checks"
+
+
+def test_capability_entry_schema_requires_capability_and_version():
+    """Locks the K1/P1 wire contract: `capability`/`version` are no longer
+    `Optional`, matching what PAPI requires on its side."""
+    import pytest
+    from pydantic import ValidationError
+
+    from app.schemas.catalog import CapabilityEntry
+
+    with pytest.raises(ValidationError):
+        CapabilityEntry(
+            codecollection="rw-checks-codecollection",
+            ref="main",
+            ref_type="branch",
+            image_digest="sha256:aaa",
+            image="ghcr.io/runwhen-contrib/rw-checks-codecollection@sha256:aaa",
+            manifest_text="capability: rw-checks\nversion: 0.2.0\n",
+        )
+
+
 def test_upsert_capability_versions_replaces_and_prunes_stale_refs(db_session):
     """Re-poll replaces existing (slug, ref) rows in place, prunes refs that
     dropped out of a *non-empty* listing, and never wipes rows on an empty

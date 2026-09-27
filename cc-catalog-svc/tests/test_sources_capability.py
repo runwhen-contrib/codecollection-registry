@@ -295,6 +295,75 @@ def test_discover_capabilities_skips_ref_with_undecodable_label():
     assert caps == []
 
 
+# ---------------------------------------------------------------------------
+# required `capability` / `version` manifest fields
+# ---------------------------------------------------------------------------
+@respx.mock
+def test_discover_capabilities_skips_ref_missing_capability_field():
+    """A manifest with no `capability` key is invalid, not merely unresolved:
+    it's skipped, but the ref stays in `listed_refs` so it isn't pruned."""
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-checks-codecollection"
+    cc = {
+        "slug": "rw-checks-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+    bad_label = base64.b64encode(yaml.safe_dump({"version": "0.2.0"}).encode()).decode()
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["main", "main-287377c"]})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Docker-Content-Digest": "sha256:mainindex"},
+            json={"config": {"digest": "sha256:maincfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:maincfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={"config": {"Labels": {"com.runwhen.capability.manifest.v1": bad_label}}},
+        )
+    )
+
+    discovery = discover_capabilities(src, cc)
+    assert discovery.capabilities == []
+    assert discovery.listed_refs == {"main"}
+
+
+@respx.mock
+def test_discover_capabilities_skips_ref_missing_version_field():
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-checks-codecollection"
+    cc = {
+        "slug": "rw-checks-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+    bad_label = base64.b64encode(yaml.safe_dump({"capability": "rw-checks"}).encode()).decode()
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["main", "main-287377c"]})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/main").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Docker-Content-Digest": "sha256:mainindex"},
+            json={"config": {"digest": "sha256:maincfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:maincfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={"config": {"Labels": {"com.runwhen.capability.manifest.v1": bad_label}}},
+        )
+    )
+
+    discovery = discover_capabilities(src, cc)
+    assert discovery.capabilities == []
+    assert discovery.listed_refs == {"main"}
+
+
 @respx.mock
 def test_discover_capabilities_handles_anonymous_bearer_dance():
     """The bearer-realm 401 dance must still work on the capability path."""
