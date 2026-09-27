@@ -88,6 +88,25 @@ sources:
         git_url: https://github.com/runwhen-contrib/azure-c7n-codecollection
         image_registry: ghcr.io/runwhen-contrib/azure-c7n-codecollection
 
+      # `kind: capability` entries are a different pipeline from the Robot
+      # CCV scheme above: each platform image carries its capability
+      # manifest.yaml as a base64 label (com.runwhen.capability.manifest.v1)
+      # instead of a two-sha tag. They're polled by the capability
+      # discovery path, never produce a codecollections row, and are served
+      # from GET /api/v1/catalog/capabilities instead of /codecollections.
+      # See app/sources/capability.py.
+      - slug: rw-checks-codecollection
+        kind: capability
+        git_url: https://github.com/runwhen-contrib/rw-checks-codecollection
+        image_registry: ghcr.io/runwhen-contrib/rw-checks-codecollection
+      - slug: rw-worktree-codecollection
+        kind: capability
+        # Shares a git_url with rw-checks-codecollection above (both
+        # capabilities are published out of the same source repo) but
+        # needs its own slug — slugs must be globally unique.
+        git_url: https://github.com/runwhen-contrib/rw-checks-codecollection
+        image_registry: ghcr.io/runwhen-contrib/rw-worktree-codecollection
+
   # ------------------------------------------------------------------------
   # Self-hosted: JFrog Artifactory as a Remote Docker repo proxying ghcr.io.
   #
