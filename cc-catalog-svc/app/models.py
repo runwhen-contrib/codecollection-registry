@@ -190,6 +190,11 @@ class CapabilityVersion(Base):
         nullable=False,
         comment="Decoded com.runwhen.capability.manifest.v1 label, verbatim YAML.",
     )
+    schemas_text: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Decoded com.runwhen.capability.schemas.v1 label, verbatim JSON.",
+    )
 
     synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

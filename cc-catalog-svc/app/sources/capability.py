@@ -20,6 +20,7 @@ from __future__ import annotations
 import base64
 import dataclasses
 import hashlib
+import json
 import logging
 import re
 from typing import Optional
@@ -35,6 +36,11 @@ logger = logging.getLogger(__name__)
 # The label the C1 build workflow stamps on every platform's image config,
 # holding the base64 of the capability's manifest.yaml verbatim.
 CAPABILITY_MANIFEST_LABEL = "com.runwhen.capability.manifest.v1"
+
+# Optional sibling label, set on the same config blob, holding the base64 of
+# a JSON object mapping every schema the manifest references (normalised,
+# relative path -> parsed JSON Schema document). See the design's Contract 2.
+CAPABILITY_SCHEMAS_LABEL = "com.runwhen.capability.schemas.v1"
 
 # A branch alias tag T is detected by the existence of a companion
 # T-<7..40 hex> tag (the same convention the Robot pipeline stamps, minus
@@ -57,6 +63,10 @@ class DiscoveredCapability:
     `capability` and `version` are required: a manifest missing either is
     treated as invalid and the ref is skipped in `_discover_one_ref`, the
     same as a missing/undecodable label or unparseable YAML.
+
+    `schemas_text` is optional and independent of the manifest's validity:
+    a missing or invalid schemas label never causes the ref to be skipped,
+    it just leaves this field `None` (see `_decode_schemas_label`).
     """
 
     capability: str
@@ -68,6 +78,7 @@ class DiscoveredCapability:
     image_digest: str
     image: str
     manifest_text: str
+    schemas_text: Optional[str] = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -395,6 +406,10 @@ def _discover_one_ref(
         )
         return None
 
+    # The schemas label is optional and never invalidates an otherwise-good
+    # manifest: any problem decoding it just leaves schemas_text as None.
+    schemas_text = _decode_schemas_label(labels.get(CAPABILITY_SCHEMAS_LABEL), slug, ref)
+
     commit_full = labels.get("io.runwhen.codecollection.commit")
     commit_hash = commit_full[:7] if commit_full else None
 
@@ -410,7 +425,54 @@ def _discover_one_ref(
         image_digest=image_digest,
         image=f"{image_registry}@{image_digest}",
         manifest_text=manifest_text,
+        schemas_text=schemas_text,
     )
+
+
+def _decode_schemas_label(
+    schemas_label: Optional[str],
+    slug: Optional[str],
+    ref: str,
+) -> Optional[str]:
+    """Decode + validate the `CAPABILITY_SCHEMAS_LABEL` value, per Contract 2.
+
+    Missing/empty is the normal, unremarkable case (the label is optional)
+    and returns None without a warning. Present but undecodable base64,
+    invalid UTF-8, invalid JSON, or not a JSON object whose keys are strings
+    and values are objects, all warn and return None -- the caller never
+    treats this as invalidating the ref itself.
+    """
+    if not schemas_label:
+        return None
+    try:
+        decoded = base64.b64decode(schemas_label, validate=True).decode("utf-8")
+    except Exception:
+        logger.warning(
+            "capability source: %s ref %s schemas label is not valid base64/utf-8; ignoring",
+            slug,
+            ref,
+        )
+        return None
+    try:
+        parsed = json.loads(decoded)
+    except json.JSONDecodeError:
+        logger.warning(
+            "capability source: %s ref %s schemas label is not parseable JSON; ignoring",
+            slug,
+            ref,
+        )
+        return None
+    if not isinstance(parsed, dict) or not all(
+        isinstance(k, str) and isinstance(v, dict) for k, v in parsed.items()
+    ):
+        logger.warning(
+            "capability source: %s ref %s schemas label is not a JSON object of string -> "
+            "object; ignoring",
+            slug,
+            ref,
+        )
+        return None
+    return decoded
 
 
 def _select_linux_amd64_child(child_manifests: list[dict]) -> Optional[dict]:

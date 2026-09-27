@@ -86,6 +86,10 @@ class CapabilityEntry(BaseModel):
     image: str = Field(..., description="'<image_registry>@<image_digest>'.")
     manifest_text: str = Field(..., description="The decoded label, verbatim YAML.")
     manifest: Optional[dict] = Field(None, description="manifest_text parsed to JSON.")
+    schemas_text: Optional[str] = Field(
+        None, description="Decoded com.runwhen.capability.schemas.v1 label, verbatim JSON."
+    )
+    schemas: Optional[dict] = Field(None, description="schemas_text parsed to JSON.")
     synced_at: Optional[datetime] = None
 
 

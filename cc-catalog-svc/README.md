@@ -207,6 +207,12 @@ are a different discovery path entirely — see
   linux/amd64 entry).
 - A missing or undecodable label, or unparseable YAML, skips just that ref
   with a warning — it never fails the rest of the entry's poll.
+- The same config blob can also carry the capability's referenced output
+  JSON Schemas, base64-encoded, in the optional `com.runwhen.capability.schemas.v1`
+  label (a JSON object mapping each referenced schema path to its parsed
+  schema document). Missing, undecodable, or malformed just leaves
+  `schemas_text` null — it never skips the ref, since the manifest itself
+  is still valid.
 - One row per `(codecollection slug, ref)`, replaced on every re-poll.
   `kind: capability` entries never produce a `codecollections` row and
   never appear under `/api/v1/catalog/codecollections*`.
@@ -229,6 +235,8 @@ sorted by `(capability, ref)`:
       "image": "ghcr.io/runwhen-contrib/rw-checks-codecollection@sha256:83b6…",
       "manifest_text": "<the decoded label, verbatim YAML>",
       "manifest": { "...": "the same YAML parsed to JSON" },
+      "schemas_text": "<the decoded schemas label, verbatim JSON, or null>",
+      "schemas": { "...": "the same JSON parsed, or null" },
       "synced_at": "2026-09-16T10:00:00Z"
     }
   ]

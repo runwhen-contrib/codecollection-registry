@@ -9,6 +9,7 @@ style of tests/test_sources_oci.py.
 from __future__ import annotations
 
 import base64
+import json
 
 import httpx
 import respx
@@ -25,6 +26,10 @@ from app.sources.oci import OCISource
 def _manifest_label(capability: str, version: str) -> str:
     text = yaml.safe_dump({"capability": capability, "version": version})
     return base64.b64encode(text.encode("utf-8")).decode("ascii")
+
+
+def _schemas_label(obj) -> str:
+    return base64.b64encode(json.dumps(obj).encode("utf-8")).decode("ascii")
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +367,251 @@ def test_discover_capabilities_skips_ref_missing_version_field():
     discovery = discover_capabilities(src, cc)
     assert discovery.capabilities == []
     assert discovery.listed_refs == {"main"}
+
+
+# ---------------------------------------------------------------------------
+# schemas label (optional; a bad value never invalidates the ref)
+# ---------------------------------------------------------------------------
+@respx.mock
+def test_discover_capabilities_reads_valid_schemas_label():
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-checks-codecollection"
+    cc = {
+        "slug": "rw-checks-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+    schemas_obj = {"schemas/k8s_object.json": {"type": "object"}}
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["v1.0.0"]})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/v1.0.0").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Docker-Content-Digest": "sha256:v1index"},
+            json={"config": {"digest": "sha256:v1cfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:v1cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "config": {
+                    "Labels": {
+                        "com.runwhen.capability.manifest.v1": _manifest_label("rw-checks", "1.0.0"),
+                        "com.runwhen.capability.schemas.v1": _schemas_label(schemas_obj),
+                    }
+                }
+            },
+        )
+    )
+
+    caps = discover_capabilities(src, cc).capabilities
+    assert len(caps) == 1
+    assert json.loads(caps[0].schemas_text) == schemas_obj
+
+
+@respx.mock
+def test_discover_capabilities_schemas_text_none_when_label_absent():
+    """The schemas label is optional: no label at all is not a warning-worthy
+    condition, just schemas_text = None with the ref kept normally."""
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-checks-codecollection"
+    cc = {
+        "slug": "rw-checks-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["v1.0.0"]})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/v1.0.0").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Docker-Content-Digest": "sha256:v1index"},
+            json={"config": {"digest": "sha256:v1cfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:v1cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "config": {
+                    "Labels": {
+                        "com.runwhen.capability.manifest.v1": _manifest_label("rw-checks", "1.0.0"),
+                    }
+                }
+            },
+        )
+    )
+
+    caps = discover_capabilities(src, cc).capabilities
+    assert len(caps) == 1
+    assert caps[0].schemas_text is None
+
+
+@respx.mock
+def test_discover_capabilities_schemas_label_bad_base64_keeps_ref(caplog):
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-checks-codecollection"
+    cc = {
+        "slug": "rw-checks-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["v1.0.0"]})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/v1.0.0").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Docker-Content-Digest": "sha256:v1index"},
+            json={"config": {"digest": "sha256:v1cfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:v1cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "config": {
+                    "Labels": {
+                        "com.runwhen.capability.manifest.v1": _manifest_label("rw-checks", "1.0.0"),
+                        "com.runwhen.capability.schemas.v1": "not-valid-base64!!!",
+                    }
+                }
+            },
+        )
+    )
+
+    caps = discover_capabilities(src, cc).capabilities
+    assert len(caps) == 1
+    assert caps[0].capability == "rw-checks"  # the manifest is still valid
+    assert caps[0].schemas_text is None
+    assert "schemas label" in caplog.text
+
+
+@respx.mock
+def test_discover_capabilities_schemas_label_bad_json_keeps_ref(caplog):
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-checks-codecollection"
+    cc = {
+        "slug": "rw-checks-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+    bad_json_label = base64.b64encode(b"not json at all").decode("ascii")
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["v1.0.0"]})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/v1.0.0").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Docker-Content-Digest": "sha256:v1index"},
+            json={"config": {"digest": "sha256:v1cfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:v1cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "config": {
+                    "Labels": {
+                        "com.runwhen.capability.manifest.v1": _manifest_label("rw-checks", "1.0.0"),
+                        "com.runwhen.capability.schemas.v1": bad_json_label,
+                    }
+                }
+            },
+        )
+    )
+
+    caps = discover_capabilities(src, cc).capabilities
+    assert len(caps) == 1
+    assert caps[0].schemas_text is None
+    assert "schemas label" in caplog.text
+
+
+@respx.mock
+def test_discover_capabilities_schemas_label_json_array_keeps_ref(caplog):
+    """A JSON array decodes fine but isn't the required object shape."""
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-checks-codecollection"
+    cc = {
+        "slug": "rw-checks-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["v1.0.0"]})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/v1.0.0").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Docker-Content-Digest": "sha256:v1index"},
+            json={"config": {"digest": "sha256:v1cfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:v1cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "config": {
+                    "Labels": {
+                        "com.runwhen.capability.manifest.v1": _manifest_label("rw-checks", "1.0.0"),
+                        "com.runwhen.capability.schemas.v1": _schemas_label(
+                            ["schemas/k8s_object.json"]
+                        ),
+                    }
+                }
+            },
+        )
+    )
+
+    caps = discover_capabilities(src, cc).capabilities
+    assert len(caps) == 1
+    assert caps[0].schemas_text is None
+    assert "schemas label" in caplog.text
+
+
+@respx.mock
+def test_discover_capabilities_schemas_label_non_object_value_keeps_ref(caplog):
+    """Every value must itself be a JSON object (a schema document)."""
+    src = OCISource()
+    repo_path = "runwhen-contrib/rw-checks-codecollection"
+    cc = {
+        "slug": "rw-checks-codecollection",
+        "image_registry": f"ghcr.io/{repo_path}",
+    }
+
+    respx.get(f"https://ghcr.io/v2/{repo_path}/tags/list").mock(
+        return_value=httpx.Response(200, json={"tags": ["v1.0.0"]})
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/manifests/v1.0.0").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"Docker-Content-Digest": "sha256:v1index"},
+            json={"config": {"digest": "sha256:v1cfg"}},
+        )
+    )
+    respx.get(f"https://ghcr.io/v2/{repo_path}/blobs/sha256:v1cfg").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "config": {
+                    "Labels": {
+                        "com.runwhen.capability.manifest.v1": _manifest_label("rw-checks", "1.0.0"),
+                        "com.runwhen.capability.schemas.v1": _schemas_label(
+                            {"schemas/k8s_object.json": "not-an-object"}
+                        ),
+                    }
+                }
+            },
+        )
+    )
+
+    caps = discover_capabilities(src, cc).capabilities
+    assert len(caps) == 1
+    assert caps[0].schemas_text is None
+    assert "schemas label" in caplog.text
 
 
 @respx.mock

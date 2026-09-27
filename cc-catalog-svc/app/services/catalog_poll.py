@@ -393,6 +393,7 @@ def _upsert_capability_versions(
         row.image_digest = cap.image_digest
         row.image = cap.image
         row.manifest_text = cap.manifest_text
+        row.schemas_text = cap.schemas_text
         row.synced_at = now
         upserted += 1
 

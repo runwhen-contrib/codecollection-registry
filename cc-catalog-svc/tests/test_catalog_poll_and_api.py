@@ -8,6 +8,7 @@ plugin and point a config at it.
 from __future__ import annotations
 
 import base64
+import json
 from datetime import datetime
 
 import httpx
@@ -769,3 +770,131 @@ def test_upsert_capability_versions_keeps_listed_but_unresolved_ref(db_session):
     )
     assert {r.ref for r in rows} == {"main"}
     assert next(r for r in rows if r.ref == "main").image_digest == "sha256:aaa"
+
+
+def test_upsert_capability_versions_stores_and_replaces_schemas_text(db_session):
+    """schemas_text rides alongside manifest_text: set on insert, and updated
+    in place on a re-poll like every other DiscoveredCapability field."""
+    from app.services.catalog_poll import _upsert_capability_versions
+    from app.models import CapabilityVersion
+    from app.sources.capability import DiscoveredCapability
+    from sqlalchemy import select
+
+    schemas_v1 = json.dumps({"schemas/k8s_object.json": {"type": "object"}})
+    cap_v1 = DiscoveredCapability(
+        capability="rw-checks",
+        version="0.1.0",
+        ref="main",
+        ref_type="branch",
+        commit_hash="aaaaaaa",
+        image_tag="main-aaaaaaa",
+        image_digest="sha256:aaa",
+        image="ghcr.io/x/y@sha256:aaa",
+        manifest_text="capability: rw-checks\nversion: 0.1.0\n",
+        schemas_text=schemas_v1,
+    )
+    _upsert_capability_versions(db_session, "rw-checks-codecollection", [cap_v1])
+    db_session.commit()
+    row = db_session.execute(
+        select(CapabilityVersion).where(CapabilityVersion.ref == "main")
+    ).scalar_one()
+    assert row.schemas_text == schemas_v1
+
+    schemas_v2 = json.dumps({"schemas/other.json": {"type": "object"}})
+    cap_v2 = DiscoveredCapability(
+        capability="rw-checks",
+        version="0.2.0",
+        ref="main",
+        ref_type="branch",
+        commit_hash="bbbbbbb",
+        image_tag="main-bbbbbbb",
+        image_digest="sha256:bbb",
+        image="ghcr.io/x/y@sha256:bbb",
+        manifest_text="capability: rw-checks\nversion: 0.2.0\n",
+        schemas_text=schemas_v2,
+    )
+    _upsert_capability_versions(db_session, "rw-checks-codecollection", [cap_v2])
+    db_session.commit()
+    row = db_session.execute(
+        select(CapabilityVersion).where(CapabilityVersion.ref == "main")
+    ).scalar_one()
+    assert row.schemas_text == schemas_v2
+
+    # A capability with no schemas label at all stores None, same as the source.
+    cap_no_schemas = DiscoveredCapability(
+        capability="rw-checks",
+        version="0.3.0",
+        ref="main",
+        ref_type="branch",
+        commit_hash="ccccccc",
+        image_tag="main-ccccccc",
+        image_digest="sha256:ccc",
+        image="ghcr.io/x/y@sha256:ccc",
+        manifest_text="capability: rw-checks\nversion: 0.3.0\n",
+    )
+    _upsert_capability_versions(db_session, "rw-checks-codecollection", [cap_no_schemas])
+    db_session.commit()
+    row = db_session.execute(
+        select(CapabilityVersion).where(CapabilityVersion.ref == "main")
+    ).scalar_one()
+    assert row.schemas_text is None
+
+
+def test_capabilities_endpoint_returns_schemas_text_and_parsed_schemas(client, db_session):
+    """`GET /api/v1/catalog/capabilities` mirrors manifest_text/manifest with
+    schemas_text/schemas, parsing the stored JSON text for callers."""
+    from app.services.catalog_poll import _upsert_capability_versions
+    from app.sources.capability import DiscoveredCapability
+
+    schemas_obj = {"schemas/k8s_object.json": {"type": "object"}}
+    cap = DiscoveredCapability(
+        capability="rw-checks",
+        version="0.2.0",
+        ref="main",
+        ref_type="branch",
+        commit_hash="aaaaaaa",
+        image_tag="main-aaaaaaa",
+        image_digest="sha256:aaa",
+        image="ghcr.io/runwhen-contrib/rw-checks-codecollection@sha256:aaa",
+        manifest_text="capability: rw-checks\nversion: 0.2.0\n",
+        schemas_text=json.dumps(schemas_obj),
+    )
+    _upsert_capability_versions(db_session, "rw-checks-codecollection", [cap])
+    db_session.commit()
+
+    resp = client.get("/api/v1/catalog/capabilities")
+    assert resp.status_code == 200
+    entry = resp.json()["capabilities"][0]
+    assert entry["schemas_text"] == json.dumps(schemas_obj)
+    assert entry["schemas"] == schemas_obj
+
+
+def test_capabilities_endpoint_returns_null_schemas_for_unparseable_stored_text(
+    client, db_session
+):
+    """A row whose stored schemas_text can't be parsed (a future bug, or a
+    hand-edited row) yields schemas: null on the wire rather than failing
+    the whole listing -- mirrors the manifest_text/manifest behavior."""
+    from app.services.catalog_poll import _upsert_capability_versions
+    from app.sources.capability import DiscoveredCapability
+
+    cap = DiscoveredCapability(
+        capability="rw-checks",
+        version="0.2.0",
+        ref="main",
+        ref_type="branch",
+        commit_hash="aaaaaaa",
+        image_tag="main-aaaaaaa",
+        image_digest="sha256:aaa",
+        image="ghcr.io/runwhen-contrib/rw-checks-codecollection@sha256:aaa",
+        manifest_text="capability: rw-checks\nversion: 0.2.0\n",
+        schemas_text="not valid json {{{",
+    )
+    _upsert_capability_versions(db_session, "rw-checks-codecollection", [cap])
+    db_session.commit()
+
+    resp = client.get("/api/v1/catalog/capabilities")
+    assert resp.status_code == 200
+    entry = resp.json()["capabilities"][0]
+    assert entry["schemas_text"] == "not valid json {{{"
+    assert entry["schemas"] is None

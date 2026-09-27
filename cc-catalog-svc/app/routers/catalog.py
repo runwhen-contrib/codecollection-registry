@@ -21,6 +21,7 @@ All endpoints are read-only and unauthenticated by design.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Optional
 
@@ -265,6 +266,18 @@ def _to_capability_entry(row: CapabilityVersion) -> Optional[CapabilityEntry]:
             row.codecollection,
             row.ref,
         )
+    schemas: Optional[dict] = None
+    if row.schemas_text:
+        try:
+            parsed_schemas = json.loads(row.schemas_text)
+            if isinstance(parsed_schemas, dict):
+                schemas = parsed_schemas
+        except json.JSONDecodeError:
+            logger.warning(
+                "capability catalog: %s@%s has unparseable schemas_text",
+                row.codecollection,
+                row.ref,
+            )
     return CapabilityEntry(
         capability=row.capability,
         version=row.version,
@@ -277,6 +290,8 @@ def _to_capability_entry(row: CapabilityVersion) -> Optional[CapabilityEntry]:
         image=row.image,
         manifest_text=row.manifest_text,
         manifest=manifest,
+        schemas_text=row.schemas_text,
+        schemas=schemas,
         synced_at=row.synced_at,
     )
 
