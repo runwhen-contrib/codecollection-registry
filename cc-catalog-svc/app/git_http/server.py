@@ -137,11 +137,49 @@ def _parse_cgi_response(raw: bytes) -> tuple[str, list[tuple[str, str]], bytes]:
     return status, headers, body
 
 
-def _git_http_backend_environ(data_dir: str, environ: dict) -> dict[str, str]:
-    """Build CGI environment for ``git http-backend`` from a WSGI environ."""
+def _append_git_config(cmd_env: dict[str, str], key: str, value: str) -> None:
+    """Append one entry to the ``GIT_CONFIG_*`` env sequence.
+
+    Appends rather than assigns so an operator-supplied ``GIT_CONFIG_COUNT``
+    and its key/value pairs — inherited through ``os.environ`` — survive.
+    """
+    try:
+        count = int(cmd_env.get("GIT_CONFIG_COUNT", "0"))
+    except ValueError:
+        count = 0
+    cmd_env[f"GIT_CONFIG_KEY_{count}"] = key
+    cmd_env[f"GIT_CONFIG_VALUE_{count}"] = value
+    cmd_env["GIT_CONFIG_COUNT"] = str(count + 1)
+
+
+def _git_http_backend_environ(
+    data_dir: str,
+    environ: dict,
+    *,
+    safe_directory: Optional[str] = None,
+) -> dict[str, str]:
+    """Build CGI environment for ``git http-backend`` from a WSGI environ.
+
+    ``safe_directory`` marks one bare repo path as trusted. Release images
+    bake the mirrors owned by the image's own uid (1000), but platforms that
+    assign an arbitrary uid at admission — OpenShift's restricted SCC being
+    the common case — run the server as a different user. Since git 2.35.2 a
+    repo owned by another user is refused with "detected dubious ownership",
+    and ``git http-backend`` turns that into a CGI ``Status: 500`` *while
+    exiting 0*: every clone fails and the exit code hides it.
+
+    Scoped to the single repo being served rather than blanket-trusting
+    ``data_dir``. ``GIT_CONFIG_*`` is used instead of ``git config --global``
+    because an arbitrary uid has no writable HOME.
+    """
     cmd_env = os.environ.copy()
     cmd_env["GIT_HTTP_EXPORT_ALL"] = "1"
     cmd_env["GIT_PROJECT_ROOT"] = data_dir
+    if safe_directory:
+        # realpath because git matches safe.directory against the resolved
+        # gitdir: a relative data_dir, or any symlink on the way to it,
+        # would otherwise silently fail to match and still 500.
+        _append_git_config(cmd_env, "safe.directory", os.path.realpath(safe_directory))
     cmd_env["REQUEST_METHOD"] = environ.get("REQUEST_METHOD", "GET")
     cmd_env["PATH_INFO"] = environ.get("PATH_INFO", "")
     cmd_env["QUERY_STRING"] = environ.get("QUERY_STRING", "")
@@ -233,7 +271,11 @@ def make_git_wsgi_app(
         # git http-backend expects PATH_INFO like /{slug}.git/info/refs.
         backend_environ = dict(environ)
         backend_environ["PATH_INFO"] = _canonical_path_info(slug, match.group("rest"))
-        cmd_env = _git_http_backend_environ(data_dir, backend_environ)
+        cmd_env = _git_http_backend_environ(
+            data_dir,
+            backend_environ,
+            safe_directory=repo_bare_path(data_dir, slug),
+        )
         body_in = b""
         if environ.get("REQUEST_METHOD") in ("POST", "PUT", "PATCH"):
             body_in = environ["wsgi.input"].read()
@@ -278,7 +320,7 @@ def make_git_wsgi_app(
                     write(leftover)
                 _stream_body(proc.stdout, write)
                 proc.wait()
-                _log_proc_stderr(proc, path)
+                _log_proc_stderr(proc, path, status)
                 return []
 
             # Fallback path: caller's WSGI stack didn't return a ``write``
@@ -291,7 +333,7 @@ def make_git_wsgi_app(
                     break
                 body_chunks.append(chunk)
             proc.wait()
-            _log_proc_stderr(proc, path)
+            _log_proc_stderr(proc, path, status)
             return body_chunks
         finally:
             if proc.poll() is None:
@@ -306,17 +348,31 @@ def _send_not_found(start_response, message: str) -> list[bytes]:
     return [message.encode("utf-8")]
 
 
-def _log_proc_stderr(proc: subprocess.Popen, path: str) -> None:
-    if proc.returncode == 0:
-        return
+def _log_proc_stderr(
+    proc: subprocess.Popen,
+    path: str,
+    status: Optional[str] = None,
+) -> None:
+    """Surface anything ``git http-backend`` wrote to stderr.
+
+    Deliberately NOT gated on ``returncode``. http-backend reports a fatal
+    error by emitting a CGI ``Status: 5xx`` and then exiting **0**, so an
+    rc-only guard silently drops exactly the diagnostics that matter — git's
+    message reaches only the response body, which git clients do not print.
+    stderr is empty on a healthy request, so this stays quiet in normal use.
+    """
     try:
         stderr = proc.stderr.read() if proc.stderr else b""
     except Exception:  # pragma: no cover - best-effort logging
         return
-    if stderr:
-        logger.warning(
-            "git http-backend exited rc=%s for %s: %s",
-            proc.returncode,
-            path,
-            stderr.decode("utf-8", errors="replace")[:2000],
-        )
+    failed = bool(proc.returncode) or bool(status and not status.startswith(("2", "3")))
+    if not stderr and not failed:
+        return
+    log = logger.warning if failed else logger.debug
+    log(
+        "git http-backend rc=%s status=%s for %s: %s",
+        proc.returncode,
+        status or "?",
+        path,
+        stderr.decode("utf-8", errors="replace")[:2000] or "<no stderr>",
+    )
