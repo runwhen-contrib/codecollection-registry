@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import shutil
 import subprocess
@@ -294,3 +295,158 @@ def test_shallow_fetch_depth2_tags_via_a2wsgi_mount(tmp_path):
         timeout=60,
     )
     assert result.returncode == 0, result.stderr
+
+
+# ---------------------------------------------------------------------------
+# Foreign-owned baked mirrors (OpenShift arbitrary-uid) — see
+# _git_http_backend_environ. GIT_TEST_ASSUME_DIFFERENT_OWNER is git's own knob
+# for forcing the ownership check to fail, so these run as any user.
+# ---------------------------------------------------------------------------
+def test_info_refs_serves_repo_owned_by_another_user(tmp_path, monkeypatch):
+    """A mirror owned by a different uid must still clone.
+
+    Release images bake mirrors as uid 1000; OpenShift's restricted SCC runs
+    the pod as an arbitrary uid. Without a scoped safe.directory, git refuses
+    with "detected dubious ownership" and http-backend answers Status: 500.
+    """
+    bare = repo_bare_path(str(tmp_path), "demo-cc")
+    _init_bare_repo(bare)
+    monkeypatch.setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+
+    api = FastAPI()
+    api.mount("/git", WSGIMiddleware(make_git_wsgi_app(str(tmp_path))))
+
+    with TestClient(api) as client:
+        resp = client.get(
+            "/git/demo-cc.git/info/refs",
+            params={"service": "git-upload-pack"},
+            headers={"Accept": "*/*"},
+        )
+
+    assert resp.status_code == 200, resp.content[:500]
+    assert resp.headers["content-type"].startswith("application/x-git-upload-pack-advertisement")
+    assert b"refs/heads/" in resp.content
+    assert b"dubious ownership" not in resp.content
+
+
+def test_safe_directory_is_scoped_to_the_served_repo(tmp_path):
+    """safe.directory names one repo path, not data_dir and not '*'."""
+    from app.git_http.server import _git_http_backend_environ
+
+    served = repo_bare_path(str(tmp_path), "demo-cc")
+    env = _git_http_backend_environ(str(tmp_path), {}, safe_directory=served)
+
+    count = int(env["GIT_CONFIG_COUNT"])
+    pairs = {env[f"GIT_CONFIG_KEY_{i}"]: env[f"GIT_CONFIG_VALUE_{i}"] for i in range(count)}
+    assert pairs["safe.directory"] == served
+    assert pairs["safe.directory"] not in ("*", str(tmp_path))
+
+
+def test_operator_supplied_git_config_is_preserved(tmp_path, monkeypatch):
+    """Appending must not clobber GIT_CONFIG_* already set on the container.
+
+    Operators set these as the out-of-band workaround; silently dropping them
+    on upgrade would regress whatever else they configured.
+    """
+    from app.git_http.server import _git_http_backend_environ
+
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "http.postBuffer")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "524288000")
+
+    served = repo_bare_path(str(tmp_path), "demo-cc")
+    env = _git_http_backend_environ(str(tmp_path), {}, safe_directory=served)
+
+    count = int(env["GIT_CONFIG_COUNT"])
+    assert count == 2
+    pairs = {env[f"GIT_CONFIG_KEY_{i}"]: env[f"GIT_CONFIG_VALUE_{i}"] for i in range(count)}
+    assert pairs["http.postBuffer"] == "524288000"
+    assert pairs["safe.directory"] == served
+
+
+def test_backend_stderr_logged_even_when_exit_code_is_zero(caplog):
+    """http-backend dies via CGI Status: 5xx and exits 0 — must still log.
+
+    This is the regression that hid the 500: the old guard returned early on
+    rc == 0, so the only copy of git's message went to the response body.
+    """
+    import logging
+    import subprocess as sp
+
+    from app.git_http.server import _log_proc_stderr
+
+    proc = sp.Popen(["printf", "%s", ""], stdout=sp.PIPE, stderr=sp.PIPE)
+    proc.wait()
+    proc.stderr = io.BytesIO(b"fatal: detected dubious ownership in repository at '/x.git'")
+
+    with caplog.at_level(logging.WARNING, logger="app.git_http.server"):
+        _log_proc_stderr(proc, "/git/x.git/info/refs", "500 Internal Server Error")
+
+    assert proc.returncode == 0
+    assert "dubious ownership" in caplog.text
+    assert "status=500 Internal Server Error" in caplog.text
+
+
+def test_healthy_request_does_not_warn(caplog):
+    """Quiet on success: empty stderr + 200 must produce no WARNING."""
+    import logging
+    import subprocess as sp
+
+    from app.git_http.server import _log_proc_stderr
+
+    proc = sp.Popen(["printf", "%s", ""], stdout=sp.PIPE, stderr=sp.PIPE)
+    proc.wait()
+    proc.stderr = io.BytesIO(b"")
+
+    with caplog.at_level(logging.WARNING, logger="app.git_http.server"):
+        _log_proc_stderr(proc, "/git/x.git/info/refs", "200 OK")
+
+    assert caplog.text == ""
+
+
+def test_safe_directory_resolves_symlinked_data_dir(tmp_path):
+    """A symlinked data_dir must still produce a matching safe.directory.
+
+    git compares safe.directory against the RESOLVED gitdir, so an
+    unresolved path would silently fail to match and still 500. Deployments
+    where data_dir traverses a symlink are the realistic case.
+    """
+    from app.git_http.server import _git_http_backend_environ
+
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real)
+
+    bare = repo_bare_path(str(link), "demo-cc")
+    _init_bare_repo(bare)
+
+    env = _git_http_backend_environ(str(link), {}, safe_directory=bare)
+    count = int(env["GIT_CONFIG_COUNT"])
+    pairs = {env[f"GIT_CONFIG_KEY_{i}"]: env[f"GIT_CONFIG_VALUE_{i}"] for i in range(count)}
+
+    assert pairs["safe.directory"] == os.path.realpath(bare)
+    assert pairs["safe.directory"] == str(real.resolve() / "demo-cc.git")
+
+
+def test_clone_succeeds_through_symlinked_data_dir_when_foreign_owned(tmp_path, monkeypatch):
+    """End-to-end: symlinked data_dir + foreign ownership must still serve."""
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real)
+    _init_bare_repo(repo_bare_path(str(link), "demo-cc"))
+    monkeypatch.setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+
+    api = FastAPI()
+    api.mount("/git", WSGIMiddleware(make_git_wsgi_app(str(link))))
+
+    with TestClient(api) as client:
+        resp = client.get(
+            "/git/demo-cc.git/info/refs",
+            params={"service": "git-upload-pack"},
+            headers={"Accept": "*/*"},
+        )
+
+    assert resp.status_code == 200, resp.content[:500]
+    assert b"refs/heads/" in resp.content
