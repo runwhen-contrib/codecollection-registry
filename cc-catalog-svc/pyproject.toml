@@ -16,7 +16,7 @@ license = { text = "Apache-2.0" }
 # Pinned reasonably; this service is intentionally small so we keep the
 # dependency surface tight. No Celery, no Redis, no AI deps.
 dependencies = [
-    "fastapi>=0.115,<0.120",
+    "fastapi>=0.143,<0.144",
     "uvicorn[standard]>=0.30,<0.40",
     "pydantic>=2.7,<3",
     "pydantic-settings>=2.4,<3",
