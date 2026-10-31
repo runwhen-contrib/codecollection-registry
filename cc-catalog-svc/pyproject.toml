@@ -28,6 +28,14 @@ dependencies = [
     # Optional Postgres support: import is lazy in db.py
     "psycopg2-binary>=2.9; extra == 'postgres'",
     "a2wsgi (>=1.10,<2)",
+    # Optional OTLP telemetry (producer side). Off unless the standard OTEL_*
+    # env vars are set — see app/telemetry.py. Both transports are shipped so
+    # OTEL_EXPORTER_OTLP_PROTOCOL (default http/protobuf) can pick either.
+    "opentelemetry-api>=1.45,<2",
+    "opentelemetry-sdk>=1.45,<2",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.45,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.45,<2",
+    "opentelemetry-instrumentation-fastapi>=0.66b0,<0.67",
 ]
 
 [project.optional-dependencies]

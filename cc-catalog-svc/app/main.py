@@ -30,6 +30,14 @@ from app.config import get_settings, load_config, get_config
 from app.db import get_engine, init_db
 from app.routers import admin, catalog, git, health, mirror
 from app.scheduler import start_scheduler, stop_scheduler
+from app.telemetry import (
+    instrument_fastapi,
+    resolve_service_name,
+    setup_logging_export,
+    setup_metrics,
+    setup_telemetry,
+    shutdown_telemetry,
+)
 
 
 def _configure_logging() -> None:
@@ -45,6 +53,15 @@ async def lifespan(app: FastAPI):
     _configure_logging()
     logger = logging.getLogger("cc-catalog-svc")
     logger.info("starting cc-catalog-svc v%s", __version__)
+
+    # Optional OTLP telemetry. Off unless the standard OTEL_* env vars are set,
+    # and every setup call swallows its own errors so this startup path can
+    # never be the reason the service fails to come up. One resolved name is
+    # shared by all signals so traces/logs/metrics cannot disagree.
+    otel_service_name = resolve_service_name()
+    setup_telemetry(service_name=otel_service_name)
+    setup_logging_export(service_name=otel_service_name)
+    setup_metrics(service_name=otel_service_name)
 
     load_config()
     init_db()
@@ -100,6 +117,7 @@ async def lifespan(app: FastAPI):
             get_engine().dispose()
         except Exception:
             logger.exception("engine.dispose() failed during shutdown")
+        shutdown_telemetry()
 
 
 app = FastAPI(
@@ -122,6 +140,10 @@ app.include_router(catalog.router)
 app.include_router(mirror.router)
 app.include_router(git.router)
 app.include_router(admin.router)
+
+# OTel FastAPI instrumentation must be applied before the app starts; it is a
+# no-op unless OTEL_TRACES_EXPORTER=otlp and a trace endpoint are set.
+instrument_fastapi(app)
 
 
 def run() -> None:  # pragma: no cover - thin wrapper for `cc-catalog-svc` script
