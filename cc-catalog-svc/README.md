@@ -224,3 +224,4 @@ without network, without Postgres.
 - [docs/GIT_MIRROR.md](docs/GIT_MIRROR.md) — git mirror hosting for air-gap deployments
 - [docs/PAPI_INTEGRATION.md](docs/PAPI_INTEGRATION.md) — how PAPI consumes the catalog and the `?destination=` extension
 - `cc-registry-v2/docs/CCV.md` — the contract this service is compatible with (in the sibling project)
+ 
