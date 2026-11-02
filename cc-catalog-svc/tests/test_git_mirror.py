@@ -427,3 +427,36 @@ def test_init_db_adds_missing_git_columns(tmp_path, monkeypatch):
     eng2.dispose()
     for col in ("git_head_commit", "git_last_synced", "git_last_sync_error"):
         assert col in cols, f"upgrade did not add {col}"
+
+
+def test_init_db_adds_missing_capability_schemas_column(tmp_path, monkeypatch):
+    """Upgrade path: pre-existing capability_versions table gains schemas_text."""
+    from sqlalchemy import create_engine, text
+
+    db_url = f"sqlite:///{tmp_path}/upgrade.db"
+    monkeypatch.setenv("CC_CATALOG_DB_URL", db_url)
+    from app.config import get_settings
+    from app import db as db_mod
+
+    get_settings.cache_clear()
+    db_mod._engine = None
+    db_mod._SessionLocal = None
+
+    eng = create_engine(db_url, future=True)
+    with eng.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE capability_versions ("
+                "id INTEGER PRIMARY KEY, codecollection VARCHAR(200) NOT NULL, "
+                "ref VARCHAR(500) NOT NULL, image_digest VARCHAR(120) NOT NULL, "
+                "image VARCHAR(1000) NOT NULL, manifest_text TEXT NOT NULL)"
+            )
+        )
+    eng.dispose()
+
+    db_mod.init_db()
+    eng2 = create_engine(db_url, future=True)
+    with eng2.connect() as conn:
+        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(capability_versions)"))}
+    eng2.dispose()
+    assert "schemas_text" in cols, "upgrade did not add schemas_text"

@@ -42,6 +42,9 @@ _LEGACY_COLUMN_ADDITIONS: dict[str, dict[str, str]] = {
         "git_last_synced": "TIMESTAMP",
         "git_last_sync_error": "TEXT",
     },
+    "capability_versions": {
+        "schemas_text": "TEXT",
+    },
 }
 
 _engine: Engine | None = None

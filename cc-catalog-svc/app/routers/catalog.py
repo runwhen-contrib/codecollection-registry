@@ -21,16 +21,21 @@ All endpoints are read-only and unauthenticated by design.
 
 from __future__ import annotations
 
+import json
+import logging
 from typing import Optional
 
+import yaml
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.config import get_config
 from app.db import db_session
-from app.models import CodeCollection, Destination, ImageRef, MirrorTarget
+from app.models import CapabilityVersion, CodeCollection, Destination, ImageRef, MirrorTarget
 from app.schemas.catalog import (
+    CapabilitiesResponse,
+    CapabilityEntry,
     CatalogEntry,
     CatalogEntryDetail,
     ImageRef as ImageRefSchema,
@@ -43,6 +48,8 @@ from app.services.catalog import (
     get_cc_by_slug,
 )
 from app.services.git_mirror import resolve_git_url_for_catalog
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/catalog", tags=["catalog"])
 
@@ -223,6 +230,84 @@ def resolve_image(
         _attach_destination(db, response, cc.id, selected, destination)
 
     return response
+
+
+# ---------------------------------------------------------------------------
+# capabilities
+#
+# `kind: capability` entries never produce a codecollections row (see
+# app.services.catalog_poll), so they're entirely absent from every
+# /codecollections* endpoint above. They're served here instead.
+# ---------------------------------------------------------------------------
+def _to_capability_entry(row: CapabilityVersion) -> Optional[CapabilityEntry]:
+    """Build the wire entry for one row, or None if it's invalid.
+
+    `capability`/`version` are required on `CapabilityEntry` (they're the
+    fields PAPI keys catalog rows on). A row missing either — a stale row
+    from before that requirement, or a future bug — is dropped from the
+    response with a warning rather than failing `response_model` validation
+    for every entry in the listing; valid entries stay unaffected.
+    """
+    if not row.capability or not row.version:
+        logger.warning(
+            "capability catalog: %s@%s is missing capability/version; omitting from the response",
+            row.codecollection,
+            row.ref,
+        )
+        return None
+    manifest: Optional[dict] = None
+    try:
+        parsed = yaml.safe_load(row.manifest_text)
+        if isinstance(parsed, dict):
+            manifest = parsed
+    except yaml.YAMLError:
+        logger.warning(
+            "capability catalog: %s@%s has unparseable manifest_text",
+            row.codecollection,
+            row.ref,
+        )
+    schemas: Optional[dict] = None
+    if row.schemas_text:
+        try:
+            parsed_schemas = json.loads(row.schemas_text)
+            if isinstance(parsed_schemas, dict):
+                schemas = parsed_schemas
+        except json.JSONDecodeError:
+            logger.warning(
+                "capability catalog: %s@%s has unparseable schemas_text",
+                row.codecollection,
+                row.ref,
+            )
+    return CapabilityEntry(
+        capability=row.capability,
+        version=row.version,
+        codecollection=row.codecollection,
+        ref=row.ref,
+        ref_type=row.ref_type,
+        commit_hash=row.commit_hash,
+        image_tag=row.image_tag,
+        image_digest=row.image_digest,
+        image=row.image,
+        manifest_text=row.manifest_text,
+        manifest=manifest,
+        schemas_text=row.schemas_text,
+        schemas=schemas,
+        synced_at=row.synced_at,
+    )
+
+
+@router.get("/capabilities", response_model=CapabilitiesResponse)
+def list_capabilities(
+    capability: Optional[str] = Query(None, description="Filter by capability id."),
+    db: Session = Depends(db_session),
+) -> CapabilitiesResponse:
+    stmt = select(CapabilityVersion)
+    if capability:
+        stmt = stmt.where(CapabilityVersion.capability == capability)
+    stmt = stmt.order_by(CapabilityVersion.capability, CapabilityVersion.ref)
+    rows = db.execute(stmt).scalars().all()
+    entries = [e for e in (_to_capability_entry(r) for r in rows) if e is not None]
+    return CapabilitiesResponse(capabilities=entries)
 
 
 def _attach_destination(
