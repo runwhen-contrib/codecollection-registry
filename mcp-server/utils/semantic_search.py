@@ -187,7 +187,7 @@ class SemanticSearch:
                 tags=meta.get('tags', '').split(',') if meta.get('tags') else [],
                 score=result.score,
                 # Use registry URL with 'name' (folder name) not 'slug' (which has collection prefix)
-                git_url=f"/collections/{meta.get('collection_slug', '')}/codebundles/{codebundle_name}",
+                git_url=f"/plugins/{meta.get('collection_slug', '')}/skills/{codebundle_name}",
                 tasks=tasks,
                 capabilities=capabilities
             ))

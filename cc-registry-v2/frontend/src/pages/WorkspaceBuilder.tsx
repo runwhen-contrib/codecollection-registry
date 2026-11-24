@@ -86,12 +86,12 @@ defaultLOD: "${workspaceInfo.defaultLOD}"
 papiURL: "${workspaceInfo.papiURL}"
 token: "${workspaceInfo.token}"
 
-# Code Collections (from your cart)
+# Plugins (from your cart)
 codeCollections:${repositoryConfigs.length > 0 ? repositoryConfigs.map(repo => `
   - repoURL: "${repo.git_url}"
     ref: "${repo.git_ref || 'main'}"
     name: "${repo.collection_name}"`) : `
-  # No code collections selected`}
+  # No plugins selected`}
 `;
 
     return yamlContent;
@@ -121,7 +121,7 @@ codeCollections:${repositoryConfigs.length > 0 ? repositoryConfigs.map(repo => `
           </Typography>
           <Typography variant="h6" color="text.secondary" sx={{ mb: 4, maxWidth: 600, mx: 'auto' }}>
             Create a workspaceInfo.yaml file for RunWhen Local deployment. 
-            This lightweight configuration focuses on workspace settings and code collections.
+            This lightweight configuration focuses on workspace settings and plugins.
           </Typography>
           
           <Alert severity="info" sx={{ mb: 4, maxWidth: 800, mx: 'auto' }}>
@@ -142,7 +142,7 @@ codeCollections:${repositoryConfigs.length > 0 ? repositoryConfigs.map(repo => `
               Start Workspace Builder
             </Button>
             <Typography variant="body2" color="text.secondary">
-              {items.length > 0 ? `${items.length} code collections selected` : 'No code collections selected'}
+              {items.length > 0 ? `${items.length} Plugins selected` : 'No Plugins selected'}
             </Typography>
           </Box>
         </Box>

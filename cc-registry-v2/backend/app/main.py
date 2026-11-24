@@ -263,12 +263,12 @@ async def get_all_tasks(
     limit: int = 100,
     offset: int = 0
 ):
-    """Search Tools (formerly "tasks") across all Skill Templates (codebundles) with filtering and pagination.
+    """Search Tools (formerly "tasks") across all Skills (codebundles) with filtering and pagination.
 
     The path `/api/v1/registry/tasks` and the JSON field `tasks[]` are kept for backward
     compatibility. Each returned item carries a `type` field of `"TaskSet"` (Runbook) or
     `"SLI"` (Monitor). User-facing surfaces (UI, MCP markdown, chat) map these to the
-    new vocabulary (Skill Template, Tool, Runbook, Monitor)."""
+    new vocabulary (Skill, Tool, Runbook, Monitor)."""
     try:
         from app.core.database import SessionLocal
         from app.models import CodeCollection, Codebundle
@@ -336,31 +336,46 @@ async def get_all_tasks(
                 if codebundle.support_tags:
                     clean_support_tags = [tag.strip() for tag in codebundle.support_tags if tag and tag.strip()]
                 
-                # Add TaskSet tasks (handle both old string format and new object format)
+                # Add TaskSet tasks (handle both old string format and new V13 object format)
                 if codebundle.tasks:
                     for task in codebundle.tasks:
+                        task_desc = codebundle.description
+                        read_only = None
+                        task_tags = []
+                        task_slug = None
+                        task_title = None
+
                         # Handle both old string format and new object format
                         if isinstance(task, str):
                             # Old format - just task name
                             task_name = task
                             task_id = codebundle.task_index.get(task_name, f"{codebundle.id}_task_{hash(task_name) % 10000}")
                         elif isinstance(task, dict):
-                            # New format - task object
-                            task_name = task.get('name', 'Unknown Task')
+                            # V13 plugin task object
+                            task_title = task.get('title')
+                            task_slug = task.get('name')
+                            task_name = task_title or task_slug or 'Unknown Task'
                             task_id = task.get('id', f"{codebundle.id}_task_{hash(task_name) % 10000}")
+                            task_desc = task.get('description') or task.get('doc') or codebundle.description
+                            read_only = task.get('readOnly', True)
+                            task_tags = [t.strip() for t in (task.get('tags') or []) if t]
                         else:
                             continue
                         
                         all_tasks.append({
                             "id": task_id,
                             "name": task_name,
+                            "title": task_title,
+                            "slug": task_slug,
                             "type": "TaskSet",
                             "codebundle_id": codebundle.id,
                             "codebundle_name": codebundle.display_name or codebundle.name,
                             "codebundle_slug": codebundle.slug,
                             "collection_name": codebundle.codecollection.name,
                             "collection_slug": codebundle.codecollection.slug,
-                            "description": codebundle.description,
+                            "description": task_desc,
+                            "read_only": read_only,
+                            "task_tags": task_tags,
                             "support_tags": clean_support_tags,
                             "categories": codebundle.categories or [],
                             "author": codebundle.author,
@@ -639,7 +654,8 @@ async def list_codebundles(
                         "id": collection.id,
                         "name": collection.name,
                         "slug": collection.slug,
-                        "git_url": collection.git_url
+                        "git_url": collection.git_url,
+                        "git_ref": collection.git_ref,
                     } if collection else None
                 })
             
@@ -742,7 +758,8 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
                     "id": collection.id,
                     "name": collection.name,
                     "slug": collection.slug,
-                    "git_url": collection.git_url
+                    "git_url": collection.git_url,
+                    "git_ref": collection.git_ref,
                 }
             }
         finally:

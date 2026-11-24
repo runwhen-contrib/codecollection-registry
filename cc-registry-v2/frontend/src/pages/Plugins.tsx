@@ -36,7 +36,7 @@ import {
 import { Link } from 'react-router-dom';
 import { apiService, CodeCollection, CodeCollectionVersion } from '../services/api';
 
-const CodeCollections: React.FC = () => {
+const Plugins: React.FC = () => {
   const [collections, setCollections] = useState<CodeCollection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +54,7 @@ const CodeCollections: React.FC = () => {
           setCollections(collectionsData);
         }
       } catch (err) {
-        setError('Failed to load collections');
+        setError('Failed to load plugins');
         console.error('Error fetching data:', err);
       } finally {
         setLoading(false);
@@ -86,10 +86,10 @@ const CodeCollections: React.FC = () => {
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
-          CodeCollections
+          Plugins
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Browse and explore automation code collections from the RunWhen community
+          Browse and explore V13 automation plugins from the RunWhen community
         </Typography>
       </Box>
 
@@ -116,10 +116,10 @@ const CodeCollections: React.FC = () => {
               },
             }}
           >
-            {/* Collection Header */}
+            {/* Plugin Header */}
             <CardActionArea
               component={Link}
-              to={`/collections/${collection.slug}`}
+              to={`/plugins/${collection.slug}`}
               sx={{ flexGrow: 1 }}
             >
               <CardContent>
@@ -171,7 +171,7 @@ const CodeCollections: React.FC = () => {
                         {collection.statistics.codebundle_count}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        CodeBundles
+                        Skills
                       </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -180,7 +180,7 @@ const CodeCollections: React.FC = () => {
                         {collection.statistics.total_tasks}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Tasks
+                        Tools
                       </Typography>
                     </Box>
                   </Box>
@@ -228,10 +228,10 @@ const CodeCollections: React.FC = () => {
         <Card sx={{ p: 6, textAlign: 'center' }}>
           <CodeIcon sx={{ fontSize: '4rem', color: 'text.secondary', mb: 2 }} />
           <Typography variant="h5" sx={{ mb: 1, fontWeight: 600 }}>
-            No CodeCollections Found
+            No Plugins Found
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            There are currently no CodeCollections available in the registry
+            There are currently no Plugins available in the registry
           </Typography>
         </Card>
       )}
@@ -239,4 +239,4 @@ const CodeCollections: React.FC = () => {
   );
 };
 
-export default CodeCollections;
+export default Plugins;

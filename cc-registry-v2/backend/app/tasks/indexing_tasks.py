@@ -42,9 +42,12 @@ def _rows_to_dicts(rows, collection_slug_map: Dict[int, str]) -> List[Dict[str, 
             "description": cb.description,
             "ai_enhanced_description": cb.ai_enhanced_description,
             "readme": cb.readme,
+            "doc": cb.doc,
             "support_tags": cb.support_tags or [],
             "tasks": cb.tasks or [],
             "discovery_platform": cb.discovery_platform,
+            "discovery_resource_types": cb.discovery_resource_types or [],
+            "runbook_source_url": cb.runbook_source_url,
             "collection_slug": coll_slug,
         }
         results.append(d)

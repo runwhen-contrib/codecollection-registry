@@ -41,7 +41,7 @@ export default function IntakeWizard() {
   const [submitResult, setSubmitResult] = useState<{ url: string; number: number } | null>(null);
   const [error, setError] = useState('');
 
-  // Pre-fill from Chat "Request CodeBundle" or other entry points
+  // Pre-fill from Chat "Request Skill" or other entry points
   useEffect(() => {
     const state = location.state as { initialQuery?: string } | null;
     if (state?.initialQuery?.trim()) {
@@ -51,7 +51,7 @@ export default function IntakeWizard() {
 
   const buildTitle = () => {
     const firstLine = problemDescription.split('\n')[0].trim();
-    return firstLine.length > 60 ? firstLine.slice(0, 57) + '...' : firstLine || 'Skill Template request';
+    return firstLine.length > 60 ? firstLine.slice(0, 57) + '...' : firstLine || 'Skill request';
   };
 
   const buildDescription = () => {
@@ -134,7 +134,7 @@ export default function IntakeWizard() {
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Box sx={{ mb: 4, textAlign: 'center' }}>
         <Typography variant="h4" gutterBottom>
-          Request a Skill Template
+          Request a Skill
         </Typography>
         <Typography variant="body1" color="text.secondary">
           Describe the problem you're solving. The designer will figure out the rest.
@@ -302,7 +302,7 @@ export default function IntakeWizard() {
           {submitting ? 'Searching & Submitting...' : 'Search & Submit'}
         </Button>
         <Typography variant="caption" display="block" sx={{ mt: 2, textAlign: 'center', color: 'text.secondary' }}>
-          We search existing Skill Templates first, then create your request with the results attached for the designer.
+          We search existing Skills first, then create your request with the results attached for the designer.
         </Typography>
       </Paper>
     </Container>

@@ -34,16 +34,15 @@ InternalType = Literal["TaskSet", "SLI", "CodeBundle"]
 TYPE_LABELS: dict[str, dict[str, str]] = {
     "TaskSet": {"singular": "Runbook", "plural": "Runbooks"},
     "SLI": {"singular": "Monitor", "plural": "Monitors"},
-    "CodeBundle": {"singular": "Skill Template", "plural": "Skill Templates"},
+    "CodeBundle": {"singular": "Skill", "plural": "Skills"},
 }
 
 CONCEPTS: dict[str, dict[str, str]] = {
     "TASK": {"singular": "Tool", "plural": "Tools"},
-    "CODEBUNDLE": {"singular": "Skill Template", "plural": "Skill Templates"},
-    # Runtime instantiation of a Skill Template (vars/secrets materialised
-    # inside a workspace). Used colloquially as an umbrella term in page titles.
+    "CODEBUNDLE": {"singular": "Skill", "plural": "Skills"},
+    # Runtime instantiation of a Skill inside a workspace.
     "SKILL": {"singular": "Skill", "plural": "Skills"},
-    "CODECOLLECTION": {"singular": "CodeCollection", "plural": "CodeCollections"},
+    "CODECOLLECTION": {"singular": "Plugin", "plural": "Plugins"},
     "SLI": {"singular": "Monitor", "plural": "Monitors"},
     "TASKSET": {"singular": "Runbook", "plural": "Runbooks"},
 }

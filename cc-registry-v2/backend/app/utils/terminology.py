@@ -8,19 +8,17 @@ byte-identical to the previous schema.
 
 Mapping (internal -> display):
     Task        -> Tool
-    CodeBundle  -> Skill Template
+    CodeBundle  -> Skill
     SLI         -> Monitor    (scheduled, continuous, numeric output)
     TaskSet     -> Runbook    (on-demand, event-triggered, findings)
+    CodeCollection -> Plugin
 
 Lifecycle distinction:
-    - A **Skill Template** is the registry-side, parameterised package
-      (formerly "CodeBundle"). Vars and secrets are unresolved placeholders.
-    - A **Skill** is the runtime instantiation of a Skill Template inside a
-      workspace, with vars/secrets materialised against real infrastructure.
-      The registry itself never holds Skills - only Skill Templates - but
-      the umbrella word "Skill" is used colloquially in user-facing page
-      titles and chat copy (e.g. "All Skills") because it reads naturally
-      and aligns with industry usage (Anthropic Agent Skills, etc.).
+    - A **Skill** is the registry-side, parameterised package (formerly
+      "CodeBundle"). Vars and secrets are unresolved placeholders.
+    - A **Plugin** groups Skills with their platform integration (resource
+      types, facets, credentials) and is backed by a git repository
+      (formerly "CodeCollection").
 
 The backend continues to emit ``type: "TaskSet" | "SLI" | "CodeBundle"`` on
 ``/api/v1/registry/tasks`` for backward compatibility. This module is used
@@ -36,17 +34,15 @@ InternalType = Literal["TaskSet", "SLI", "CodeBundle"]
 TYPE_LABELS: dict[str, dict[str, str]] = {
     "TaskSet": {"singular": "Runbook", "plural": "Runbooks"},
     "SLI": {"singular": "Monitor", "plural": "Monitors"},
-    "CodeBundle": {"singular": "Skill Template", "plural": "Skill Templates"},
+    "CodeBundle": {"singular": "Skill", "plural": "Skills"},
 }
 
 CONCEPTS: dict[str, dict[str, str]] = {
     "TASK": {"singular": "Tool", "plural": "Tools"},
-    "CODEBUNDLE": {"singular": "Skill Template", "plural": "Skill Templates"},
-    # Runtime instantiation of a Skill Template (vars/secrets materialised
-    # inside a workspace). The registry itself only stores Skill Templates,
-    # but "Skill" is the umbrella word used in user-facing page titles.
+    "CODEBUNDLE": {"singular": "Skill", "plural": "Skills"},
+    # Runtime instantiation of a Skill inside a workspace.
     "SKILL": {"singular": "Skill", "plural": "Skills"},
-    "CODECOLLECTION": {"singular": "CodeCollection", "plural": "CodeCollections"},
+    "CODECOLLECTION": {"singular": "Plugin", "plural": "Plugins"},
     "SLI": {"singular": "Monitor", "plural": "Monitors"},
     "TASKSET": {"singular": "Runbook", "plural": "Runbooks"},
 }
@@ -54,14 +50,11 @@ CONCEPTS: dict[str, dict[str, str]] = {
 VOCABULARY_BLOCK = """\
 RunWhen registry vocabulary (2026):
 - Tool: an invocable unit (formerly "Task").
-- Skill Template: a reusable, parameterised package of Tools that lives
-  in the registry (formerly "CodeBundle"). Has placeholder vars and
+- Skill: a reusable, parameterised package of Tools that lives in a
+  Plugin in the registry (formerly "CodeBundle"). Has placeholder vars and
   unresolved secrets.
-- Skill: the RUNTIME instantiation of a Skill Template inside a workspace,
-  with vars/secrets materialised against real infrastructure. The registry
-  itself only stores Skill Templates; Skills only exist at runtime in a
-  workspace. The umbrella word "Skill" is used colloquially in page titles
-  and chat copy (e.g. "All Skills").
+- Plugin: a git-repo-level grouping of Skills and their platform
+  integration (formerly "CodeCollection").
 - Monitor: a Tool that runs on a schedule, continuously, in the background
   and emits a numeric 0-1 health value (formerly "SLI").
 - Runbook: a Tool that runs on demand in response to an event or request

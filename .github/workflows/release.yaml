@@ -8,6 +8,7 @@ on:
       - 'cc-registry-v2/**'
       - 'cc-catalog-svc/**'
       - 'mcp-server/**'
+      - 'codecollections.yaml'
       - '.github/workflows/release.yaml'
 
   workflow_dispatch:
@@ -77,6 +78,9 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Copy codecollections.yaml to backend build context
+        run: cp codecollections.yaml cc-registry-v2/backend/codecollections.yaml
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2

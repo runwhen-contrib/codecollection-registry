@@ -4,9 +4,9 @@
 
 documentation:
   codebundle_development:
-    - name: CodeBundle Development Guide
+    - name: Skill Development Guide
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development
-      description: Complete guide to developing RunWhen Skill Templates (formerly "CodeBundles") including structure, syntax, and best practices
+      description: Complete guide to developing RunWhen Skills (formerly "CodeBundles") including structure, syntax, and best practices
       keywords:
         - development
         - best-practices
@@ -17,7 +17,7 @@ documentation:
 
     - name: Robot Framework Basics
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/robot-framework-basics
-      description: Introduction to Robot Framework syntax for Skill Template (formerly "CodeBundle") development
+      description: Introduction to Robot Framework syntax for Skill development
       keywords:
         - robot
         - robot-framework
@@ -77,7 +77,7 @@ documentation:
 
     - name: RW.Core Library
       url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-core
-      description: Core utility functions for CodeBundle development
+      description: Core utility functions for Skill development
       keywords:
         - core
         - utilities
@@ -157,7 +157,7 @@ documentation:
       url: https://docs.runwhen.com/public/v/runwhen-local/user-guide/features/getting-started
       description: |
         RunWhen Local is a container-based tool that runs on your local machine or inside your Kubernetes cluster.
-        It discovers your cloud and Kubernetes resources, matches them to relevant CodeBundles, and generates
+        It discovers your cloud and Kubernetes resources, matches them to relevant Skills, and generates
         troubleshooting commands you can run immediately.
 
         Installation methods:
@@ -223,7 +223,7 @@ documentation:
       description: |
         RunWhen Local provides these key features:
         - **Resource Discovery**: Automatically discovers Kubernetes workloads, cloud resources, and infrastructure
-        - **CodeBundle Matching**: Maps discovered resources to relevant troubleshooting CodeBundles
+        - **Skill Matching**: Maps discovered resources to relevant troubleshooting Skills
         - **Troubleshooting Commands**: Generates ready-to-run commands for common issues
         - **Map View**: Visual map of your infrastructure and its health
         - **Custom Workspaces**: Organize resources by team, environment, or project
@@ -236,7 +236,7 @@ documentation:
         - overview
 
   faq:
-    - name: How do I use kubectl in a CodeBundle?
+    - name: How do I use kubectl in a Skill?
       url: https://docs.runwhen.com/public/runwhen-authors/keyword-libraries/rw-cli
       description: |
         Use the RW.CLI.Run Cli keyword with your kubectl command:
@@ -261,10 +261,10 @@ documentation:
         - credentials
         - authentication
 
-    - name: How do I debug a CodeBundle?
+    - name: How do I debug a Skill?
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/debugging
       description: |
-        Tips for debugging CodeBundles:
+        Tips for debugging Skills:
         1. Use Log statements to output variable values
         2. Test locally with robot command
         3. Check the RunSession logs in the platform
@@ -277,8 +277,8 @@ documentation:
     - name: What is the difference between SLI and TaskSet?
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development
       description: |
-        SLI (Service Level Indicator) CodeBundles measure a metric and return a numeric value.
-        TaskSet CodeBundles run automated runbooks with multiple tasks that can be triggered.
+        Monitor Skills (formerly SLIs / Service Level Indicators) measure a metric and return a numeric value.
+        Runbook Skills run automated workflows with multiple tools that can be triggered.
         Use SLIs for monitoring, TaskSets for remediation and troubleshooting.
       keywords:
         - sli
@@ -286,12 +286,12 @@ documentation:
         - difference
         - types
 
-    - name: How do I contribute a CodeBundle?
+    - name: How do I contribute a Skill?
       url: https://docs.runwhen.com/public/runwhen-authors/contributing
       description: |
-        To contribute a CodeBundle:
+        To contribute a Skill:
         1. Fork the appropriate codecollection repository
-        2. Create your CodeBundle following the development guide
+        2. Create your Skill following the development guide
         3. Submit a pull request
         4. The community will review and merge
       keywords:

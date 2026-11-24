@@ -19,7 +19,7 @@ import {
 import { useParams, Link } from 'react-router-dom';
 import { apiService, CodeCollection, CodeCollectionVersion } from '../services/api';
 
-const CodeCollectionDetail: React.FC = () => {
+const PluginDetail: React.FC = () => {
   const { collectionSlug } = useParams<{ collectionSlug: string }>();
   const [collection, setCollection] = useState<CodeCollection | null>(null);
   const [versions, setVersions] = useState<CodeCollectionVersion[]>([]);
@@ -37,7 +37,7 @@ const CodeCollectionDetail: React.FC = () => {
           apiService.getCollectionVersions(collectionSlug)
         ]);
         
-        console.log('Collection data:', collectionData);
+        console.log('Plugin data:', collectionData);
         console.log('Versions data:', versionsData);
         console.log('Number of versions:', versionsData.length);
         
@@ -74,7 +74,7 @@ const CodeCollectionDetail: React.FC = () => {
   if (!collection) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Alert severity="warning">Collection not found</Alert>
+        <Alert severity="warning">Plugin not found</Alert>
       </Container>
     );
   }
@@ -117,13 +117,13 @@ const CodeCollectionDetail: React.FC = () => {
                 <>
                   <Chip 
                     icon={<CodeIcon />}
-                    label={`${collection.statistics.codebundle_count} CodeBundles`} 
+                    label={`${collection.statistics.codebundle_count} Skills`} 
                     size="small" 
                     variant="outlined"
                   />
                   <Chip 
                     icon={<TaskIcon />}
-                    label={`${collection.statistics.total_tasks} Tasks`} 
+                    label={`${collection.statistics.total_tasks} Tools`} 
                     size="small" 
                     variant="outlined"
                   />
@@ -149,7 +149,7 @@ const CodeCollectionDetail: React.FC = () => {
 
       </Card>
 
-      {/* Collection Information */}
+      {/* Plugin Information */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3, mb: 4 }}>
         {/* Repository Information */}
         <Card>
@@ -266,7 +266,7 @@ const CodeCollectionDetail: React.FC = () => {
                       key={version.id}
                       label={version.version_name}
                       component={Link}
-                      to={`/collections/${collection.slug}/versions/${version.version_name}`}
+                      to={`/plugins/${collection.slug}/versions/${version.version_name}`}
                       clickable
                       size="medium"
                       variant={version.is_latest ? "filled" : "outlined"}
@@ -357,7 +357,7 @@ const CodeCollectionDetail: React.FC = () => {
                         {version.codebundle_count !== undefined && (
                           <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <CodeIcon sx={{ fontSize: '1rem' }} />
-                            {version.codebundle_count} CodeBundle{version.codebundle_count !== 1 ? 's' : ''}
+                            {version.codebundle_count} Skill{version.codebundle_count !== 1 ? 's' : ''}
                           </Typography>
                         )}
                       </Box>
@@ -365,7 +365,7 @@ const CodeCollectionDetail: React.FC = () => {
                     
                     <Button
                       component={Link}
-                      to={`/collections/${collection.slug}/versions/${version.version_name}`}
+                      to={`/plugins/${collection.slug}/versions/${version.version_name}`}
                       variant={version.is_latest ? "contained" : "outlined"}
                       size="small"
                     >
@@ -423,21 +423,21 @@ const CodeCollectionDetail: React.FC = () => {
         </Box>
       )}
 
-      {/* Browse CodeBundles Link */}
+      {/* Browse Skills Link */}
       <Card sx={{ mt: 3, p: 3, textAlign: 'center', bgcolor: 'action.hover' }}>
         <Typography variant="h6" sx={{ mb: 1 }}>
-          Browse CodeBundles
+          Browse Skills
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          View all CodeBundles from this collection
+          View all Skills from this plugin
         </Typography>
         <Button
           component={Link}
-          to={`/codebundles?collection=${collection.id}`}
+          to={`/skills?collection=${collection.id}`}
           variant="contained"
           startIcon={<CodeIcon />}
         >
-          View All CodeBundles
+          View All Skills
         </Button>
       </Card>
 
@@ -445,4 +445,4 @@ const CodeCollectionDetail: React.FC = () => {
   );
 };
 
-export default CodeCollectionDetail;
+export default PluginDetail;

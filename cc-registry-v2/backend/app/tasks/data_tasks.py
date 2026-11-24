@@ -142,7 +142,16 @@ def clone_repositories_task(self, previous_result=None, collection_slugs: List[s
                 with tempfile.TemporaryDirectory() as temp_dir:
                     # Clone repository
                     repo = Repo.clone_from(git_url, temp_dir, branch=git_ref, depth=1)
-                    
+
+                    # For V13 monorepos, store only this collection's plugin
+                    # files so six collections don't each persist every skill.
+                    plugin_path = collection_data.get('plugin_path')
+                    plugin_prefix = None
+                    if plugin_path and os.path.isdir(os.path.join(temp_dir, plugin_path)):
+                        plugin_prefix = plugin_path.rstrip('/') + '/'
+                    elif os.path.isdir(os.path.join(temp_dir, 'plugins', collection_slug)):
+                        plugin_prefix = f"plugins/{collection_slug}/"
+
                     # Walk through files
                     for root, dirs, files in os.walk(temp_dir):
                         # Skip .git directory
@@ -152,6 +161,9 @@ def clone_repositories_task(self, previous_result=None, collection_slugs: List[s
                         for file in files:
                             file_path = os.path.join(root, file)
                             relative_path = os.path.relpath(file_path, temp_dir)
+
+                            if plugin_prefix and not (relative_path + '/').startswith(plugin_prefix):
+                                continue
                             
                             # Determine file type
                             file_type = None
@@ -230,9 +242,56 @@ def parse_stored_data_task(self, previous_result=None):
         logger.info("Starting parse_stored_data_task")
         
         db = SessionLocal()
-        
-        # Get all unprocessed Robot files
+
+        # --- V13 plugins: reconstruct skills from stored raw files ---
         from app.models.raw_data import RawRepositoryData
+        from app.tasks.plugin_sync import (
+            parse_collection_plugin_from_files,
+            sync_plugin_collection,
+        )
+
+        plugin_rows = db.query(RawRepositoryData).filter(
+            RawRepositoryData.is_processed == False,  # noqa: E712 - SQLAlchemy comparison
+        ).all()
+        plugin_files_by_collection: Dict[str, Dict[str, str]] = {}
+        plugin_rows_by_collection: Dict[str, list] = {}
+        for raw_file in plugin_rows:
+            path = raw_file.file_path or ""
+            if not (path.startswith("plugins/") or path in ("plugin.yaml", "integration/integration.yaml")):
+                continue
+            plugin_files_by_collection.setdefault(raw_file.collection_slug, {})[path] = raw_file.file_content or ""
+            plugin_rows_by_collection.setdefault(raw_file.collection_slug, []).append(raw_file)
+
+        plugin_skills_created = 0
+        plugin_skills_updated = 0
+        for collection_slug, files in plugin_files_by_collection.items():
+            collection = db.query(CodeCollection).filter(
+                CodeCollection.slug == collection_slug
+            ).first()
+            if not collection:
+                logger.warning(f"Collection not found for plugin files: {collection_slug}")
+                continue
+            parsed_plugin = parse_collection_plugin_from_files(
+                collection_slug,
+                files,
+                git_url=collection.git_url,
+                git_ref=collection.git_ref,
+            )
+            if parsed_plugin and parsed_plugin.get("skills"):
+                created, updated, _ = sync_plugin_collection(
+                    db, collection, "", parsed_plugin
+                )
+                plugin_skills_created += created
+                plugin_skills_updated += updated
+                logger.info(
+                    f"[{collection_slug}] parsed {len(parsed_plugin['skills'])} plugin "
+                    f"skills ({created} created, {updated} updated)"
+                )
+            for raw_file in plugin_rows_by_collection.get(collection_slug, []):
+                raw_file.is_processed = True
+        db.commit()
+
+        # Get all unprocessed Robot files
         robot_files = db.query(RawRepositoryData).filter(
             RawRepositoryData.file_type == 'robot',
             RawRepositoryData.is_processed == False
@@ -344,11 +403,11 @@ def parse_stored_data_task(self, previous_result=None):
         
         return {
             'status': 'success',
-            'codebundles_created': codebundles_created,
-            'codebundles_updated': codebundles_updated,
-            'total_processed': codebundles_created + codebundles_updated,
+            'codebundles_created': codebundles_created + plugin_skills_created,
+            'codebundles_updated': codebundles_updated + plugin_skills_updated,
+            'total_processed': codebundles_created + codebundles_updated + plugin_skills_created + plugin_skills_updated,
             'files_processed': files_processed,
-            'message': f'Successfully parsed {codebundles_created + codebundles_updated} codebundles from {files_processed} files'
+            'message': f'Successfully parsed {codebundles_created + codebundles_updated} codebundles and {plugin_skills_created + plugin_skills_updated} plugin skills from {files_processed} files'
         }
         
     except Exception as e:

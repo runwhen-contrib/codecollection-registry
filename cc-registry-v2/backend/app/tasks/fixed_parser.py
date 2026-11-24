@@ -76,7 +76,7 @@ def parse_generation_rules(runwhen_dir: Path) -> Dict[str, Any]:
                         'mode': match.get('mode')
                     })
                 
-                # Extract SLX definitions
+                # Extract skill definitions from generation rules
                 slxs = rule.get('slxs', [])
                 for slx in slxs:
                     # Get level of detail
@@ -351,4 +351,19 @@ def parse_robot_file_content(content: str, file_path: str, collection_slug: str 
     except Exception as e:
         logger.error(f"Failed to parse robot file content: {e}")
         return None
+
+
+# ---------------------------------------------------------------------------
+# V13 Plugins (`runwhen-plugins`, branch `v13/plugins-m4`)
+#
+# Re-exported here so callers that already import from `fixed_parser` can
+# reach the plugin parser without a second import path.
+# ---------------------------------------------------------------------------
+from app.tasks.plugin_parser import (  # noqa: E402,F401
+    parse_plugin_directory,
+    parse_plugin_skill_directory,
+    parse_skill_md,
+    extract_variables_from_tasks_yaml,
+    format_permission_entry,
+)
 

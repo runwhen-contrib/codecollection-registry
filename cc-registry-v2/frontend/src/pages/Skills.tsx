@@ -25,7 +25,7 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import { Link, useSearchParams } from 'react-router-dom';
 import { apiService, CodeBundle, CodeCollection } from '../services/api';
 
-const CodeBundles: React.FC = () => {
+const Skills: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [codebundles, setCodebundles] = useState<CodeBundle[]>([]);
   const [collections, setCollections] = useState<CodeCollection[]>([]);
@@ -103,7 +103,7 @@ const CodeBundles: React.FC = () => {
         setCodebundles(codebundlesData.codebundles);
         setTotalCount(codebundlesData.total_count);
       } catch (err) {
-        setError('Failed to load Skill Templates');
+        setError('Failed to load Skills');
         console.error('Error fetching data:', err);
       } finally {
         setInitialLoading(false);
@@ -156,12 +156,12 @@ const CodeBundles: React.FC = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          All Skill Templates
+          All Skills
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {searching && <CircularProgress size={16} />}
           <Typography variant="body1" color="text.secondary">
-            {searching ? 'Searching...' : `${totalCount} Skill Template${totalCount !== 1 ? 's' : ''} found`}
+            {searching ? 'Searching...' : `${totalCount} Skill${totalCount !== 1 ? 's' : ''} found`}
           </Typography>
         </Box>
       </Box>
@@ -179,10 +179,10 @@ const CodeBundles: React.FC = () => {
           </Button>
         </Box>
 
-        {/* Row 1: Search and Collection */}
+        {/* Row 1: Search and Plugin */}
         <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <TextField
-            placeholder="Search Skill Templates..."
+            placeholder="Search Skills..."
             value={searchTerm}
             onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
             InputProps={{
@@ -204,13 +204,13 @@ const CodeBundles: React.FC = () => {
           />
           
           <FormControl sx={{ flex: '1 1 200px' }} size="small">
-            <InputLabel>Collection</InputLabel>
+            <InputLabel>Plugin</InputLabel>
             <Select
               value={selectedCollection}
               onChange={(e) => { setSelectedCollection(e.target.value); setPage(1); }}
-              label="Collection"
+              label="Plugin"
             >
-              <MenuItem value="">All Collections</MenuItem>
+              <MenuItem value="">All Plugins</MenuItem>
               {collections.map((collection) => (
                 <MenuItem key={collection.id} value={collection.id.toString()}>
                   {collection.name}
@@ -290,7 +290,7 @@ const CodeBundles: React.FC = () => {
         </Box>
       </Card>
 
-      {/* CodeBundles Grid */}
+      {/* Skills Grid */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, opacity: searching ? 0.6 : 1, transition: 'opacity 0.2s' }}>
         {codebundles.map((codebundle) => (
           <Box key={codebundle.id} sx={{ flex: '0 0 calc(100% - 12px)', '@media (min-width: 600px)': { flex: '0 0 calc(50% - 12px)' }, '@media (min-width: 900px)': { flex: '0 0 calc(33.333% - 16px)' } }}>
@@ -306,7 +306,7 @@ const CodeBundles: React.FC = () => {
             >
               <CardActionArea
                 component={Link}
-                to={`/collections/${codebundle.codecollection?.slug}/codebundles/${codebundle.slug}`}
+                to={`/plugins/${codebundle.codecollection?.slug}/skills/${codebundle.slug}`}
                 sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
               >
                 <CardContent sx={{ flexGrow: 1 }}>
@@ -363,7 +363,7 @@ const CodeBundles: React.FC = () => {
       {codebundles.length === 0 && !searching && (
         <Box sx={{ textAlign: 'center', mt: 4 }}>
           <Typography variant="h6" color="text.secondary">
-            No Skill Templates found
+            No Skills found
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             Try adjusting your filters or search terms
@@ -389,4 +389,4 @@ const CodeBundles: React.FC = () => {
   );
 };
 
-export default CodeBundles;
+export default Skills;

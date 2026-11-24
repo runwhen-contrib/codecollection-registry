@@ -149,6 +149,26 @@ class Settings(BaseSettings):
                 except ValueError as e:
                     logger.error(f"Failed to convert REDIS_DB '{self.REDIS_DB}' to int: {e}, defaulting to 0")
                     self.REDIS_DB = 0
+
+        # Prefer baked /app/codecollections.yaml when a mounted ConfigMap still
+        # holds legacy non-plugin codecollections entries (or does not exist).
+        import os
+        baked_yaml = "/app/codecollections.yaml"
+        if self.CODECOLLECTIONS_FILE != baked_yaml and os.path.exists(baked_yaml):
+            try:
+                if not os.path.exists(self.CODECOLLECTIONS_FILE):
+                    self.CODECOLLECTIONS_FILE = baked_yaml
+                else:
+                    with open(self.CODECOLLECTIONS_FILE, "r", encoding="utf-8") as fh:
+                        mounted_text = fh.read()
+                    if "runwhen-plugins" not in mounted_text and "plugin_path" not in mounted_text:
+                        logger.info(
+                            f"CODECOLLECTIONS_FILE ({self.CODECOLLECTIONS_FILE}) has no V13 plugin entries; "
+                            f"using baked {baked_yaml} instead."
+                        )
+                        self.CODECOLLECTIONS_FILE = baked_yaml
+            except Exception as e:
+                logger.warning(f"Could not inspect {self.CODECOLLECTIONS_FILE}: {e}")
         
         return self
     

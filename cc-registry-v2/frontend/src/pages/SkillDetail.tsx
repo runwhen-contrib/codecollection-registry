@@ -50,7 +50,7 @@ import { apiService, CodeBundle } from '../services/api';
 import { useCart } from '../contexts/CartContext';
 import { labelForType } from '../lib/terminology';
 
-const CodeBundleDetail: React.FC = () => {
+const SkillDetail: React.FC = () => {
   const { collectionSlug, codebundleSlug } = useParams<{ collectionSlug: string; codebundleSlug: string }>();
   const navigate = useNavigate();
   const [codebundle, setCodebundle] = useState<CodeBundle | null>(null);
@@ -69,7 +69,7 @@ const CodeBundleDetail: React.FC = () => {
         const codebundleData = await apiService.getCodeBundleBySlug(collectionSlug, codebundleSlug);
         setCodebundle(codebundleData);
       } catch (err) {
-        setError('Failed to load codebundle');
+        setError('Failed to load skill');
         console.error('Error fetching data:', err);
       } finally {
         setLoading(false);
@@ -98,7 +98,7 @@ const CodeBundleDetail: React.FC = () => {
   if (!codebundle) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Alert severity="warning">Skill Template not found</Alert>
+        <Alert severity="warning">Skill not found</Alert>
       </Container>
     );
   }
@@ -143,7 +143,7 @@ const CodeBundleDetail: React.FC = () => {
             }
             onClick={() => {
               // Create context string with codebundle details
-              const context = `I have a question about the "${codebundle.display_name}" Skill Template from the ${codebundle.codecollection?.name || 'unknown'} collection.\n\nSkill Template Details:\n- Description: ${codebundle.description || 'N/A'}\n- Platform: ${codebundle.discovery_platform || 'N/A'}\n- Tools: ${codebundle.task_count || 0}\n- Access Level: ${codebundle.access_level || 'N/A'}`;
+              const context = `I have a question about the "${codebundle.display_name}" Skill from the ${codebundle.codecollection?.name || 'unknown'} plugin.\n\nSkill Details:\n- Description: ${codebundle.description || 'N/A'}\n- Platform: ${codebundle.discovery_platform || 'N/A'}\n- Tools: ${codebundle.task_count || 0}\n- Access Level: ${codebundle.access_level || 'N/A'}`;
               
               navigate('/chat', { 
                 state: { 
@@ -463,10 +463,10 @@ const CodeBundleDetail: React.FC = () => {
               {codebundle.codecollection && (
                 <Box sx={{ mb: 1.5 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                    Collection
+                    Plugin
                   </Typography>
                   <Link 
-                    to={`/collections/${codebundle.codecollection.slug}`}
+                    to={`/plugins/${codebundle.codecollection.slug}`}
                     style={{ textDecoration: 'none' }}
                   >
                     <Typography variant="body2" color="primary" sx={{ fontWeight: 500 }}>
@@ -480,7 +480,7 @@ const CodeBundleDetail: React.FC = () => {
                 <Button
                   variant="outlined"
                   startIcon={<GitHubIcon />}
-                  href={`${codebundle.codecollection.git_url}/tree/main/codebundles/${codebundle.slug}`}
+                  href={codebundle.runbook_source_url || `${codebundle.codecollection.git_url}/tree/${(codebundle.codecollection as any).git_ref || 'main'}/codebundles/${codebundle.slug}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   fullWidth
@@ -536,26 +536,54 @@ const CodeBundleDetail: React.FC = () => {
                   </Box>
                 )}
                 
-                {/* Link to README */}
-                {codebundle.readme && codebundle.codecollection?.git_url && (
-                  <Box sx={{ mt: codebundle.ai_enhanced_description ? 0 : 0, pt: codebundle.ai_enhanced_description ? 3 : 0, borderTop: codebundle.ai_enhanced_description ? '1px solid' : 'none', borderColor: 'divider' }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      Author README:
+                {/* SKILL.md / README content */}
+                {(codebundle.readme || codebundle.doc) && (
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                      {codebundle.runbook_source_url?.includes('/plugins/') ? 'Skill documentation' : 'Author README'}
                     </Typography>
-                    <Typography variant="body2">
-                      <a 
-                        href={`${codebundle.codecollection.git_url}/blob/main/codebundles/${codebundle.slug}/README.md`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: 'inherit', textDecoration: 'none' }}
-                      >
-                        View README on GitHub →
-                      </a>
-                    </Typography>
+                    <Box
+                      sx={{
+                        maxHeight: 420,
+                        overflowY: 'auto',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 2,
+                        bgcolor: 'action.hover',
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                        {codebundle.readme || codebundle.doc}
+                      </Typography>
+                    </Box>
+                    {codebundle.runbook_source_url?.includes('/plugins/') ? (
+                      <Typography variant="body2" sx={{ mt: 1 }}>
+                        <a
+                          href={`${codebundle.runbook_source_url}/SKILL.md`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit' }}
+                        >
+                          View SKILL.md on GitHub →
+                        </a>
+                      </Typography>
+                    ) : codebundle.codecollection?.git_url && (
+                      <Typography variant="body2" sx={{ mt: 1 }}>
+                        <a
+                          href={`${codebundle.codecollection.git_url}/blob/${(codebundle.codecollection as any).git_ref || 'main'}/codebundles/${codebundle.slug}/README.md`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit' }}
+                        >
+                          View README on GitHub →
+                        </a>
+                      </Typography>
+                    )}
                   </Box>
                 )}
                 
-                {!codebundle.ai_enhanced_description && !codebundle.readme && (
+                {!codebundle.ai_enhanced_description && !codebundle.readme && !codebundle.doc && (
                   <Typography variant="body2" color="text.secondary">
                     No description available.
                   </Typography>
@@ -609,17 +637,62 @@ const CodeBundleDetail: React.FC = () => {
                       <Box sx={{ mt: 2 }}>
                         <List>
                           {codebundle.tasks.map((task, index) => {
-                            const taskName = typeof task === 'string' ? task : task.name;
-                            const taskDoc = typeof task === 'object' ? task.doc : undefined;
-                            const taskTags = typeof task === 'object' ? (task as any).tags || [] : [];
+                            const isObject = typeof task === 'object' && task !== null;
+                            const taskTitle = isObject ? (task as any).title : undefined;
+                            const taskName = isObject ? ((task as any).name || (task as any).title) : task;
+                            const taskDoc = isObject ? ((task as any).description || (task as any).doc) : undefined;
+                            const taskTags: string[] = isObject ? (task as any).tags || [] : [];
+                            const readOnly = isObject ? (task as any).readOnly : undefined;
+                            const destructive = isObject ? !!(task as any).destructive : false;
+                            const dryRun = isObject ? !!(task as any).dryRun : false;
                             const dataTags = taskTags.filter((t: string) => t.startsWith('data:'));
+                            const displayTags = taskTags.filter((t: string) => !t.startsWith('data:'));
+                            const accessChip = readOnly === false ? 'read-write' : readOnly === true ? 'read-only' : null;
                             return (
                               <React.Fragment key={index}>
                                 <ListItem sx={{ alignItems: 'flex-start' }}>
                                   <ListItemText 
                                     primary={
                                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                        <Typography variant="body1">{taskName}</Typography>
+                                        <Typography variant="body1">
+                                          {taskTitle ? `${taskTitle} (${taskName})` : taskName}
+                                        </Typography>
+                                        {accessChip && (
+                                          <Chip
+                                            label={accessChip}
+                                            size="small"
+                                            color={accessChip === 'read-write' ? 'warning' : 'success'}
+                                            variant="outlined"
+                                            sx={{ fontSize: '0.75rem', height: 24, fontWeight: 600 }}
+                                          />
+                                        )}
+                                        {destructive && (
+                                          <Chip
+                                            label="destructive"
+                                            size="small"
+                                            color="error"
+                                            variant="outlined"
+                                            sx={{ fontSize: '0.75rem', height: 24, fontWeight: 600 }}
+                                          />
+                                        )}
+                                        {dryRun && (
+                                          <Chip
+                                            label="dry-run"
+                                            size="small"
+                                            color="info"
+                                            variant="outlined"
+                                            sx={{ fontSize: '0.75rem', height: 24, fontWeight: 600 }}
+                                          />
+                                        )}
+                                        {displayTags.map((tag: string) => (
+                                          <Chip
+                                            key={tag}
+                                            label={tag}
+                                            size="small"
+                                            variant="outlined"
+                                            sx={{ fontSize: '0.75rem', height: 24 }}
+                                          />
+                                        ))}
                                         {dataTags.map((dt: string) => (
                                           <Chip
                                             key={dt}
@@ -664,7 +737,7 @@ const CodeBundleDetail: React.FC = () => {
                   </Box>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
-                    No Tools defined for this Skill Template.
+                    No Tools defined for this Skill.
                   </Typography>
                 )}
               </CardContent>
@@ -688,6 +761,7 @@ const CodeBundleDetail: React.FC = () => {
                           <TableRow>
                             <TableCell sx={{ fontWeight: 600 }}>Variable</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Scope</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Default</TableCell>
                           </TableRow>
                         </TableHead>
@@ -699,6 +773,11 @@ const CodeBundleDetail: React.FC = () => {
                               </TableCell>
                               <TableCell sx={{ fontSize: '0.875rem' }}>
                                 {variable.description || '-'}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '0.875rem' }}>
+                                {variable.scope
+                                  ? `${variable.scope}${variable.task ? ` \u00b7 ${variable.task}` : ''}`
+                                  : '-'}
                               </TableCell>
                               <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
                                 {variable.default || variable.example || '-'}
@@ -718,7 +797,7 @@ const CodeBundleDetail: React.FC = () => {
                           No User Variables Documented
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          This Skill Template may not require user-configured variables, or they have not been extracted yet. 
+                          This Skill may not require user-configured variables, or they have not been extracted yet. 
                           Check the source code on GitHub for the complete configuration requirements.
                         </Typography>
                         {codebundle.codecollection?.git_url && (
@@ -726,7 +805,7 @@ const CodeBundleDetail: React.FC = () => {
                             variant="outlined"
                             size="small"
                             startIcon={<GitHubIcon />}
-                            href={`${codebundle.codecollection.git_url}/tree/main/codebundles/${codebundle.slug}`}
+                            href={codebundle.runbook_source_url || `${codebundle.codecollection.git_url}/tree/${(codebundle.codecollection as any).git_ref || 'main'}/codebundles/${codebundle.slug}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             sx={{ mt: 2, textTransform: 'none' }}
@@ -770,10 +849,10 @@ const CodeBundleDetail: React.FC = () => {
                     </Box>
                     <Typography variant="body2" color="text.secondary">
                       {codebundle.access_level === 'read-only' 
-                        ? 'This Skill Template requires read-only access to resources. It will not make changes to your infrastructure.'
+                        ? 'This Skill requires read-only access to resources. It will not make changes to your infrastructure.'
                         : codebundle.access_level === 'read-write'
-                        ? 'This Skill Template requires read-write access and may modify resources in your infrastructure.'
-                        : 'Access level requirements for this Skill Template.'}
+                        ? 'This Skill requires read-write access and may modify resources in your infrastructure.'
+                        : 'Access level requirements for this Skill.'}
                     </Typography>
                   </Box>
                 )}
@@ -794,7 +873,7 @@ const CodeBundleDetail: React.FC = () => {
                       />
                     </Box>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      The following IAM permissions are required to execute this Skill Template:
+                      The following IAM permissions are required to execute this Skill:
                     </Typography>
                     <Box 
                       component="ul" 
@@ -849,7 +928,7 @@ const CodeBundleDetail: React.FC = () => {
                 
                 {!codebundle.access_level && (!codebundle.minimum_iam_requirements || codebundle.minimum_iam_requirements.length === 0) && (
                   <Alert severity="info">
-                    No specific security requirements have been documented for this Skill Template.
+                    No specific security requirements have been documented for this Skill.
                   </Alert>
                 )}
               </CardContent>
@@ -905,7 +984,9 @@ const CodeBundleDetail: React.FC = () => {
                         variant="outlined"
                         size="small"
                         startIcon={<GitHubIcon />}
-                        href={`${codebundle.codecollection.git_url}/commits/main/codebundles/${codebundle.slug}`}
+                        href={codebundle.runbook_source_url
+                          ? `${codebundle.runbook_source_url}/commits`
+                          : `${codebundle.codecollection.git_url}/commits/${(codebundle.codecollection as any).git_ref || 'main'}/codebundles/${codebundle.slug}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         sx={{ textTransform: 'none' }}
@@ -1010,4 +1091,4 @@ const CodeBundleDetail: React.FC = () => {
   );
 };
 
-export default CodeBundleDetail;
+export default SkillDetail;

@@ -1,6 +1,5 @@
 /**
- * AdminCCVersions — admin view of the PAPI-facing CodeCollection
- * image catalog. Renders the data exposed at:
+ * AdminPluginVersions — admin view of the PAPI-facing Plugin image catalog. Renders the data exposed at:
  *
  *   GET /api/v1/catalog/codecollections
  *   GET /api/v1/catalog/codecollections/{slug}
@@ -102,7 +101,7 @@ const truncate = (s: string | null | undefined, n = 12): string => {
   return s.length > n ? `${s.slice(0, n)}…` : s;
 };
 
-const AdminCCVersions: React.FC = () => {
+const AdminPluginVersions: React.FC = () => {
   const [entries, setEntries] = useState<CatalogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -202,10 +201,10 @@ const AdminCCVersions: React.FC = () => {
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" component="h2" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
           <CatalogIcon sx={{ mr: 1 }} />
-          CodeCollection Image Catalog
+          Plugin Image Catalog
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          PAPI-facing image catalog: tracked OCI tags per CodeCollection, populated by{' '}
+          PAPI-facing image catalog: tracked OCI tags per Plugin, populated by{' '}
           <code>sync_image_tags_task</code>. Read-only view of{' '}
           <code>/api/v1/catalog/codecollections</code>.
         </Typography>
@@ -348,7 +347,7 @@ const AdminCCVersions: React.FC = () => {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>CodeCollection</TableCell>
+                <TableCell>Plugin</TableCell>
                 <TableCell>Visibility</TableCell>
                 <TableCell>Image Registry</TableCell>
                 <TableCell>Latest</TableCell>
@@ -579,4 +578,4 @@ const AdminCCVersions: React.FC = () => {
   );
 };
 
-export default AdminCCVersions;
+export default AdminPluginVersions;

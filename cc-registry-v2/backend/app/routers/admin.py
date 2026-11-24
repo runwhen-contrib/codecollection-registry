@@ -17,6 +17,12 @@ from app.core.database import get_db, SessionLocal
 from app.models import CodeCollection, Codebundle, RawYamlData, RawRepositoryData
 from app.services.robot_parser import parse_all_robot_files
 from app.tasks.fixed_parser import parse_robot_file_content, parse_generation_rules
+from app.tasks.plugin_sync import (
+    clone_repository_cached,
+    deactivate_stale_codebundles,
+    parse_collection_plugin,
+    sync_plugin_collection,
+)
 from pathlib import Path
 from sqlalchemy.orm import Session
 
@@ -82,6 +88,9 @@ async def trigger_data_population(token: str = Depends(verify_admin_token)):
         codebundles_updated = 0
         
         with tempfile.TemporaryDirectory() as tmp_dir:
+            # Cache clones by (git_url, git_ref): the V13 plugins monorepo
+            # backs six registry collections and must be cloned only once.
+            clone_cache: Dict[Any, Optional[str]] = {}
             for collection_data in collections_data:
                 try:
                     collection_slug = collection_data.get('slug')
@@ -116,29 +125,63 @@ async def trigger_data_population(token: str = Depends(verify_admin_token)):
                         collection.name = collection_data.get('name', collection_slug)
                         collection.git_url = git_url
                         collection.description = collection_data.get('description', '')
+                        collection.owner = collection_data.get('owner', '')
+                        collection.owner_email = collection_data.get('owner_email', '')
+                        collection.owner_icon = collection_data.get('owner_icon', '')
+                        collection.git_ref = collection_data.get('git_ref', 'main')
                         collection.is_active = True
                         db.commit()
                         logger.info(f"Updated collection: {collection_slug}")
                     
                     collections_synced += 1
                     
-                    # Clone repository
-                    repo_path = os.path.join(tmp_dir, collection_slug)
-                    logger.info(f"Cloning {git_url} to {repo_path}")
-                    
-                    try:
-                        # Clone without depth limit to get full history for accurate git dates
-                        git.Repo.clone_from(git_url, repo_path)
-                    except Exception as clone_err:
-                        logger.error(f"Failed to clone {git_url}: {clone_err}")
+                    # Clone repository (cached by git_url + git_ref, so the
+                    # shared V13 plugins monorepo is fetched only once).
+                    repo_path = clone_repository_cached(
+                        git_url,
+                        collection_data.get('git_ref', 'main'),
+                        tmp_dir,
+                        clone_cache,
+                    )
+                    if not repo_path:
+                        logger.error(f"Failed to clone {git_url}")
+                        continue
+
+                    # --- V13 plugins: plugins/<slug>/skills/<skill> ---
+                    plugin_parsed = parse_collection_plugin(
+                        repo_path,
+                        collection_slug,
+                        git_url=git_url,
+                        git_ref=collection_data.get('git_ref', 'main'),
+                        plugin_path=collection_data.get('plugin_path'),
+                    )
+                    if plugin_parsed is not None:
+                        plugin_git_date = get_git_last_commit_date(
+                            repo_path, plugin_parsed.get("plugin_path", f"plugins/{collection_slug}")
+                        )
+                        created, updated, deactivated = sync_plugin_collection(
+                            db, collection, repo_path, plugin_parsed, plugin_git_date
+                        )
+                        codebundles_created += created
+                        codebundles_updated += updated
+                        db.commit()
+                        logger.info(
+                            f"[{collection_slug}] {len(plugin_parsed.get('skills', []))} skills "
+                            f"({created} created, {updated} updated, {deactivated} deactivated)"
+                        )
+                        if plugin_parsed.get("errors"):
+                            logger.warning(
+                                f"[{collection_slug}] plugin parse errors: {plugin_parsed['errors']}"
+                            )
                         continue
                     
                     # Find and parse codebundles
                     codebundles_dir = os.path.join(repo_path, 'codebundles')
                     if not os.path.exists(codebundles_dir):
-                        logger.warning(f"No codebundles directory in {collection_slug}")
+                        logger.warning(f"No plugin or codebundles directory in {collection_slug}")
                         continue
                     
+                    legacy_active_slugs = set()
                     for bundle_name in os.listdir(codebundles_dir):
                         bundle_path = os.path.join(codebundles_dir, bundle_name)
                         if not os.path.isdir(bundle_path):
@@ -212,7 +255,8 @@ async def trigger_data_population(token: str = Depends(verify_admin_token)):
                             ).first()
                             
                             # Build runbook source URL
-                            runbook_source_url = f"{git_url.rstrip('.git')}/tree/main/codebundles/{bundle_name}"
+                            runbook_source_url = f"{git_url.rstrip('/').removesuffix('.git')}/tree/{collection_data.get('git_ref', 'main')}/codebundles/{bundle_name}"
+                            legacy_active_slugs.add(primary_parsed['slug'])
                             
                             # Get last git commit date for this codebundle folder
                             git_date = get_git_last_commit_date(repo_path, f"codebundles/{bundle_name}")
@@ -290,6 +334,8 @@ async def trigger_data_population(token: str = Depends(verify_admin_token)):
                             logger.error(f"Failed to parse codebundle {bundle_name}: {parse_err}")
                             continue
                     
+                    # Retire legacy codebundles removed from the repo.
+                    deactivate_stale_codebundles(db, collection, list(legacy_active_slugs))
                     db.commit()
                     
                 except Exception as coll_err:

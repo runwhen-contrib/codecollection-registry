@@ -286,7 +286,11 @@ def _build_minimal_issue_body(req: SubmitRequest) -> str:
             parts.append(f"- **Platform:** {m.platform or '—'}")
             parts.append(f"- **Description:** {m.description[:500]}{'…' if len(m.description) > 500 else ''}")
             if m.tasks:
-                parts.append(f"- **Tasks:** {', '.join(m.tasks[:8])}{'…' if len(m.tasks) > 8 else ''}")
+                task_labels = [
+                    (t.get('title') or t.get('name')) if isinstance(t, dict) else str(t)
+                    for t in m.tasks[:8]
+                ]
+                parts.append(f"- **Tasks:** {', '.join(task_labels)}{'…' if len(m.tasks) > 8 else ''}")
             if m.tags:
                 parts.append(f"- **Tags:** {', '.join(m.tags[:10])}")
             if m.source_url:

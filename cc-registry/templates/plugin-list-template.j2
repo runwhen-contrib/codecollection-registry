@@ -1,0 +1,29 @@
+---
+title: Plugins
+---
+
+<div class="cc-card-grid">
+{% for plugin in data["plugins"] %}
+    <div class="cc-card">
+      <div class="card-header">
+            <img class="card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/github-mark.svg" alt="Icon" />
+            <h3 class="card-title">{{ plugin.name }}</h3>
+        </div>       
+        <div>
+          <p class="card-description">{{ plugin.description }}</p>
+          <div class="card-stats">
+            <div class="stat-item"><span>Owner:</span> {{ plugin.owner }}</div>
+            <div class="stat-item"><span>Contact Email:</span> {{ plugin.owner_email }}</div>
+            <div class="stat-item"><span>Contributors:</span> {{ all_plugin_stats[plugin.slug].total_contributors }}</div>
+            <div class="stat-item"><span>Total Skills:</span> {{ all_plugin_stats[plugin.slug].total_skills }}</div>
+            <div class="stat-item"><span>Total Tools:</span> {{ all_plugin_stats[plugin.slug].total_tasks }}</div>
+          </div>
+       <div class="card-footer">
+            <a class="github-button" href="{{ plugin.git_url }}" data-color-scheme="no-preference: light; light: light; dark: dark;" data-icon="octicon-star" data-size="large" data-show-count="true" aria-label="Star on GitHub">Star</a>            
+            <a class="github-button" href="{{ plugin.git_url }}/fork" data-color-scheme="no-preference: light; light: light; dark: dark;" data-icon="octicon-repo-forked" data-size="large" aria-label="Fork on GitHub">Fork</a>
+            <a class="github-button" href="{{ plugin.git_url }}/issues" data-color-scheme="no-preference: light; light: light; dark: dark;" data-icon="octicon-issue-opened" data-size="large" aria-label="Issue on GitHub">Issue</a>
+          </div>
+        </div>
+    </div>
+{% endfor %}
+</div>

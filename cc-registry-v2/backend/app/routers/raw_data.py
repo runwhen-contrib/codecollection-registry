@@ -101,6 +101,7 @@ async def clone_repositories(request: Dict[str, Any], db: Session = Depends(get_
         
         collections_processed = 0
         temp_dir = tempfile.mkdtemp(prefix="registry_clone_")
+        clone_cache: Dict[Any, str] = {}
         
         try:
             # Process each collection
@@ -117,11 +118,17 @@ async def clone_repositories(request: Dict[str, Any], db: Session = Depends(get_
                     logger.warning(f"No git_url found for {collection_data['name']}")
                     continue
                 
-                repo_path = os.path.join(temp_dir, collection_data['slug'])
+                git_ref = collection_data.get('git_ref', 'main')
+                cache_key = (repo_url, git_ref)
                 try:
-                    # Clone the repository
-                    import git
-                    git.Repo.clone_from(repo_url, repo_path)
+                    # Clone once per (git_url, git_ref): V13 plugins share a
+                    # monorepo, so six collections clone a single repository.
+                    if cache_key not in clone_cache:
+                        import git
+                        repo_path = os.path.join(temp_dir, f"repo-{abs(hash(cache_key))}")
+                        git.Repo.clone_from(repo_url, repo_path, branch=git_ref, depth=1)
+                        clone_cache[cache_key] = repo_path
+                    repo_path = clone_cache[cache_key]
                     logger.info(f"Cloned {collection_data['name']} to {repo_path}")
                     
                     # Store collection metadata in database
@@ -154,7 +161,12 @@ async def clone_repositories(request: Dict[str, Any], db: Session = Depends(get_
                         collection.last_synced = datetime.utcnow()
                     
                     # Store raw repository files in database
-                    files_stored = _store_repository_files(db, collection_data['slug'], repo_path)
+                    plugin_path = collection_data.get('plugin_path')
+                    if not plugin_path and os.path.isdir(os.path.join(repo_path, 'plugins', collection_data['slug'])):
+                        plugin_path = f"plugins/{collection_data['slug']}"
+                    files_stored = _store_repository_files(
+                        db, collection_data['slug'], repo_path, plugin_path
+                    )
                     
                     db.commit()
                     collections_processed += 1
@@ -179,31 +191,48 @@ async def clone_repositories(request: Dict[str, Any], db: Session = Depends(get_
         logger.error(f"Failed to clone repositories: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-def _store_repository_files(db: Session, collection_slug: str, repo_path: str) -> int:
-    """Store all relevant files from repository in database"""
+def _store_repository_files(db: Session, collection_slug: str, repo_path: str, plugin_path: str = None) -> int:
+    """Store all relevant files from repository in database.
+
+    When `plugin_path` is set (a V13 plugin inside a shared monorepo), only
+    files under that path are stored for this collection.
+    """
     files_stored = 0
-    
-    # Find all .robot files and other relevant files
+    prefix = f"{plugin_path.rstrip('/')}/" if plugin_path else None
+
+    # Find all .robot files and other relevant files (`.md` covers SKILL.md)
     for root, dirs, files in os.walk(repo_path):
         for file in files:
-            if file.endswith(('.robot', '.yaml', '.yml', '.json')):
+            if file.endswith(('.robot', '.yaml', '.yml', '.json', '.md')):
                 file_path = os.path.join(root, file)
                 relative_path = os.path.relpath(file_path, repo_path)
-                
+
+                # Scope a shared monorepo checkout to this collection's plugin.
+                if prefix and not (relative_path + "/").startswith(prefix):
+                    continue
+
                 try:
+                    existing = db.query(RawRepositoryData).filter(
+                        RawRepositoryData.collection_slug == collection_slug,
+                        RawRepositoryData.file_path == relative_path,
+                    ).first()
                     with open(file_path, 'r', encoding='utf-8') as f:
                         content = f.read()
-                    
-                    # Store raw file data
-                    raw_file = RawRepositoryData(
-                        collection_slug=collection_slug,
-                        repository_path=repo_path,
-                        file_path=relative_path,
-                        file_content=content,
-                        file_type=file.split('.')[-1],
-                        is_processed=False
-                    )
-                    db.add(raw_file)
+
+                    if existing:
+                        existing.file_content = content
+                        existing.repository_path = repo_path
+                        existing.file_type = file.split('.')[-1]
+                        existing.is_processed = False
+                    else:
+                        db.add(RawRepositoryData(
+                            collection_slug=collection_slug,
+                            repository_path=repo_path,
+                            file_path=relative_path,
+                            file_content=content,
+                            file_type=file.split('.')[-1],
+                            is_processed=False
+                        ))
                     files_stored += 1
                     logger.debug(f"Stored raw file: {relative_path}")
                     
@@ -218,7 +247,45 @@ async def parse_stored_data(db: Session = Depends(get_db)):
     """Parse stored raw data and create structured records"""
     try:
         logger.info("Starting parsing of stored raw data")
-        
+
+        # --- V13 plugins: reconstruct skills from stored raw files ---
+        from app.tasks.plugin_sync import (
+            parse_collection_plugin_from_files,
+            sync_plugin_collection,
+        )
+
+        all_rows = db.query(RawRepositoryData).all()
+        plugin_files_by_collection: Dict[str, Dict[str, str]] = {}
+        plugin_rows_by_collection: Dict[str, list] = {}
+        for raw_file in all_rows:
+            path = raw_file.file_path or ""
+            if not (path.startswith("plugins/") or path in ("plugin.yaml", "integration/integration.yaml")):
+                continue
+            plugin_files_by_collection.setdefault(raw_file.collection_slug, {})[path] = raw_file.file_content or ""
+            plugin_rows_by_collection.setdefault(raw_file.collection_slug, []).append(raw_file)
+
+        plugin_skills_created = 0
+        plugin_skills_updated = 0
+        for collection_slug, files in plugin_files_by_collection.items():
+            collection = db.query(CodeCollection).filter(
+                CodeCollection.slug == collection_slug
+            ).first()
+            if not collection:
+                logger.warning(f"Collection not found for plugin files: {collection_slug}")
+                continue
+            parsed_plugin = parse_collection_plugin_from_files(
+                collection_slug, files,
+                git_url=collection.git_url,
+                git_ref=collection.git_ref,
+            )
+            if parsed_plugin and parsed_plugin.get("skills"):
+                created, updated, _ = sync_plugin_collection(db, collection, "", parsed_plugin)
+                plugin_skills_created += created
+                plugin_skills_updated += updated
+            for raw_file in plugin_rows_by_collection.get(collection_slug, []):
+                raw_file.is_processed = True
+        db.commit()
+
         # Parse all Robot Framework files
         codebundles_data = parse_all_robot_files(db)
         
@@ -278,10 +345,10 @@ async def parse_stored_data(db: Session = Depends(get_db)):
         
         return {
             'status': 'success',
-            'codebundles_created': codebundles_created,
-            'codebundles_updated': codebundles_updated,
-            'total_processed': codebundles_created + codebundles_updated,
-            'message': f'Successfully parsed {codebundles_created + codebundles_updated} codebundles'
+            'codebundles_created': codebundles_created + plugin_skills_created,
+            'codebundles_updated': codebundles_updated + plugin_skills_updated,
+            'total_processed': codebundles_created + codebundles_updated + plugin_skills_created + plugin_skills_updated,
+            'message': f'Successfully parsed {codebundles_created + codebundles_updated} codebundles and {plugin_skills_created + plugin_skills_updated} plugin skills'
         }
         
     except Exception as e:

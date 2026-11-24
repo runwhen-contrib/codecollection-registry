@@ -49,6 +49,27 @@ logger = logging.getLogger(__name__)
 _TASK_SECTION_NAMES = frozenset({"tasks", "test cases"})
 
 
+def _extract_task_names_from_tasks_yaml(content: str) -> Set[str]:
+    """Parse a V13 `tasks.yaml` and return its task names.
+
+    `tasks:` is a list of mappings, each with a `name`. Malformed input
+    yields an empty set rather than raising.
+    """
+    try:
+        import yaml
+
+        data = yaml.safe_load(content) or {}
+    except Exception:  # noqa: BLE001 - history may contain broken YAML
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    return {
+        str(task["name"])
+        for task in (data.get("tasks") or [])
+        if isinstance(task, dict) and task.get("name")
+    }
+
+
 def _extract_task_names_from_robot(content: str) -> Set[str]:
     """
     Parse a Robot Framework file and return the set of task/test-case
@@ -88,6 +109,7 @@ def _first_introduction_dates(
     repo_path: str,
     file_path: str,
     target_names: Set[str],
+    extractor=_extract_task_names_from_robot,
 ) -> Dict[str, datetime]:
     """
     For each name in `target_names` that exists in `file_path` at some
@@ -132,7 +154,7 @@ def _first_introduction_dates(
         if show.returncode != 0:
             continue
 
-        names_at_commit = _extract_task_names_from_robot(show.stdout)
+        names_at_commit = extractor(show.stdout)
         newly_seen = remaining & names_at_commit
         if newly_seen:
             for name in newly_seen:
@@ -209,39 +231,59 @@ def compute_task_growth_analytics(self):
         per_name_fallback = 0
 
         with tempfile.TemporaryDirectory() as tmp_dir:
+            # Cache clones by (git_url, git_ref): V13 plugins share one
+            # monorepo, so six collections must not trigger six clones.
+            clone_cache: Dict[tuple, bool] = {}
+
             for coll_id, data in collections_map.items():
                 collection: CodeCollection = data["collection"]
                 bundles = data["codebundles"]
-                repo_path = os.path.join(tmp_dir, collection.slug)
+                ref = collection.git_ref or "main"
+                cache_key = (collection.git_url, ref)
+                repo_path = os.path.join(tmp_dir, f"repo-{abs(hash(cache_key))}")
 
-                logger.info(
-                    f"Cloning {collection.git_url} to attribute task introductions"
-                )
-                clone = subprocess.run(
-                    [
-                        "git",
-                        "clone",
-                        "--quiet",
-                        "--no-checkout",
-                        "--filter=blob:none",
-                        collection.git_url,
-                        repo_path,
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
-                )
-                clone_ok = clone.returncode == 0
-
-                if not clone_ok:
-                    logger.warning(
-                        f"Clone failed for {collection.slug}: "
-                        f"{(clone.stderr or '').strip()[:200]}"
+                if cache_key not in clone_cache:
+                    logger.info(
+                        f"Cloning {collection.git_url} (ref={ref}) to attribute task introductions"
                     )
+                    clone = subprocess.run(
+                        [
+                            "git",
+                            "clone",
+                            "--quiet",
+                            "--no-checkout",
+                            "--filter=blob:none",
+                            "--branch",
+                            ref,
+                            collection.git_url,
+                            repo_path,
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                    )
+                    clone_cache[cache_key] = clone.returncode == 0
+                    if clone.returncode != 0:
+                        logger.warning(
+                            f"Clone failed for {collection.slug}: "
+                            f"{(clone.stderr or '').strip()[:200]}"
+                        )
+
+                clone_ok = clone_cache[cache_key]
 
                 for cb in bundles:
-                    current_task_names = set(cb.tasks or [])
-                    current_sli_names = set(cb.slis or [])
+                    # `tasks` holds dicts for V13 plugin skills and plain
+                    # strings for legacy Robot codebundles.
+                    current_task_names = {
+                        (t.get("name") if isinstance(t, dict) else str(t))
+                        for t in (cb.tasks or [])
+                        if (t.get("name") if isinstance(t, dict) else t)
+                    }
+                    current_sli_names = {
+                        (s.get("name") if isinstance(s, dict) else str(s))
+                        for s in (cb.slis or [])
+                        if (s.get("name") if isinstance(s, dict) else s)
+                    }
                     all_names = current_task_names | current_sli_names
                     if not all_names:
                         continue
@@ -259,10 +301,16 @@ def compute_task_growth_analytics(self):
                     # name only shows up there.
                     found: Dict[str, datetime] = {}
                     if clone_ok:
+                        runbook_extractor = (
+                            _extract_task_names_from_tasks_yaml
+                            if (runbook_rel or "").endswith("tasks.yaml")
+                            else _extract_task_names_from_robot
+                        )
                         if runbook_rel:
                             found.update(
                                 _first_introduction_dates(
-                                    repo_path, runbook_rel, current_task_names
+                                    repo_path, runbook_rel, current_task_names,
+                                    extractor=runbook_extractor,
                                 )
                             )
                         if sli_rel:

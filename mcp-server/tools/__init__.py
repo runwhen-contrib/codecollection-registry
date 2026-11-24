@@ -2,8 +2,8 @@
 MCP Server Tools Package
 
 Tools are organized by category:
-- codebundle_tools: Finding, listing, searching CodeBundles
-- collection_tools: Finding and listing CodeCollections  
+- codebundle_tools: Finding, listing, searching Skills
+- collection_tools: Finding and listing Plugins  
 - library_tools: Help with Robot Framework libraries
 - documentation_tools: Documentation, guides, and FAQs
 - github_issue: Creating GitHub issues for new CodeBundle requests

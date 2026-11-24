@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import { apiService } from '../services/api';
 import AdminInventory from './AdminInventory';
-import AdminCCVersions from './AdminCCVersions';
+import AdminPluginVersions from './AdminPluginVersions';
 import AdminTaskOperations from './AdminTaskOperations';
 
 const Admin: React.FC = () => {
@@ -489,7 +489,7 @@ const Admin: React.FC = () => {
       )}
 
       {currentTab === 3 && (
-        <AdminCCVersions />
+        <AdminPluginVersions />
       )}
 
       {currentTab === 4 && (

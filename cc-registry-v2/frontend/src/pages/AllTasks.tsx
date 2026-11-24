@@ -267,7 +267,7 @@ const AllTasks: React.FC = () => {
             All Skills
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ fontSize: '0.9375rem' }}>
-            {filteredTasks.length} Tools across {Object.keys(groupedTasks).length} Skill Templates
+            {filteredTasks.length} Tools across {Object.keys(groupedTasks).length} Skills
           </Typography>
         </Box>
 
@@ -283,7 +283,7 @@ const AllTasks: React.FC = () => {
               >
                 <MenuItem value="alpha">Alphabetical</MenuItem>
                 <MenuItem value="diverse">Platform Diversity</MenuItem>
-                <MenuItem value="codebundle">By Skill Template</MenuItem>
+                <MenuItem value="codebundle">By Skill</MenuItem>
               </Select>
             </FormControl>
           )}
@@ -308,7 +308,7 @@ const AllTasks: React.FC = () => {
       <Box sx={{ mb: 2 }}>
         <TextField
           fullWidth
-          placeholder="Search Tools and Skill Templates..."
+          placeholder="Search Tools and Skills..."
           value={taskSearch}
           onChange={(e) => setTaskSearch(e.target.value)}
           InputProps={{
@@ -391,7 +391,7 @@ const AllTasks: React.FC = () => {
               <Box sx={{ mt: 1 }}>
                 <FormControl fullWidth size="small" sx={{ mb: 1 }}>
                   <Select value={selectedCollection} onChange={(e) => handleCollectionChange(e.target.value)} displayEmpty sx={{ fontSize: '0.8125rem' }}>
-                    <MenuItem value="">All Collections</MenuItem>
+                    <MenuItem value="">All Plugins</MenuItem>
                     {uniqueCollections.map((collection) => (<MenuItem key={collection} value={collection}>{collection}</MenuItem>))}
                   </Select>
                 </FormControl>
@@ -485,7 +485,7 @@ const AllTasks: React.FC = () => {
             <Box sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  {Object.keys(groupedTasks).length} Skill Template{Object.keys(groupedTasks).length !== 1 ? 's' : ''} • {filteredTasks.length} Tool{filteredTasks.length !== 1 ? 's' : ''}
+                  {Object.keys(groupedTasks).length} Skill{Object.keys(groupedTasks).length !== 1 ? 's' : ''} • {filteredTasks.length} Tool{filteredTasks.length !== 1 ? 's' : ''}
                   {selectedSupportTags.length > 0 && ` • ${selectedSupportTags.length} tag${selectedSupportTags.length > 1 ? 's' : ''}`}
                   {selectedCollection && ` • ${selectedCollection}`}
                 </Typography>
@@ -541,10 +541,10 @@ const AllTasks: React.FC = () => {
                                   }
                                 }}
                               >
-                                {isInCart(group.codebundle.id) ? "Remove" : "Select Skill Template"}
+                                {isInCart(group.codebundle.id) ? "Remove" : "Select Skill"}
                               </Button>
                               <Button variant="outlined" size="small" startIcon={<LaunchIcon />}
-                                href={`/collections/${group.codebundle.collection_slug}/codebundles/${group.codebundle.slug}`}
+                                href={`/plugins/${group.codebundle.collection_slug}/skills/${group.codebundle.slug}`}
                                 sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, whiteSpace: 'nowrap' }}
                               >View</Button>
                             </Box>

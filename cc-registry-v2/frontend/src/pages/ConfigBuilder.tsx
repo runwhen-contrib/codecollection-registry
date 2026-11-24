@@ -416,16 +416,16 @@ const ConfigBuilder: React.FC = () => {
 
   const generateConfigYaml = () => {
     return `# RunWhen Configuration
-# Total CodeBundles: ${items.length}
+# Total Skills: ${items.length}
 # Total Repositories: ${repositoryConfigs.length}
 
 codeCollections:${repositoryConfigs.map(repo => `
 - repoURL: ${repo.git_url}
   tag: ${repo.git_ref}`).join('')}
 
-# CodeBundles included:${repositoryConfigs.map(repo => `
+# Skills included:${repositoryConfigs.map(repo => `
 # ${repo.collection_name} (${repo.git_ref}):${repo.codebundles.map(item => `
-#   - ${item.codebundle.display_name || item.codebundle.name} (${item.codebundle.task_count} tasks, ${item.codebundle.sli_count} SLIs)`).join('')}`).join('')}
+#   - ${item.codebundle.display_name || item.codebundle.name} (${item.codebundle.task_count} Tools, ${item.codebundle.sli_count} Monitors)`).join('')}`).join('')}
 `;
   };
 
@@ -801,18 +801,18 @@ ${yamlString}`;
             <Box sx={{ mt: 6 }}>
               <Alert severity="info" sx={{ maxWidth: 600, mx: 'auto' }}>
                 <Typography variant="body2">
-                  <strong>No CodeBundles selected:</strong> You can still create configurations, 
-                  but consider browsing and adding CodeBundles to your cart for a more complete setup.
+                  <strong>No Skills selected:</strong> You can still create configurations, 
+                  but consider browsing and adding Skills to your cart for a more complete setup.
                 </Typography>
               </Alert>
               <Button
                 component={Link}
-                to="/codebundles"
+                to="/skills"
                 variant="text"
                 sx={{ mt: 2 }}
                 startIcon={<CodeIcon />}
               >
-                Browse CodeBundles
+                Browse Skills
               </Button>
             </Box>
           )}
@@ -836,7 +836,7 @@ ${yamlString}`;
             Helm Configuration Wizard
           </Typography>
           <Typography variant="h6" color="text.secondary" sx={{ mb: 4 }}>
-            Add some CodeBundles to your cart to get started with Helm configuration generation.
+            Add some Skills to your cart to get started with Helm configuration generation.
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
             <Button
@@ -848,12 +848,12 @@ ${yamlString}`;
             </Button>
             <Button
               component={Link}
-              to="/codebundles"
+              to="/skills"
               variant="contained"
               size="large"
               startIcon={<CodeIcon />}
             >
-              Browse CodeBundles
+              Browse Skills
             </Button>
             <Button
               variant="contained"
@@ -1963,7 +1963,7 @@ ${yamlString}`;
                     {repo.collection_name}
                   </Typography>
                   <Chip 
-                    label={`${repo.codebundles.length} CodeBundle${repo.codebundles.length !== 1 ? 's' : ''}`} 
+                    label={`${repo.codebundles.length} Skill${repo.codebundles.length !== 1 ? 's' : ''}`} 
                     size="small" 
                     color="primary" 
                   />
@@ -2006,7 +2006,7 @@ ${yamlString}`;
                 </Box>
 
                 <Typography variant="subtitle2" gutterBottom>
-                  CodeBundles ({repo.codebundles.length}):
+                  Skills ({repo.codebundles.length}):
                 </Typography>
                 <List dense>
                   {repo.codebundles.map((item) => (
@@ -2015,7 +2015,7 @@ ${yamlString}`;
                         primary={
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Link
-                              to={`/collections/${repo.collection_slug}/codebundles/${item.codebundle.slug}`}
+                              to={`/plugins/${repo.collection_slug}/skills/${item.codebundle.slug}`}
                               style={{ textDecoration: 'none', color: 'inherit' }}
                             >
                               <Typography variant="body2" sx={{ '&:hover': { color: 'primary.main' } }}>
@@ -2072,7 +2072,7 @@ ${yamlString}`;
               
               <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" color="text.secondary">
-                  Total CodeBundles
+                  Total Skills
                 </Typography>
                 <Typography variant="h4" color="primary">
                   {items.length}
@@ -2090,7 +2090,7 @@ ${yamlString}`;
 
               <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" color="text.secondary">
-                  Total Tasks
+                  Total Tools
                 </Typography>
                 <Typography variant="h4" color="primary">
                   {items.reduce((sum, item) => sum + item.codebundle.task_count, 0)}
@@ -2099,7 +2099,7 @@ ${yamlString}`;
 
               <Box sx={{ mb: 3 }}>
                 <Typography variant="body2" color="text.secondary">
-                  Total SLIs
+                  Total Monitors
                 </Typography>
                 <Typography variant="h4" color="primary">
                   {items.reduce((sum, item) => sum + item.codebundle.sli_count, 0)}
@@ -2110,7 +2110,7 @@ ${yamlString}`;
 
               <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Auto-Discovered CodeBundles
+                  Auto-Discovered Skills
                 </Typography>
                 <Typography variant="body1">
                   {items.filter(item => item.codebundle.configuration_type?.has_generation_rules).length} of {items.length}
@@ -2152,9 +2152,9 @@ ${yamlString}`;
                 fullWidth
                 variant="outlined"
                 component={Link}
-                to="/codebundles"
+                to="/skills"
               >
-                Add More CodeBundles
+                Add More Skills
               </Button>
               </CardContent>
             </Card>
@@ -2164,7 +2164,7 @@ ${yamlString}`;
                 <strong>Next Steps:</strong><br />
                 1. Copy the configuration YAML<br />
                 2. Clone the required repositories<br />
-                3. Use the RunWhen CLI to deploy your selected CodeBundles
+                3. Use the RunWhen CLI to deploy your selected Skills
               </Typography>
             </Alert>
           </Box>
@@ -2511,7 +2511,7 @@ ${yamlString}`;
               </Box>
               
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                This configuration can be used with the RunWhen CLI to deploy your selected CodeBundles.
+                This configuration can be used with the RunWhen CLI to deploy your selected Skills.
               </Typography>
 
               <Collapse in={showYamlEditor}>

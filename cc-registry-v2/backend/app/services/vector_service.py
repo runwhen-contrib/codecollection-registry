@@ -284,15 +284,41 @@ class VectorService:
             parts.append(cb["ai_enhanced_description"])
         if cb.get("discovery_platform"):
             parts.append(f"Platform: {cb['discovery_platform']}")
+        resource_types = cb.get("discovery_resource_types") or []
+        if resource_types:
+            parts.append(f"Applies to: {', '.join(str(t) for t in resource_types[:15])}")
         tags = cb.get("support_tags") or []
         if tags:
             parts.append(f"Tags: {', '.join(tags[:15])}")
+
+        # `tasks` is a list of strings for legacy Robot codebundles and a
+        # list of dicts for V13 plugin skills. Render names + titles + a
+        # short description for the latter.
         tasks = cb.get("tasks") or []
-        if tasks:
-            parts.append(f"Tasks: {', '.join(tasks[:20])}")
+        task_names: List[str] = []
+        task_descriptions: List[str] = []
+        for task in tasks:
+            if isinstance(task, dict):
+                label = task.get("title") or task.get("name")
+                if label:
+                    task_names.append(str(label))
+                desc = task.get("description") or task.get("doc")
+                if desc:
+                    task_descriptions.append(str(desc)[:300])
+            elif task:
+                task_names.append(str(task))
+        if task_names:
+            parts.append(f"Tasks: {', '.join(task_names[:20])}")
+        if task_descriptions:
+            parts.append("Task details: " + " ".join(task_descriptions[:10]))
+
         readme = cb.get("readme") or ""
         if readme:
             parts.append(readme[:2000])
+        # V13: SKILL.md body when no README is present.
+        doc = cb.get("doc") or ""
+        if doc and doc != readme:
+            parts.append(doc[:2000])
         return "\n".join(parts)
 
     @staticmethod
@@ -305,6 +331,10 @@ class VectorService:
             "description": (cb.get("description") or "")[:500],
             "platform": cb.get("discovery_platform") or cb.get("platform", ""),
             "tags": ",".join((cb.get("support_tags") or [])[:10]),
+            "resource_types": ",".join(
+                str(t) for t in (cb.get("discovery_resource_types") or [])[:10]
+            ),
+            "runbook_source_url": cb.get("runbook_source_url", ""),
         }
 
     @staticmethod

@@ -119,11 +119,11 @@ const VersionDetail: React.FC = () => {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Breadcrumbs */}
       <Breadcrumbs sx={{ mb: 3 }}>
-        <Link to="/collections" style={{ textDecoration: 'none', color: 'inherit' }}>
-          Collections
+        <Link to="/plugins" style={{ textDecoration: 'none', color: 'inherit' }}>
+          Plugins
         </Link>
         <Link 
-          to={`/collections/${collectionSlug}`} 
+          to={`/plugins/${collectionSlug}`} 
           style={{ textDecoration: 'none', color: 'inherit' }}
         >
           {version.codecollection?.name}
@@ -136,11 +136,11 @@ const VersionDetail: React.FC = () => {
       {/* Back Button */}
       <Button
         component={Link}
-        to={`/collections/${collectionSlug}`}
+        to={`/plugins/${collectionSlug}`}
         startIcon={<ArrowBackIcon />}
         sx={{ mb: 3 }}
       >
-        Back to Collection
+        Back to Plugin
       </Button>
 
       {/* Version Header */}
@@ -183,7 +183,7 @@ const VersionDetail: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CodeIcon color="action" />
             <Typography variant="body2" color="text.secondary">
-              {codebundles.length} codebundles
+              {codebundles.length} Skills
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -194,11 +194,11 @@ const VersionDetail: React.FC = () => {
         </Box>
       </Paper>
 
-      {/* Codebundles List */}
+      {/* Skills List */}
       <Card>
         <CardContent>
           <Typography variant="h5" sx={{ mb: 2 }}>
-            Codebundles ({codebundles.length})
+            Skills ({codebundles.length})
           </Typography>
           
           {codebundles.length > 0 ? (
@@ -244,11 +244,11 @@ const VersionDetail: React.FC = () => {
                           </Box>
                         )}
                         <Typography variant="caption" color="text.secondary">
-                          {codebundle.task_count} tasks
+                          {codebundle.task_count} Tools
                         </Typography>
                         {codebundle.sli_count > 0 && (
                           <Typography variant="caption" color="text.secondary">
-                            {codebundle.sli_count} SLIs
+                            {codebundle.sli_count} Monitors
                           </Typography>
                         )}
                       </Box>
@@ -296,7 +296,7 @@ const VersionDetail: React.FC = () => {
           ) : (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="body1" color="text.secondary">
-                No codebundles found in this version.
+                No Skills found in this version.
               </Typography>
             </Box>
           )}

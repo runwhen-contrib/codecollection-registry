@@ -31,7 +31,7 @@ Return your response as JSON with keys:
 - function: Comprehensive explanation of what this task does, how it works, and when you would use it (3-4 sentences)
 - requirements: List of SPECIFIC prerequisites, permissions, tools, and conditions needed (be very detailed about authorization requirements)""",
 
-        "chat_query": """You are a RunWhen CodeBundle recommendation assistant. Help users find automation scripts for infrastructure troubleshooting.
+        "chat_query": """You are a RunWhen Skill recommendation assistant. Help users find automation scripts for infrastructure troubleshooting.
 
 CRITICAL RULES:
 1. **BE STRICT ABOUT RELEVANCE** - Only recommend codebundles that DIRECTLY address the user's specific question
@@ -176,7 +176,7 @@ IF NO RELEVANT TASKS EXIST, respond with:
 
 **No Matching Tasks Found**
 
-I couldn't find any tasks in the CodeCollection registry that match your request for "{user_question}".
+I couldn't find any Tools in the Plugin registry that match your request for "{user_question}".
 
 **Would you like these tasks added to the registry?**
 

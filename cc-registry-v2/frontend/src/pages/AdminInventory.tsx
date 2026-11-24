@@ -227,7 +227,7 @@ const AdminInventory: React.FC = () => {
           Admin Inventory
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Detailed database view of CodeCollections and CodeBundles with AI enhancement data
+          Detailed database view of Plugins and Skills with AI enhancement data
         </Typography>
       </Box>
 
@@ -238,7 +238,7 @@ const AdminInventory: React.FC = () => {
             <Card>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
-                  Collections
+                  Plugins
                 </Typography>
                 <Typography variant="h4">
                   {stats.collections.total}
@@ -250,7 +250,7 @@ const AdminInventory: React.FC = () => {
             <Card>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
-                  CodeBundles
+                  Skills
                 </Typography>
                 <Typography variant="h4">
                   {stats.codebundles.total}
@@ -297,12 +297,12 @@ const AdminInventory: React.FC = () => {
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs value={currentTab} onChange={(e, newValue) => setCurrentTab(newValue)}>
-          <Tab label="CodeBundles" icon={<CodeIcon />} />
-          <Tab label="Collections" icon={<StorageIcon />} />
+          <Tab label="Skills" icon={<CodeIcon />} />
+          <Tab label="Plugins" icon={<StorageIcon />} />
         </Tabs>
       </Box>
 
-      {/* CodeBundles Tab */}
+      {/* Skills Tab */}
       <TabPanel value={currentTab} index={0}>
         {/* Filters */}
         <Card sx={{ mb: 3 }}>
@@ -330,7 +330,7 @@ const AdminInventory: React.FC = () => {
               </Grid>
               <Grid item xs={12} sm={6} md={2}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Collection</InputLabel>
+                  <InputLabel>Plugin</InputLabel>
                   <Select
                     value={collectionFilter}
                     onChange={(e) => setCollectionFilter(e.target.value)}
@@ -400,7 +400,7 @@ const AdminInventory: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* CodeBundles Table */}
+        {/* Skills Table */}
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress />
@@ -415,8 +415,8 @@ const AdminInventory: React.FC = () => {
               <TableHead>
                 <TableRow>
                   <TableCell>Name</TableCell>
-                  <TableCell>Collection</TableCell>
-                  <TableCell>Tasks</TableCell>
+                  <TableCell>Plugin</TableCell>
+                  <TableCell>Tools</TableCell>
                   <TableCell>Enhancement Status</TableCell>
                   <TableCell>Access Level</TableCell>
                   <TableCell>AI Enhanced</TableCell>
@@ -523,12 +523,12 @@ const AdminInventory: React.FC = () => {
                       <Grid container spacing={2}>
                         <Grid item xs={6}>
                           <Typography variant="body2">
-                            <strong>CodeBundles:</strong> {collection.codebundle_count}
+                            <strong>Skills:</strong> {collection.codebundle_count}
                           </Typography>
                         </Grid>
                         <Grid item xs={6}>
                           <Typography variant="body2">
-                            <strong>Tasks:</strong> {collection.total_tasks}
+                            <strong>Tools:</strong> {collection.total_tasks}
                           </Typography>
                         </Grid>
                         <Grid item xs={6}>
@@ -582,7 +582,7 @@ const AdminInventory: React.FC = () => {
         fullWidth
       >
         <DialogTitle>
-          CodeBundle Details: {selectedCodebundle?.display_name || selectedCodebundle?.name}
+          Skill Details: {selectedCodebundle?.display_name || selectedCodebundle?.name}
         </DialogTitle>
         <DialogContent>
           {selectedCodebundle && (

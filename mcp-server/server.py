@@ -3,7 +3,7 @@
 RunWhen Skills Registry MCP Server
 
 A Model Context Protocol server for querying RunWhen Skills Registry data
-(Skill Templates, Tools, libraries, and documentation resources).
+(Skills, Plugins, Tools, libraries, and documentation resources).
 """
 import asyncio
 import json
@@ -33,8 +33,8 @@ async def list_tools() -> List[Tool]:
         Tool(
             name="list_codebundles",
             description=(
-                "List all Skill Templates (formerly 'CodeBundles') and CodeCollections. "
-                "Supports filtering by collection and output formatting."
+                "List all Skills (formerly 'CodeBundles') and Plugins. "
+                "Supports filtering by plugin and output formatting."
             ),
             inputSchema={
                 "type": "object",
@@ -47,7 +47,7 @@ async def list_tools() -> List[Tool]:
                     },
                     "collection_slug": {
                         "type": "string",
-                        "description": "Filter by CodeCollection slug (optional)"
+                        "description": "Filter by Plugin slug (optional)"
                     }
                 }
             }
@@ -55,8 +55,8 @@ async def list_tools() -> List[Tool]:
         Tool(
             name="search_codebundles",
             description=(
-                "Search for Skill Templates (formerly 'CodeBundles') by keywords, tags, or use case. "
-                "Returns relevant Skill Templates with relevance scoring."
+                "Search for Skills (formerly 'CodeBundles') by keywords, tags, or use case. "
+                "Returns relevant Skills with relevance scoring."
             ),
             inputSchema={
                 "type": "object",
@@ -85,17 +85,17 @@ async def list_tools() -> List[Tool]:
         ),
         Tool(
             name="get_codebundle_details",
-            description="Get detailed information about a specific Skill Template (formerly 'CodeBundle')",
+            description="Get detailed information about a specific Skill (formerly 'CodeBundle')",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slug": {
                         "type": "string",
-                        "description": "Skill Template slug"
+                        "description": "Skill slug"
                     },
                     "collection_slug": {
                         "type": "string",
-                        "description": "CodeCollection slug (optional)"
+                        "description": "Plugin slug (optional)"
                     }
                 },
                 "required": ["slug"]
@@ -103,7 +103,7 @@ async def list_tools() -> List[Tool]:
         ),
         Tool(
             name="list_codecollections",
-            description="List all available CodeCollections",
+            description="List all available Plugins",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -207,15 +207,15 @@ async def handle_list_codebundles(arguments: Dict[str, Any]) -> List[TextContent
     
     elif format_type == "summary":
         result = f"# RunWhen Skills Registry Summary\n\n"
-        result += f"**Total CodeCollections:** {len(collections)}\n"
-        result += f"**Total Skill Templates:** {len(codebundles)}\n\n"
+        result += f"**Total Plugins:** {len(collections)}\n"
+        result += f"**Total Skills:** {len(codebundles)}\n\n"
         
         for cc in collections:
             cc_bundles = [cb for cb in codebundles if cb.get("collection_slug") == cc["slug"]]
-            result += f"- **{cc['name']}** ({cc['slug']}): {len(cc_bundles)} Skill Templates\n"
+            result += f"- **{cc['name']}** ({cc['slug']}): {len(cc_bundles)} Skills\n"
     
     else:  # markdown
-        result = "# RunWhen CodeCollections and Skill Templates\n\n"
+        result = "# RunWhen Plugins and Skills\n\n"
         
         # Group codebundles by collection
         for cc in collections:
@@ -225,7 +225,7 @@ async def handle_list_codebundles(arguments: Dict[str, Any]) -> List[TextContent
             result += f"**Slug:** `{cc['slug']}`\n\n"
             result += f"**Description:** {cc.get('description', 'N/A')}\n\n"
             result += f"**Repository:** {cc.get('git_url', 'N/A')}\n\n"
-            result += f"**Skill Templates ({len(cc_bundles)}):**\n\n"
+            result += f"**Skills ({len(cc_bundles)}):**\n\n"
             
             if cc_bundles:
                 for cb in cc_bundles:
@@ -244,7 +244,7 @@ async def handle_list_codebundles(arguments: Dict[str, Any]) -> List[TextContent
                     
                     result += "\n"
             else:
-                result += "*No Skill Templates found*\n\n"
+                result += "*No Skills found*\n\n"
     
     return [TextContent(type="text", text=result)]
 
@@ -270,10 +270,10 @@ async def handle_search_codebundles(arguments: Dict[str, Any]) -> List[TextConte
     
     # Format results
     if not results:
-        return [TextContent(type="text", text=f"No Skill Templates found matching query: {query}")]
+        return [TextContent(type="text", text=f"No Skills found matching query: {query}")]
     
     output = f"# Search Results for: {query}\n\n"
-    output += f"Found {len(results)} relevant Skill Template(s):\n\n"
+    output += f"Found {len(results)} relevant Skill(s):\n\n"
     
     for i, cb in enumerate(results, 1):
         output += f"## {i}. {cb.get('display_name', cb.get('name'))}\n\n"
@@ -313,7 +313,7 @@ async def handle_get_codebundle_details(arguments: Dict[str, Any]) -> List[TextC
     cb = data_loader.get_codebundle_by_slug(slug, collection_slug)
     
     if not cb:
-        return [TextContent(type="text", text=f"Skill Template not found: {slug}")]
+        return [TextContent(type="text", text=f"Skill not found: {slug}")]
     
     # Format detailed output
     output = f"# {cb.get('display_name', cb.get('name'))}\n\n"
@@ -378,13 +378,13 @@ async def handle_list_codecollections(arguments: Dict[str, Any]) -> List[TextCon
         result = json.dumps({"codecollections": collections}, indent=2)
     
     elif format_type == "summary":
-        result = f"# RunWhen CodeCollections\n\n"
+        result = f"# RunWhen Plugins\n\n"
         result += f"**Total:** {len(collections)}\n\n"
         for cc in collections:
             result += f"- **{cc['name']}** (`{cc['slug']}`): {cc.get('description', 'N/A')}\n"
     
     else:  # markdown
-        result = "# RunWhen CodeCollections\n\n"
+        result = "# RunWhen Plugins\n\n"
         for cc in collections:
             result += f"## {cc['name']}\n\n"
             result += f"- **Slug:** `{cc['slug']}`\n"
@@ -394,7 +394,7 @@ async def handle_list_codecollections(arguments: Dict[str, Any]) -> List[TextCon
             result += f"- **Owner:** {cc.get('owner', 'N/A')}\n"
             result += f"- **Primary Language:** {cc.get('primary_language', 'N/A')}\n"
             result += f"- **Tags:** {', '.join(cc.get('tags', []))}\n"
-            result += f"- **Skill Template Count:** {cc.get('codebundle_count', 0)}\n\n"
+            result += f"- **Skill Count:** {cc.get('codebundle_count', 0)}\n\n"
     
     return [TextContent(type="text", text=result)]
 

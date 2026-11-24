@@ -70,14 +70,14 @@ const TestAPI: React.FC = () => {
 
       {collections.length > 0 && (
         <Box sx={{ mb: 2 }}>
-          <Typography variant="h6">Collections ({collections.length}):</Typography>
+          <Typography variant="h6">Plugins ({collections.length}):</Typography>
           <pre>{JSON.stringify(collections, null, 2)}</pre>
         </Box>
       )}
 
       {codebundles.length > 0 && (
         <Box sx={{ mb: 2 }}>
-          <Typography variant="h6">Codebundles ({codebundles.length}):</Typography>
+          <Typography variant="h6">Skills ({codebundles.length}):</Typography>
           <pre>{JSON.stringify(codebundles, null, 2)}</pre>
         </Box>
       )}

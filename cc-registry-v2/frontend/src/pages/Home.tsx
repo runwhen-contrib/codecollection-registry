@@ -68,7 +68,7 @@ const EXAMPLE_SEARCHES = [
   "How do I troubleshoot Postgres connection timeouts?",
   "Help me check if my Prometheus instance is healthy",
   "I need to diagnose issues with my AKS cluster",
-  "Show me how to parse JSON output in Robot Framework"
+  "How do I check replication lag on my Patroni cluster?"
 ];
 
 const Home: React.FC = () => {
@@ -100,7 +100,7 @@ const Home: React.FC = () => {
   };
 
   const handleTagClick = (tag: string) => {
-    navigate(`/all-tasks?support_tags=${encodeURIComponent(tag)}`);
+    navigate(`/all-tools?support_tags=${encodeURIComponent(tag)}`);
   };
 
   useEffect(() => {
@@ -319,19 +319,19 @@ const Home: React.FC = () => {
           }}>
             {[
               {
-                icon: CollectionIcon, label: 'CodeCollections', count: stats?.collections || 0, to: '/collections',
-                desc: 'Groups of Skill Templates by provider',
-                tooltip: 'CodeCollections group related Skill Templates by technology or provider — like aws-codecollection or k8s-codecollection. Each collection is backed by a Git repository maintained by the community.',
+                icon: CollectionIcon, label: 'Plugins', count: stats?.collections || 0, to: '/plugins',
+                desc: 'Integration & skill packages by platform',
+                tooltip: 'Plugins bundle a platform integration (resource types, facets, credentials) with diagnostic and remediation Skills — such as kubernetes, aws, azure, gcp, and postgres.',
               },
               {
-                icon: BundleIcon, label: 'Skill Templates', count: stats?.codebundles || 0, to: '/codebundles',
-                desc: 'Scripted automation packages',
-                tooltip: 'A Skill Template is a self-contained automation package that targets a specific service or resource — like "Postgres Health" or "AKS Triage." Each Skill Template contains one or more executable Tools, configuration variables, and documentation.',
+                icon: BundleIcon, label: 'Skills', count: stats?.codebundles || 0, to: '/skills',
+                desc: 'Diagnostic & remediation packages',
+                tooltip: 'A Skill is a reusable package targeting a specific service or resource — like k8s-postgres-operator-health or azure-aks-health — containing executable Tools, settings, inputs, and operational guidance.',
               },
               {
-                icon: TaskIcon, label: 'Tools', count: stats?.tasks || 0, to: '/all-tasks',
+                icon: TaskIcon, label: 'Tools', count: stats?.tasks || 0, to: '/all-tools',
                 desc: 'CLI & API actions to run',
-                tooltip: 'Tools are the runnable units inside a Skill Template. Each Tool is a scripted action — CLI commands, API calls, or queries — that performs a specific operation like "Check Pod Restarts" or "Query Connection Pool." Tools are either Runbooks (run on demand in response to an event) or Monitors (run on a schedule, emit a 0-1 health score). They execute on private runners in your environment.',
+                tooltip: 'Tools are the runnable units inside a Skill. Each Tool is a scripted action — CLI commands, API calls, or queries — that performs a specific operation like "Check Pod Restarts" or "Query Connection Pool." Tools are either Runbooks (run on demand in response to an event) or Monitors (run on a schedule, emit a 0-1 health score). They execute on private runners in your environment.',
               },
               {
                 icon: DocsIcon, label: 'Docs', count: null, to: '/chat',
@@ -596,7 +596,7 @@ const Home: React.FC = () => {
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 4 }}>
           
-          {/* Left Column: Recently Updated CodeBundles */}
+          {/* Left Column: Recently Updated Skills */}
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
               <TrendingIcon sx={{ color: '#2F80ED', fontSize: 24 }} />
@@ -608,7 +608,7 @@ const Home: React.FC = () => {
                   letterSpacing: '-0.2px'
                 }}
               >
-                Recently Updated Skill Templates
+                Recently Updated Skills
               </Typography>
             </Box>
             
@@ -631,7 +631,7 @@ const Home: React.FC = () => {
                 <Box
                   key={`${cb.id}-${codebundleOffset}`}
                   component={Link}
-                  to={`/collections/${cb.collection_slug}/codebundles/${cb.slug}`}
+                  to={`/plugins/${cb.collection_slug}/skills/${cb.slug}`}
                   sx={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -760,7 +760,7 @@ const Home: React.FC = () => {
                 <Box
                   key={`${task.codebundle_slug}-${task.task_name}-${taskOffset}`}
                   component={Link}
-                  to={`/collections/${task.collection_slug}/codebundles/${task.codebundle_slug}`}
+                  to={`/plugins/${task.collection_slug}/skills/${task.codebundle_slug}`}
                   sx={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -865,7 +865,7 @@ const Home: React.FC = () => {
         }}>
           <Button
             component={Link}
-            to="/codebundles"
+            to="/skills"
             variant="contained"
             sx={{
               textTransform: 'none',
@@ -881,7 +881,7 @@ const Home: React.FC = () => {
               }
             }}
           >
-            Browse All Skill Templates
+            Browse All Skills
           </Button>
           <Button
             variant="outlined"

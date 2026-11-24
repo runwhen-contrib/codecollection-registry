@@ -1,7 +1,7 @@
 ---
-title: "{{ parsed_runbook['display_name'] }} TaskSet"
+title: "{{ parsed_runbook['display_name'] }} Skill"
 tags:
-  - tasks
+  - tools
   - runbook
   {% for tag in parsed_runbook['support_tags'] %}
   - {{ tag }}
@@ -38,7 +38,7 @@ tags:
                 </p>
                 <p class="author-bio">
                     <img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/content_copy.svg" alt="Icon 2" class="bio-icon">
-                    Codecollection: <a href="/CodeCollection/{{ codecollection_slug }}">{{ codecollection_slug }}</a>
+                    Plugin: <a href="/Plugins/{{ plugin_slug }}">{{ plugin_slug }}</a>
                 </p>
             </div>
         </div>
@@ -47,7 +47,7 @@ tags:
     <div class="card-description">
     {{ parsed_runbook['doc'] }}
     <br><br>
-    <b>Tasks:</b>
+    <b>Tools:</b>
     <ul>
         {% for task in parsed_runbook['tasks'] %}
         <li>
@@ -63,15 +63,15 @@ tags:
     </ul>
     </div>
     <div class="card-footer">
-        <a class="codebundle-button" href="{{ runbook_source_url }}" target="_blank"><img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/github-mark.svg" alt="Icon" class="codebundle-button-icon">Source Code</a>
+        <a class="skill-button" href="{{ runbook_source_url }}" target="_blank"><img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/github-mark.svg" alt="Icon" class="skill-button-icon">Source Code</a>
         {% if "true" in has_genrules %}
-        <a class="codebundle-button"><img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/search.svg" alt="Icon" class="codebundle-button-icon">Discoverable</a>
+        <a class="skill-button"><img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/search.svg" alt="Icon" class="skill-button-icon">Discoverable</a>
         {% endif %}
         {% if "true" in found_in_cheatsheet %}
-        <a class="codebundle-button"><img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/edit_note.svg" alt="Icon" class="codebundle-button-icon">Troubleshooting CheatSheet</a>
+        <a class="skill-button"><img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/edit_note.svg" alt="Icon" class="skill-button-icon">Troubleshooting CheatSheet</a>
         {% endif %}
         {% if "true" in raises_issues %}
-        <a class="codebundle-button""><img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/warning.svg" alt="Icon" class="codebundle-button-icon">Raises Issues</a>
+        <a class="skill-button"><img src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/warning.svg" alt="Icon" class="skill-button-icon">Raises Issues</a>
         {% endif %}
     </div>
 </div>

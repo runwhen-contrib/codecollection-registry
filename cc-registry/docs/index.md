@@ -120,26 +120,26 @@ hide:
 <div class="home-column-container">
 
 <div class="home-column">
-  <h2> Featured CodeCollections </h2><hr>
+  <h2> Featured Plugins </h2><hr>
   <div class="card-grid" markdown>
   
     <div class="card">
     <img class="card-icon" src="https://assets-global.website-files.com/64f9646ad0f39e9ee5c116c4/659f80c7391d64a0ec2a840e_icon_rw-platform.svg" alt="Icon" />
-    <a href="/CodeCollection/rw-public-codecollection"><br>
+    <a href="/Plugins/rw-public-codecollection"><br>
     RunWhen Public CodeCollection
     </a>
     </div>
   
     <div class="card">
     <img class="card-icon" src="https://assets-global.website-files.com/64f9646ad0f39e9ee5c116c4/659f80c7391d64a0ec2a840e_icon_rw-platform.svg" alt="Icon" />
-    <a href="/CodeCollection/rw-cli-codecollection"><br>
+    <a href="/Plugins/rw-cli-codecollection"><br>
     RunWhen CLI CodeCollection
     </a>
     </div>
   
     <div class="card">
     <img class="card-icon" src="https://assets-global.website-files.com/64f9646ad0f39e9ee5c116c4/659f80c7391d64a0ec2a840e_icon_rw-platform.svg" alt="Icon" />
-    <a href="/CodeCollection/rw-generic-codecollection"><br>
+    <a href="/Plugins/rw-generic-codecollection"><br>
     RunWhen Generic CodeCollection
     </a>
     </div>
