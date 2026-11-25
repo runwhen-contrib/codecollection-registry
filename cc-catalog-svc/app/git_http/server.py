@@ -52,7 +52,7 @@ _STREAM_CHUNK_BYTES = 64 * 1024
 # raw refs / loose objects under unauthenticated HTTP.
 #
 # ``.git`` is optional in the URL path. GitHub/GitLab accept clone URLs
-# with or without the suffix; platform consumers (sobow gitget) often
+# with or without the suffix; platform consumers (PAPI capability sync) often
 # normalize to the bare form before ``git ls-remote``. Bare repos on disk
 # are still ``<slug>.git`` — we rewrite PATH_INFO before http-backend.
 _PATH_RE = re.compile(
