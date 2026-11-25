@@ -299,7 +299,7 @@ const Home: React.FC = () => {
               mx: 'auto'
             }}
           >
-            The public catalog of open-source Plugins, Skills, and Tasks built for production operations. Give your Agents Day-0 observability out of the box — so they can automatically investigate INC/CRQ tickets and alerts, deliver root-cause facts before an engineer is paged, and continuously author new private Skills as your environment evolves.
+            The public catalog of open-source Plugins, Skills, and Tasks built for production operations. Give your Agents Day-0 observability out of the box across cloud, Kubernetes, databases, APIs, CLIs, SaaS, and ticketing systems — so they can automatically investigate INC/CRQ tickets and alerts, deliver root-cause facts before an engineer is paged, and continuously author new private Skills as your environment evolves.
           </Typography>
 
           {/* Search Bar that routes to Registry Chat */}
@@ -356,7 +356,7 @@ const Home: React.FC = () => {
               {
                 icon: CollectionIcon, label: 'Plugins', count: stats?.collections || 0, to: '/plugins',
                 desc: 'Integration & skill packages by platform',
-                tooltip: 'Plugins bundle a platform integration (resource types, facets, credentials) with diagnostic and remediation Skills — such as kubernetes, aws, azure, gcp, and postgres.',
+                tooltip: 'Plugins bundle an integration — resource types, facets, credentials and auth — for any API, CLI, cloud, Kubernetes, database, observability, or SaaS system, together with its diagnostic and remediation Skills.',
               },
               {
                 icon: BundleIcon, label: 'Skills', count: stats?.codebundles || 0, to: '/skills',
@@ -461,7 +461,7 @@ const Home: React.FC = () => {
                   kicker: 'Day-0 Context',
                   title: 'Discover & Map',
                   icon: ContextIcon,
-                  desc: 'Plugins index cloud, Kubernetes, and database resources + dependencies automatically on Day 0.',
+                  desc: 'Plugins connect to any API, CLI, cloud, Kubernetes, database, observability, or ticketing system — and map resources and dependencies on Day 0.',
                   accent: false,
                 },
                 {
