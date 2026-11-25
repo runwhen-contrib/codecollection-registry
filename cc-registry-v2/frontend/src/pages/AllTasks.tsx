@@ -29,7 +29,6 @@ import {
   Sort as SortIcon,
 } from '@mui/icons-material';
 import { apiService, Task, TasksResponse } from '../services/api';
-import { labelForType } from '../lib/terminology';
 
 type ViewMode = 'grouped' | 'presentation';
 type SortOrder = 'alpha' | 'diverse' | 'codebundle';
@@ -523,35 +522,15 @@ const AllTasks: React.FC = () => {
                             </Box>
                           </Box>
 
-                          <Box>
-                            {group.tasks.filter(task => task.type === 'TaskSet').length > 0 && (
-                              <Box sx={{ mb: 1.5 }}>
-                                <Typography variant="subtitle2" sx={{ color: 'primary.main', fontWeight: 600, mb: 0.5, fontSize: '0.875rem' }}>
-                                  {labelForType('TaskSet')} ({group.tasks.filter(task => task.type === 'TaskSet').length})
-                                </Typography>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                  {group.tasks.filter(task => task.type === 'TaskSet').map((task) => (
-                                    <Box key={task.id} sx={{ px: 1.5, py: 0.75, minHeight: 40, bgcolor: 'action.hover', borderRadius: 0.5, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center' }}>
-                                      <Typography variant="body2" sx={{ fontSize: '0.9375rem', fontWeight: 500, color: 'text.primary' }}>{task.name}</Typography>
-                                    </Box>
-                                  ))}
-                                </Box>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            {group.tasks.map((task) => (
+                              <Box key={task.id} sx={{ px: 1.5, py: 0.75, minHeight: 40, bgcolor: 'action.hover', borderRadius: 0.5, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ flex: 1, fontSize: '0.9375rem', fontWeight: 500, color: 'text.primary' }}>{task.name}</Typography>
+                                {task.type === 'SLI' && (
+                                  <Chip label="Monitor" size="small" variant="outlined" color="secondary" sx={{ fontSize: '0.6875rem', height: 20 }} />
+                                )}
                               </Box>
-                            )}
-                            {group.tasks.filter(task => task.type === 'SLI').length > 0 && (
-                              <Box>
-                                <Typography variant="subtitle2" sx={{ color: 'secondary.main', fontWeight: 600, mb: 0.5, fontSize: '0.875rem' }}>
-                                  {labelForType('SLI')} ({group.tasks.filter(task => task.type === 'SLI').length})
-                                </Typography>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                  {group.tasks.filter(task => task.type === 'SLI').map((task) => (
-                                    <Box key={task.id} sx={{ px: 1.5, py: 0.75, minHeight: 40, bgcolor: 'action.hover', borderRadius: 0.5, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center' }}>
-                                      <Typography variant="body2" sx={{ fontSize: '0.9375rem', fontWeight: 500, color: 'text.primary' }}>{task.name}</Typography>
-                                    </Box>
-                                  ))}
-                                </Box>
-                              </Box>
-                            )}
+                            ))}
                           </Box>
                         </CardContent>
                       </Card>
