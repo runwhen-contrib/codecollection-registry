@@ -107,10 +107,12 @@ class Settings(BaseSettings):
         # Build DATABASE_URL from components if not provided
         if not self.DATABASE_URL:
             if all([self.DB_HOST, self.DB_USER, self.DB_PASSWORD, self.DB_NAME]):
-                self.DATABASE_URL = f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+                self.DATABASE_URL = f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
             else:
                 # Fallback to default for development
-                self.DATABASE_URL = "postgresql://user:password@database:5432/codecollection_registry"
+                self.DATABASE_URL = "postgresql+psycopg2://user:password@database:5432/codecollection_registry"
+        elif self.DATABASE_URL.startswith("postgresql://"):
+            self.DATABASE_URL = self.DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
         
         # Build REDIS_URL. Sentinel ALWAYS wins when REDIS_SENTINEL_HOSTS
         # is set, even if a REDIS_URL was also provided via env. Helm
