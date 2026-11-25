@@ -23,9 +23,11 @@ import {
   IntegrationInstructionsOutlined as BundleIcon,
   TerminalOutlined as TaskIcon,
   MenuBookOutlined as DocsIcon,
-  ChatBubbleOutline as ChatIcon,
   SettingsSuggestOutlined as RunnerIcon,
   CheckCircleOutline as ResolveIcon,
+  AccountTreeOutlined as ContextIcon,
+  NotificationsActiveOutlined as EventIcon,
+  AutoFixHighOutlined as SkillLoopIcon,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { Link, useNavigate } from 'react-router-dom';
@@ -250,7 +252,40 @@ const Home: React.FC = () => {
           >
             RunWhen Skills Registry
           </Typography>
-          
+
+          {/* Hero pill badges */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 1, mb: 2.5 }}>
+            {[
+              { label: 'Open-Source Public Registry', accent: false, icon: CollectionIcon },
+              { label: 'Day-0 Observability', accent: false, icon: ContextIcon },
+              { label: 'Self-Improving Agent Loop', accent: true, icon: SkillLoopIcon },
+            ].map((pill) => (
+              <Box
+                key={pill.label}
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: '999px',
+                  bgcolor: pill.accent ? 'rgba(248,173,75,0.16)' : 'rgba(255,255,255,0.12)',
+                  border: '1px solid',
+                  borderColor: pill.accent ? 'rgba(248,173,75,0.65)' : 'rgba(255,255,255,0.28)',
+                  backdropFilter: 'blur(8px)',
+                  color: pill.accent ? '#ffd79a' : 'rgba(255,255,255,0.92)',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: '0.01em',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <pill.icon sx={{ fontSize: 14, color: pill.accent ? '#f8ad4b' : 'rgba(255,255,255,0.75)' }} />
+                {pill.label}
+              </Box>
+            ))}
+          </Box>
+
           <Typography 
             variant="body1" 
             align="center" 
@@ -260,11 +295,11 @@ const Home: React.FC = () => {
               fontWeight: 400,
               lineHeight: 1.5,
               color: 'rgba(255,255,255,0.90)',
-              maxWidth: '750px',
+              maxWidth: '820px',
               mx: 'auto'
             }}
           >
-            Grow your team's capability with safe-for-production skills for AI agents — across SRE, DevOps, FinOps, release engineering, and beyond. Describe your problem and the assistant will suggest the right skill to run securely in your own environment.
+            The public catalog of open-source Plugins, Skills, and Tasks built for production operations. Give your Agents Day-0 observability out of the box — so they can automatically investigate INC/CRQ tickets and alerts, deliver root-cause facts before an engineer is paged, and continuously author new private Skills as your environment evolves.
           </Typography>
 
           {/* Search Bar that routes to Registry Chat */}
@@ -413,45 +448,169 @@ const Home: React.FC = () => {
       <Box sx={{ py: { xs: 3, md: 4 }, bgcolor: 'background.default', overflow: 'hidden' }}>
         <Container maxWidth="lg">
 
-          {/* ─── Flow timeline ─── */}
-          <Box sx={{ position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', mb: { xs: 3, md: 4 }, px: 2 }}>
-            {/* Connecting line */}
+          {/* ─── Option A: 5-step Day-0 → Event Triage → Self-Improving Skill Loop ─── */}
+          <Box sx={{ mb: { xs: 3, md: 4 } }}>
             <Box sx={{
-              position: 'absolute',
-              top: 20,
-              left: '12%',
-              right: '12%',
-              height: 2,
-              background: '#2F80ED',
-              borderRadius: 1,
-              zIndex: 0,
-            }} />
-            {/* Steps */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: 700, position: 'relative', zIndex: 1 }}>
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' },
+              gap: 1.5,
+            }}>
               {[
-                { label: 'Ask', color: '#2F80ED', muiIcon: ChatIcon },
-                { label: 'Run Tasks', color: '#2F80ED', muiIcon: RunnerIcon },
-                { label: 'Collect Insights', color: '#2F80ED', img: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png' },
-                { label: 'Resolve', color: '#2F80ED', muiIcon: ResolveIcon },
+                {
+                  num: '1',
+                  kicker: 'Day-0 Context',
+                  title: 'Discover & Map',
+                  icon: ContextIcon,
+                  desc: 'Plugins index cloud, Kubernetes, and database resources + dependencies automatically on Day 0.',
+                  accent: false,
+                },
+                {
+                  num: '2',
+                  kicker: 'Event or Ask',
+                  title: 'Ticket, Alert, or Chat',
+                  icon: EventIcon,
+                  desc: 'Triggered automatically by INC/CRQ tickets, PagerDuty/Slack alerts, schedules, or human-in-the-loop.',
+                  accent: false,
+                },
+                {
+                  num: '3',
+                  kicker: 'First-Pass Run',
+                  title: 'Run Public & Private Skills',
+                  icon: RunnerIcon,
+                  desc: "Agents execute public Registry Skills alongside your team's private Skills on your own runners.",
+                  accent: false,
+                },
+                {
+                  num: '4',
+                  kicker: 'Fast MTTR',
+                  title: 'Context & Next Steps',
+                  icon: ResolveIcon,
+                  desc: 'Root-cause facts, dry-run remediations, code PRs, or smart routing land directly on the ticket.',
+                  accent: false,
+                },
+                {
+                  num: '5',
+                  kicker: 'Self-Improving',
+                  title: 'Build New Skills',
+                  icon: SkillLoopIcon,
+                  desc: 'Spot a coverage gap? Agents draft, test, and review new private Skills in the Skill Building Harness.',
+                  accent: true,
+                },
               ].map((step) => (
-                <Box key={step.label} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.75 }}>
-                  <Box sx={{
-                    width: 40, height: 40, borderRadius: '50%', bgcolor: 'background.paper',
-                    border: `2.5px solid ${step.color}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: (t: any) => `0 0 0 4px ${t.palette.background.default}, 0 2px 8px ${step.color}20`,
-                  }}>
-                    {step.img ? (
-                      <Box component="img" src={step.img} alt="" sx={{ width: 24, height: 24, borderRadius: '50%' }} />
-                    ) : step.muiIcon ? (
-                      <step.muiIcon sx={{ fontSize: 20, color: step.color }} />
-                    ) : null}
+                <Box
+                  key={step.num}
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    p: 1.75,
+                    borderRadius: 2,
+                    bgcolor: 'background.paper',
+                    border: '1px solid',
+                    borderColor: step.accent ? 'rgba(248,173,75,0.5)' : 'divider',
+                    boxShadow: step.accent ? '0 2px 14px rgba(248,173,75,0.14)' : 'none',
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      borderColor: step.accent ? '#f8ad4b' : 'primary.main',
+                      boxShadow: step.accent
+                        ? '0 4px 20px rgba(248,173,75,0.22)'
+                        : '0 4px 16px rgba(47,128,237,0.16)',
+                    },
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <Box sx={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 1.5,
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      bgcolor: step.accent
+                        ? 'rgba(248,173,75,0.14)'
+                        : isDark ? 'rgba(47,128,237,0.2)' : 'rgba(47,128,237,0.1)',
+                    }}>
+                      <step.icon sx={{ fontSize: 18, color: step.accent ? '#f8ad4b' : '#2F80ED' }} />
+                    </Box>
+                    <Typography sx={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      lineHeight: 1.2,
+                      color: step.accent
+                        ? (isDark ? '#f8ad4b' : '#a8681a')
+                        : 'text.secondary',
+                    }}>
+                      {step.num} · {step.kicker}
+                    </Typography>
                   </Box>
-                  <Typography sx={{ fontSize: 12, fontWeight: 600, color: step.color, textAlign: 'center', lineHeight: 1.2, whiteSpace: 'nowrap' }}>
-                    {step.label}
+                  <Typography sx={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: 'text.primary',
+                    mb: 0.5,
+                    lineHeight: 1.25,
+                  }}>
+                    {step.title}
+                  </Typography>
+                  <Typography sx={{ fontSize: 12, color: 'text.secondary', lineHeight: 1.45 }}>
+                    {step.desc}
                   </Typography>
                 </Box>
               ))}
+            </Box>
+
+            {/* Compact loop callout bar */}
+            <Box sx={{
+              mt: 1.5,
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' },
+              alignItems: { xs: 'flex-start', md: 'center' },
+              justifyContent: 'space-between',
+              gap: 1.5,
+              px: { xs: 2, md: 2.5 },
+              py: 1.5,
+              borderRadius: 2,
+              bgcolor: isDark ? 'rgba(248,173,75,0.08)' : 'rgba(248,173,75,0.07)',
+              border: '1px solid',
+              borderColor: isDark ? 'rgba(248,173,75,0.28)' : 'rgba(248,173,75,0.35)',
+            }}>
+              <Typography sx={{ fontSize: 12, lineHeight: 1.5, color: 'text.primary', minWidth: 0 }}>
+                <Box component="span" sx={{ color: '#f8ad4b', fontWeight: 700, mr: 0.5 }}>↻</Box>
+                <Box component="span" sx={{ fontWeight: 600 }}>The Agent Skill-Building Loop:</Box>{' '}
+                Every ticket teaches your workspace what to automate next — combining public Registry Skills with custom private Skills.
+              </Typography>
+              <Box
+                component="a"
+                href="https://www.runwhen.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: '999px',
+                  flexShrink: 0,
+                  border: '1px solid',
+                  borderColor: isDark ? 'rgba(248,173,75,0.45)' : 'rgba(248,173,75,0.55)',
+                  bgcolor: isDark ? 'rgba(248,173,75,0.1)' : '#fff',
+                  color: isDark ? '#f8ad4b' : '#a8681a',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    bgcolor: isDark ? 'rgba(248,173,75,0.18)' : 'rgba(248,173,75,0.12)',
+                    borderColor: '#f8ad4b',
+                  },
+                }}
+              >
+                Works standalone (CLI · Claude · MCP) or on RunWhen Platform →
+              </Box>
             </Box>
           </Box>
 
