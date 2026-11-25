@@ -89,7 +89,7 @@ const Plugins: React.FC = () => {
           Plugins
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Browse and explore V13 automation plugins from the RunWhen community
+          Browse platform integrations and diagnostic/remediation skills
         </Typography>
       </Box>
 
@@ -102,7 +102,9 @@ const Plugins: React.FC = () => {
         },
         gap: 3 
       }}>
-        {collections.map((collection) => (
+        {collections
+          .filter((collection) => collection.slug !== 'misc' && (!collection.statistics || collection.statistics.codebundle_count > 0))
+          .map((collection) => (
           <Card
             key={collection.id}
             sx={{
@@ -168,39 +170,28 @@ const Plugins: React.FC = () => {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <CodeIcon color="primary" fontSize="small" />
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {collection.statistics.codebundle_count}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Skills
+                        {collection.statistics.codebundle_count} Skills
                       </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <TaskIcon color="primary" fontSize="small" />
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {collection.statistics.total_tasks}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Tools
+                        {collection.statistics.total_tasks} Tools
                       </Typography>
                     </Box>
                   </Box>
                 )}
 
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  <Chip 
-                    label={collection.git_ref} 
-                    size="small" 
-                    variant="outlined"
-                  />
-                  {collection.versions && collection.versions.length > 0 && (
+                {collection.versions && collection.versions.length > 0 && (
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     <Chip 
                       label={`${collection.versions.length} version${collection.versions.length !== 1 ? 's' : ''}`} 
                       size="small" 
                       color="primary"
                       variant="outlined"
                     />
-                  )}
-                </Box>
+                  </Box>
+                )}
               </CardContent>
             </CardActionArea>
 

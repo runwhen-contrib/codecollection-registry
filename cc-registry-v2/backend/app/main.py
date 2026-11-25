@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
-from typing import Optional
+from typing import List, Optional
 from app.core.config import settings
 from app.core.database import engine, Base
 import logging
@@ -579,9 +579,12 @@ async def list_codebundles(
                 if tag_conditions:
                     query = query.filter(or_(*tag_conditions))
             
-            # Apply platform filter
+            # Apply platform filter (case-insensitive: callers may send
+            # "kubernetes", "Kubernetes", "POSTGRESQL", ...).
             if platform:
-                query = query.filter(Codebundle.discovery_platform == platform)
+                query = query.filter(
+                    func.lower(Codebundle.discovery_platform) == platform.strip().lower()
+                )
             
             # Apply access level filter
             if access_level:
@@ -742,6 +745,8 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
                 "minimum_iam_requirements": codebundle.minimum_iam_requirements or [],
                 "ai_enhanced_metadata": codebundle.ai_enhanced_metadata or {},
                 "last_enhanced": codebundle.last_enhanced,
+                # Top-level platform for easy access by MCP / API consumers
+                "platform": codebundle.discovery_platform,
                 # Discovery information
                 "configuration_type": {
                     "type": "Automatically Discovered" if codebundle.has_genrules else "Manual",
@@ -852,7 +857,8 @@ async def get_recent_tasks():
                 desc(Codebundle.git_updated_at)
             ).limit(100).all()
             
-            result = []
+            result: List[dict] = []
+            task_lists = []
             for cb in codebundles:
                 collection = db.query(CodeCollection).filter(
                     CodeCollection.id == cb.codecollection_id
@@ -862,32 +868,42 @@ async def get_recent_tasks():
                 if collection and collection.slug == 'rw-generic-codecollection':
                     continue
                 
-                # Extract task names from the codebundle
+                # Extract task names from the codebundle. `title` is the
+                # human-readable label; `name` remains the stable tool slug.
+                entries = []
                 if cb.tasks:
                     for task in cb.tasks:
-                        # Handle both string and dict formats
                         if isinstance(task, str):
                             task_name = task
+                            task_slug = task
                         elif isinstance(task, dict):
-                            task_name = task.get('name', 'Unknown Task')
+                            task_name = task.get('title') or task.get('name') or 'Unknown Task'
+                            task_slug = task.get('name') or task_name
                         else:
                             continue
                         
-                        result.append({
+                        entries.append({
                             "task_name": task_name,
+                            "task_slug": task_slug,
                             "codebundle_name": cb.display_name or cb.name,
                             "codebundle_slug": cb.slug,
                             "collection_name": collection.name if collection else "Unknown",
                             "collection_slug": collection.slug if collection else "",
                             "git_updated_at": cb.git_updated_at.isoformat() if cb.git_updated_at else None,
                         })
-                        
-                        # Stop once we have 20 tasks
+                if entries:
+                    task_lists.append(entries)
+            
+            # Round-robin across skills so the flipboard shows diverse tools
+            # instead of five consecutive tools from the same skill.
+            index = 0
+            while len(result) < 20 and any(index < len(entries) for entries in task_lists):
+                for entries in task_lists:
+                    if index < len(entries):
+                        result.append(entries[index])
                         if len(result) >= 20:
                             break
-                
-                if len(result) >= 20:
-                    break
+                index += 1
             
             return result[:20]
         finally:

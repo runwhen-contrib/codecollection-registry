@@ -255,10 +255,11 @@ const Skills: React.FC = () => {
               label="Platform"
             >
               <MenuItem value="">All Platforms</MenuItem>
-              <MenuItem value="kubernetes">Kubernetes</MenuItem>
-              <MenuItem value="aws">AWS</MenuItem>
-              <MenuItem value="gcp">GCP</MenuItem>
-              <MenuItem value="azure">Azure</MenuItem>
+              <MenuItem value="Kubernetes">Kubernetes</MenuItem>
+              <MenuItem value="AWS">AWS</MenuItem>
+              <MenuItem value="Azure">Azure</MenuItem>
+              <MenuItem value="GCP">GCP</MenuItem>
+              <MenuItem value="PostgreSQL">PostgreSQL</MenuItem>
             </Select>
           </FormControl>
 
@@ -314,13 +315,24 @@ const Skills: React.FC = () => {
                     {codebundle.display_name}
                   </Typography>
                   
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      mb: 2,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                      minHeight: '3.9em',
+                    }}
+                  >
                     {codebundle.description}
                   </Typography>
 
                   {codebundle.support_tags && codebundle.support_tags.length > 0 && (
                     <Box sx={{ mb: 2 }}>
-                      {codebundle.support_tags.slice(0, 3).map((tag) => (
+                      {codebundle.support_tags.slice(0, 4).map((tag) => (
                         <Chip
                           key={tag}
                           label={tag}
@@ -328,11 +340,12 @@ const Skills: React.FC = () => {
                           sx={{ mr: 1, mb: 1 }}
                         />
                       ))}
-                      {codebundle.support_tags.length > 3 && (
+                      {codebundle.support_tags.length > 4 && (
                         <Chip
-                          label={`+${codebundle.support_tags.length - 3} more`}
+                          label={`+${codebundle.support_tags.length - 4} more`}
                           size="small"
                           variant="outlined"
+                          sx={{ mr: 1, mb: 1 }}
                         />
                       )}
                     </Box>

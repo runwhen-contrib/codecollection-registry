@@ -53,7 +53,11 @@ async def get_collections_with_versions(
                 "name": collection.name,
                 "slug": collection.slug,
                 "description": collection.description,
-                "repository_url": collection.repository_url,
+                "repository_url": collection.git_url,
+                "git_url": collection.git_url,
+                "owner": collection.owner,
+                "owner_icon": collection.owner_icon,
+                "git_ref": collection.git_ref,
                 "created_at": collection.created_at,
                 "updated_at": collection.updated_at,
                 "versions": [
@@ -169,7 +173,8 @@ async def get_version_by_name(
             "name": collection.name,
             "slug": collection.slug,
             "description": collection.description,
-            "repository_url": collection.repository_url
+            "repository_url": collection.git_url,
+            "git_url": collection.git_url
         }
     }
 

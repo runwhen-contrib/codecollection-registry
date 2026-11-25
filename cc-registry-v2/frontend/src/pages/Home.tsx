@@ -157,11 +157,11 @@ const Home: React.FC = () => {
     }, 3500);
     return () => clearInterval(interval);
 
-  // Category carousel — 4 pages of 4, cycle every 5s
+  // Category carousel — 2 pages of 4, cycle every 5s
   }, []);
   useEffect(() => {
     const interval = setInterval(() => {
-      setActiveCatPage((prev) => (prev + 1) % 4);
+      setActiveCatPage((prev) => (prev + 1) % 2);
     }, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -458,31 +458,56 @@ const Home: React.FC = () => {
           {/* ─── Category Carousel ─── */}
           {(() => {
             const allCategories = [
-              // Page 1 — Core platforms
-              { name: 'Kubernetes', tag: 'KUBERNETES', color: '#326CE5', tasks: ['Inspect Deployment Health', 'Triage CrashLoopBackOff Pods', 'Check Namespace Resources', 'Audit RBAC Policies'] },
-              { name: 'AWS', tag: 'AWS', color: '#FF9900', tasks: ['Audit IAM Policies', 'Check CloudWatch Alerts', 'Monitor EC2 Health', 'Inspect S3 Buckets'] },
-              { name: 'Azure', tag: 'AZURE', color: '#0078D4', tasks: ['Check App Service Health', 'Monitor AKS Clusters', 'Audit Key Vault', 'Inspect Azure SQL'] },
-              { name: 'GCP', tag: 'GCP', color: '#4285F4', tasks: ['GKE Cluster Health', 'Cloud SQL Monitoring', 'IAM Audit', 'Load Balancer Check'] },
-              // Page 2 — Operations
-              { name: 'Database', tag: 'POSTGRES', color: '#336791', tasks: ['Check Connection Health', 'Monitor Replication Lag', 'Query Connection Pool', 'Inspect Slow Queries'] },
-              { name: 'Cost Optimization', tag: 'COST', color: '#2E7D32', tasks: ['Find Cost Savings', 'Identify Idle Resources', 'Right-Size Instances', 'Budget Alerts'] },
-              { name: 'Observability', tag: 'PROMETHEUS', color: '#E6522C', tasks: ['Verify Prometheus Health', 'Check Log Pipelines', 'Alert Rule Audit', 'Dashboard Health'] },
-              { name: 'Applications', tag: 'APPLICATION', color: '#7B1FA2', tasks: ['Troubleshoot Python Apps', 'Inspect Go Services', 'Check Runtime Health', 'Debug API Latency'],
-                langIcons: [
-                  'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg',
-                  'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/go/go-original-wordmark.svg',
-                ],
+              // Page 1 — Core Platforms
+              {
+                name: 'Kubernetes',
+                tag: 'KUBERNETES',
+                color: '#326CE5',
+                tasks: ['Rollout & Pod Status', 'Node Conditions & Capacity', 'PVC & Storage Health', 'Namespace Warning Events'],
               },
-              // Page 3 — DevOps & Engineering
-              { name: 'CI/CD Pipelines', tag: 'GITHUB', color: '#8b949e', tasks: ['GitHub Actions Health', 'Build Failure Triage', 'GitLab Pipeline Status', 'Artifact Registry Audit'] },
-              { name: 'GitOps', tag: 'ARGOCD', color: '#EF7B4D', tasks: ['ArgoCD Sync Health', 'FluxCD Drift Detection', 'Deployment Reconciliation', 'Helm Release Status'] },
-              { name: 'OpenShift', tag: 'OPENSHIFT', color: '#EE0000', tasks: ['Cluster Health', 'Route Monitoring', 'Build Config Audit', 'Operator Status'] },
-              { name: 'Cloud Governance', tag: 'CLOUDCUSTODIAN', color: '#1B9AAA', tasks: ['Policy Compliance', 'Tag Enforcement', 'Resource Rules Audit', 'Cost Policy Check'] },
-              // Page 4 — Security, Networking & Managed K8s
-              { name: 'Security & Certs', tag: 'CERT-MANAGER', color: '#D4A017', tasks: ['Certificate Expiry Check', 'Vault Secrets Audit', 'TLS Configuration', 'Issuer Health'] },
-              { name: 'Networking', tag: 'HTTP', color: '#0097A7', tasks: ['Ingress Health Check', 'DNS Resolution Audit', 'API Gateway Status', 'Endpoint Latency'] },
-              { name: 'Managed Kubernetes', tag: 'EKS', color: '#FF9900', tasks: ['EKS Node Health', 'AKS Upgrade Status', 'GKE Autopilot Check', 'Cluster Add-ons Audit'] },
-              { name: 'Monitoring Platforms', tag: 'DATADOG', color: '#632CA6', tasks: ['Datadog Agent Health', 'Sysdig Monitor Status', 'Grafana Dashboard Check', 'Alert Channel Audit'] },
+              {
+                name: 'PostgreSQL',
+                tag: 'POSTGRES',
+                color: '#336791',
+                tasks: ['Patroni Leader & Lag', 'Blocking Lock Chains', 'Connection Saturation', 'Long-Running Queries'],
+              },
+              {
+                name: 'Azure',
+                tag: 'AZURE',
+                color: '#0078D4',
+                tasks: ['AKS Cluster & Node Pools', 'Resource Health Status', 'Key Vault Secret Expiry', 'Activity Log Failures'],
+              },
+              {
+                name: 'AWS & GCP',
+                tag: 'DISCOVERY',
+                color: '#FF9900',
+                tasks: ['AWS Lambda Health & Errors', 'GCP Cloud Functions State', 'GCS Bucket IAM & Lifecycle', 'Multi-Region Account Discovery'],
+              },
+              // Page 2 — Workloads, Operators & Observability
+              {
+                name: 'Observability',
+                tag: 'PROMETHEUS',
+                color: '#E6522C',
+                tasks: ['Prometheus Target & TSDB Health', 'Loki Ingestion & Ring Status', 'Jaeger Trace Pipeline', 'OpenTelemetry Collector'],
+              },
+              {
+                name: 'GitOps & Delivery',
+                tag: 'ARGOCD',
+                color: '#EF7B4D',
+                tasks: ['Argo CD App Sync & Health', 'Flux Kustomization & Helm', 'Suspend & Resume Reconcile', 'Jenkins Queue & Executors'],
+              },
+              {
+                name: 'Security & Certificates',
+                tag: 'CERT-MANAGER',
+                color: '#D4A017',
+                tasks: ['Certificate Expiry & Issuers', 'Vault Sealed & HA Status', 'Key Vault Access Policies', 'RBAC Permission Checks'],
+              },
+              {
+                name: 'Resilience & Remediation',
+                tag: 'REMEDIATION',
+                color: '#7B1FA2',
+                tasks: ['Workload Rollback & Restart', 'HPA Bounds & Scaling', 'Patroni Switchover & Reinit', 'Controlled Chaos Experiments'],
+              },
             ];
             const pageSize = 4;
             const totalPages = Math.ceil(allCategories.length / pageSize);
@@ -582,7 +607,7 @@ const Home: React.FC = () => {
                   ))}
                   </Box>
                   <Typography sx={{ fontSize: 15, fontWeight: 600, color: 'text.secondary', mt: 0.25 }}>
-                    {['Platforms', 'Operations', 'DevOps & Engineering', 'Security & Networking'][activeCatPage]}
+                    {['Core Platforms', 'Workloads, Operators & Observability'][activeCatPage]}
                   </Typography>
                 </Box>
               </Box>
@@ -687,7 +712,7 @@ const Home: React.FC = () => {
                         fontFamily: 'monospace'
                       }}
                     >
-                      {cb.collection_name.replace('rw-', '').replace('-codecollection', '').toUpperCase()}
+                      {cb.collection_name.replace(/^RunWhen\s+/i, '')}
                     </Box>
                   </Box>
                   <Box sx={{ textAlign: 'right' }}>

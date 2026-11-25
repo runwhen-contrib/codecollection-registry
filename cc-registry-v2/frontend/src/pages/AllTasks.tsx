@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -24,14 +24,11 @@ import {
   FilterList as FilterIcon,
   Launch as LaunchIcon,
   Close as CloseIcon,
-  Add as AddIcon,
-  Remove as RemoveIcon,
   ViewList as ListIcon,
   ViewModule as GroupedIcon,
   Sort as SortIcon,
 } from '@mui/icons-material';
 import { apiService, Task, TasksResponse } from '../services/api';
-import { useCart } from '../contexts/CartContext';
 import { labelForType } from '../lib/terminology';
 
 type ViewMode = 'grouped' | 'presentation';
@@ -74,8 +71,6 @@ const AllTasks: React.FC = () => {
     setSearchParams(params, { replace: true });
   }, [viewMode, sortOrder]);
   
-  const { addToCart, removeFromCart, isInCart } = useCart();
-
   const fetchTasks = async (
     search?: string,
     supportTags?: string[],
@@ -263,8 +258,8 @@ const AllTasks: React.FC = () => {
       {/* Header with view toggle */}
       <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
         <Box>
-          <Typography variant="h4" component="h1" gutterBottom sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' }, fontWeight: 700, mb: 0.5 }}>
-            All Skills
+          <Typography variant="h4" component="h1" gutterBottom sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' }, fontWeight: 600, mb: 0.5 }}>
+            All Tools
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ fontSize: '0.9375rem' }}>
             {filteredTasks.length} Tools across {Object.keys(groupedTasks).length} Skills
@@ -511,42 +506,20 @@ const AllTasks: React.FC = () => {
                                 {group.codebundle.name}
                               </Typography>
                               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                                {group.codebundle.collection_name} • {group.tasks.filter(t => t.type === 'TaskSet').length} Runbooks • {group.tasks.filter(t => t.type === 'SLI').length} Monitors
+                                {group.codebundle.collection_name} • {group.tasks.length} Tool{group.tasks.length !== 1 ? 's' : ''}
                               </Typography>
                             </Box>
                             <Box sx={{ ml: 1.5, display: 'flex', flexDirection: 'row', gap: 0.75, alignItems: 'center' }}>
                               <Button
-                                variant={isInCart(group.codebundle.id) ? "contained" : "outlined"} size="small"
-                                color={isInCart(group.codebundle.id) ? "error" : "primary"}
-                                startIcon={isInCart(group.codebundle.id) ? <RemoveIcon /> : <AddIcon />}
+                                variant="outlined"
+                                size="small"
+                                startIcon={<LaunchIcon />}
+                                component={Link}
+                                to={`/plugins/${group.codebundle.collection_slug}/skills/${group.codebundle.slug}`}
                                 sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, whiteSpace: 'nowrap' }}
-                                onClick={() => {
-                                  if (isInCart(group.codebundle.id)) {
-                                    removeFromCart(group.codebundle.id);
-                                  } else {
-                                    const codebundleItem = {
-                                      id: group.codebundle.id, name: group.codebundle.name, slug: group.codebundle.slug,
-                                      display_name: group.codebundle.name, description: group.codebundle.description,
-                                      doc: '', readme: null, author: group.codebundle.author, support_tags: group.codebundle.support_tags,
-                                      tasks: group.tasks.filter(t => t.type === 'TaskSet').map(t => ({name: t.name, doc: t.description || '', tags: []})),
-                                      slis: group.tasks.filter(t => t.type === 'SLI').map(t => ({name: t.name, doc: t.description || '', tags: []})),
-                                      task_count: group.tasks.filter(t => t.type === 'TaskSet').length,
-                                      sli_count: group.tasks.filter(t => t.type === 'SLI').length,
-                                      runbook_source_url: group.codebundle.runbook_source_url || '',
-                                      created_at: new Date().toISOString(), updated_at: new Date().toISOString(), git_updated_at: null,
-                                      configuration_type: { type: 'Manual' as const, has_generation_rules: false, platform: null, resource_types: [], match_patterns: [], templates: [], output_items: [], level_of_detail: null, runwhen_directory_path: null },
-                                      codecollection: { id: 0, name: group.codebundle.collection_name, slug: group.codebundle.collection_slug, git_url: group.tasks[0]?.git_url || '', git_ref: (group.tasks[0] as any)?.git_ref || 'main' }
-                                    };
-                                    addToCart(codebundleItem);
-                                  }
-                                }}
                               >
-                                {isInCart(group.codebundle.id) ? "Remove" : "Select Skill"}
+                                View
                               </Button>
-                              <Button variant="outlined" size="small" startIcon={<LaunchIcon />}
-                                href={`/plugins/${group.codebundle.collection_slug}/skills/${group.codebundle.slug}`}
-                                sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, whiteSpace: 'nowrap' }}
-                              >View</Button>
                             </Box>
                           </Box>
 

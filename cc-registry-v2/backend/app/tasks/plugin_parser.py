@@ -54,15 +54,57 @@ _DATA_TAG_LABELS = {
     "data:logs-stacktrace": "Stacktrace logs",
 }
 
+# Canonical display forms for acronyms and product/brand tokens that appear in
+# skill directory names (e.g. `k8s-otelcollector-health`).
+_TOKEN_DISPLAY_MAP = {
+    "k8s": "Kubernetes",
+    "pg": "PostgreSQL",
+    "aws": "AWS",
+    "gcp": "GCP",
+    "aks": "AKS",
+    "eks": "EKS",
+    "gke": "GKE",
+    "kv": "Key Vault",
+    "pvc": "PVC",
+    "hpa": "HPA",
+    "rbac": "RBAC",
+    "dns": "DNS",
+    "tls": "TLS",
+    "http": "HTTP",
+    "sql": "SQL",
+    "cli": "CLI",
+    "vm": "VM",
+    "iam": "IAM",
+    "vpc": "VPC",
+    "otelcollector": "OpenTelemetry Collector",
+    "litellm": "LiteLLM",
+    "certmanager": "cert-manager",
+    "seaweedfs": "SeaweedFS",
+    "argocd": "Argo CD",
+    "cronjob": "CronJob",
+    "istio": "Istio",
+    "loki": "Loki",
+    "redis": "Redis",
+    "jaeger": "Jaeger",
+    "ops": "Operations",
+}
+
+# Canonical verb order when merging Kubernetes RBAC rules.
+_VERB_ORDER = ["get", "list", "watch", "create", "update", "patch", "delete", "*"]
+
 
 # ---------------------------------------------------------------------------
 # Small helpers
 # ---------------------------------------------------------------------------
 def _create_display_name(name: str) -> str:
-    """Turn `k8s-workload-health` / `pg_locks` into `K8s Workload Health`."""
+    """Turn `k8s-workload-health` / `pg_locks` into `Kubernetes Workload Health`."""
     display_words: List[str] = []
     for word in re.split(r"[-_]", name or ""):
         if not word:
+            continue
+        canonical = _TOKEN_DISPLAY_MAP.get(word.lower())
+        if canonical:
+            display_words.append(canonical)
             continue
         # Words with digits (`k8s`, `v13`) are abbreviations: keep them intact.
         if re.search(r"\d", word):
@@ -154,6 +196,121 @@ def parse_skill_md(content: str) -> Tuple[Dict[str, Any], str]:
 # ---------------------------------------------------------------------------
 # 2. Permissions
 # ---------------------------------------------------------------------------
+def _as_str_list(value: Any) -> List[str]:
+    """Normalise a scalar-or-list field into a de-duplicated list of strings.
+
+    Empty strings are preserved so Kubernetes' core group (`apiGroups: [""]`)
+    can be rendered as `core` before any emptiness check runs.
+    """
+    if value is None:
+        return []
+    items = value if isinstance(value, list) else [value]
+    out: List[str] = []
+    seen = set()
+    for item in items:
+        if item is None:
+            continue
+        text = str(item)
+        if text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
+def _normalize_k8s_rule(perm: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Normalise a Kubernetes RBAC rule, or None when it carries no rule.
+
+    A rule with neither apiGroups nor resources has nothing to grant (this is
+    how malformed `" [get]"` entries were produced), unless it targets
+    `nonResourceURLs`, which is kept and rendered explicitly.
+    """
+    groups = ["core" if g == "" else str(g) for g in _as_str_list(perm.get("apiGroups"))]
+    resources = [r for r in _as_str_list(perm.get("resources")) if r]
+    verbs = [v for v in _as_str_list(perm.get("verbs")) if v]
+    urls = [u for u in _as_str_list(perm.get("nonResourceURLs")) if u]
+
+    if not groups and not resources:
+        if not urls:
+            return None
+        return {"kind": "nonResource", "urls": urls, "verbs": verbs}
+
+    return {
+        "kind": "rbac",
+        "groups": _dedupe(groups),
+        "resources": resources,
+        "verbs": verbs,
+    }
+
+
+def _sort_verbs(verbs: List[str]) -> List[str]:
+    """Union verbs in canonical RBAC order, then any extras alphabetically."""
+    unique = _dedupe(verbs)
+    known = [v for v in _VERB_ORDER if v in unique]
+    extra = sorted(v for v in unique if v not in _VERB_ORDER)
+    return known + extra
+
+
+def merge_permissions(permissions: List[Any]) -> List[str]:
+    """Merge and format a task's or skill's permission list.
+
+    Kubernetes RBAC rules sharing `(apiGroups, resources)` collapse into one
+    entry with the union of their verbs (canonical order). Rules without any
+    groups or resources are dropped instead of rendering as `" [get]"`.
+    Other permission shapes are formatted and de-duplicated, preserving order.
+    """
+    entries: List[Tuple[str, Any]] = []
+    merged: Dict[Tuple[Tuple[str, ...], Tuple[str, ...]], Dict[str, Any]] = {}
+    non_resource: Dict[Tuple[str, ...], Dict[str, Any]] = {}
+
+    for perm in permissions or []:
+        if not isinstance(perm, dict):
+            entries.append(("other", format_permission_entry(perm)))
+            continue
+
+        if not any(k in perm for k in ("apiGroups", "resources", "verbs", "nonResourceURLs")):
+            entries.append(("other", format_permission_entry(perm)))
+            continue
+
+        normalized = _normalize_k8s_rule(perm)
+        if normalized is None:
+            continue
+
+        if normalized["kind"] == "nonResource":
+            key = ("nonResource", tuple(normalized["urls"]))
+            if key not in non_resource:
+                non_resource[key] = {"urls": list(normalized["urls"]), "verbs": []}
+                entries.append(("nonResource", key))
+            non_resource[key]["verbs"].extend(normalized["verbs"])
+            continue
+
+        key = (tuple(normalized["groups"]), tuple(normalized["resources"]))
+        if key not in merged:
+            merged[key] = {"groups": list(normalized["groups"]), "resources": list(normalized["resources"]), "verbs": []}
+            entries.append(("rbac", key))
+        merged[key]["verbs"].extend(normalized["verbs"])
+
+    formatted: List[str] = []
+    for kind, key in entries:
+        if kind == "other":
+            formatted.append(str(key))
+            continue
+        if kind == "nonResource":
+            rule = non_resource[key]
+            head = f"nonResourceURLs: {', '.join(rule['urls'])}"
+            verbs = _sort_verbs(rule["verbs"])
+            formatted.append(f"{head} [{', '.join(verbs)}]" if verbs else head)
+            continue
+        rule = merged[key]
+        groups_str = ", ".join(rule["groups"])
+        resources_str = ", ".join(rule["resources"])
+        head = f"{groups_str}: {resources_str}" if groups_str else resources_str
+        verbs = _sort_verbs(rule["verbs"])
+        formatted.append(f"{head} [{', '.join(verbs)}]" if verbs else head)
+
+    return _dedupe([f for f in formatted if f and f.strip()])
+
+
 def format_permission_entry(perm: Dict[str, Any]) -> str:
     """Render a `tasks.yaml` permission object as a human-readable string.
 
@@ -168,17 +325,31 @@ def format_permission_entry(perm: Dict[str, Any]) -> str:
     api_groups = perm.get("apiGroups")
     resources = perm.get("resources")
     verbs = perm.get("verbs")
-    if api_groups is not None or resources is not None or verbs is not None:
+    non_resource_urls = perm.get("nonResourceURLs")
+    if (
+        api_groups is not None
+        or resources is not None
+        or verbs is not None
+        or non_resource_urls is not None
+    ):
         groups = api_groups if isinstance(api_groups, list) else [api_groups]
         groups = [("core" if g == "" else str(g)) for g in groups if g is not None]
         res = resources if isinstance(resources, list) else [resources]
         res = [str(r) for r in res if r is not None]
         verb_list = verbs if isinstance(verbs, list) else [verbs]
         verb_list = [str(v) for v in verb_list if v is not None]
+        urls = non_resource_urls if isinstance(non_resource_urls, list) else [non_resource_urls]
+        urls = [str(u) for u in urls if u is not None]
+
         group_str = ", ".join(_dedupe(groups))
         res_str = ", ".join(_dedupe(res))
-        verb_str = ", ".join(_dedupe(verb_list))
-        head = f"{group_str}: {res_str}" if group_str else res_str
+        verb_str = ", ".join(_sort_verbs(verb_list))
+        if not group_str and not res_str:
+            if not urls:
+                return ""
+            head = f"nonResourceURLs: {', '.join(_dedupe(urls))}"
+        else:
+            head = f"{group_str}: {res_str}" if group_str else res_str
         return f"{head} [{verb_str}]" if verb_str else head
 
     if perm.get("action"):
@@ -389,6 +560,11 @@ def parse_plugin_skill_content(
     else:
         applies_to_types = [str(t) for t in (applies_to.get("types") or [])]
     role = runwhen_meta.get("role")
+    role_tags: List[str] = (
+        [str(r) for r in role if r] if isinstance(role, list)
+        else ([str(role)] if role else [])
+    )
+    role_str: Optional[str] = ", ".join(role_tags) if role_tags else None
     frontmatter_tags = [str(t) for t in (runwhen_meta.get("tags") or [])]
 
     runtime = tasks_data.get("runtime")
@@ -398,7 +574,7 @@ def parse_plugin_skill_content(
     raw_tasks = [t for t in (tasks_data.get("tasks") or []) if isinstance(t, dict)]
 
     tasks: List[Dict[str, Any]] = []
-    all_permissions: List[str] = []
+    all_permissions: List[Any] = []
     all_tags: List[str] = list(frontmatter_tags)
     output_keys: List[str] = []
     any_write = False
@@ -416,10 +592,8 @@ def parse_plugin_skill_content(
         if isinstance(outputs, list):
             output_keys.extend(str(o) for o in outputs)
 
-        formatted_permissions = [
-            format_permission_entry(p) for p in (task.get("permissions") or [])
-        ]
-        all_permissions.extend(formatted_permissions)
+        formatted_permissions = merge_permissions(task.get("permissions") or [])
+        all_permissions.extend(task.get("permissions") or [])
 
         read_only = task.get("readOnly", True)
         if read_only is False:
@@ -455,13 +629,8 @@ def parse_plugin_skill_content(
         description = tasks_data.get("description", "") or ""
     description = " ".join(str(description).split()) if description else ""
 
-    support_tags = _dedupe(
-        [plugin_slug]
-        + frontmatter_tags
-        + ([str(role)] if role else [])
-        + all_tags
-    )
-    support_tags = [t.upper() for t in support_tags]
+    support_tags = [t.upper() for t in _dedupe([plugin_slug] + frontmatter_tags + role_tags)
+                    if t and str(t).strip()]
 
     platform_raw = (
         integration_meta.get("platform") if isinstance(integration_meta, dict) else None
@@ -487,14 +656,14 @@ def parse_plugin_skill_content(
         "readme": skill_md_content,
         "author": "RunWhen",
         "support_tags": support_tags,
-        "categories": [str(role)] if role else [],
+        "categories": role_tags,
         "tasks": tasks,
         "slis": [],
         "task_count": len(tasks),
         "sli_count": 0,
         "user_variables": extract_variables_from_tasks_yaml(tasks_data),
         "access_level": "read-write" if any_write else "read-only",
-        "minimum_iam_requirements": _dedupe(all_permissions),
+        "minimum_iam_requirements": merge_permissions(all_permissions),
         "data_classifications": _classify_data(all_tags, output_keys),
         "has_genrules": bool(applies_to_types),
         "is_discoverable": bool(applies_to_types)
@@ -505,7 +674,7 @@ def parse_plugin_skill_content(
             {"type": "appliesTo", "pattern": rt} for rt in applies_to_types
         ],
         "discovery_output_items": ["tasks"],
-        "discovery_level_of_detail": str(role) if role else None,
+        "discovery_level_of_detail": role_str,
         "discovery_templates": [],
         "runbook_path": f"{relative_base}/tasks.yaml",
         "meta_path": f"{relative_base}/SKILL.md",
@@ -514,7 +683,7 @@ def parse_plugin_skill_content(
         "ai_enhanced_metadata": {
             "runtime": runtime,
             "defaults": defaults,
-            "role": role,
+            "role": role_str,
             "applies_to": applies_to_types,
             "plugin_version": (plugin_meta or {}).get("version"),
             "integration": integration_meta or None,
