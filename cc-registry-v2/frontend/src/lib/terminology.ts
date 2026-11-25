@@ -8,7 +8,7 @@
  * byte-identical to the previous schema.
  *
  * Mapping (internal -> display):
- *   - Task         -> Tool
+ *   - Task         -> Task (umbrella concept; Runbook and Monitor are its subtypes)
  *   - CodeBundle   -> Skill
  *   - SLI          -> Monitor       (scheduled, continuous, numeric output)
  *   - TaskSet      -> Runbook       (on-demand, event-triggered, findings)
@@ -50,7 +50,7 @@ export const TYPE_LABELS: Record<InternalType, LabelPair> = {
  * "Tasks"/"CodeBundles" string literals.
  */
 export const CONCEPTS = {
-  TASK: { singular: "Tool", plural: "Tools" },
+  TASK: { singular: "Task", plural: "Tasks" },
   CODEBUNDLE: { singular: "Skill", plural: "Skills" },
   // Runtime instantiation of a Skill inside a workspace.
   SKILL: { singular: "Skill", plural: "Skills" },

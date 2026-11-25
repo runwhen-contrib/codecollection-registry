@@ -28,7 +28,7 @@ documentation:
 
     - name: SLI Development
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/sli-development
-      description: Guide to creating Monitors (formerly "SLIs" / Service Level Indicators) - Tools that run on a schedule and emit a 0-1 numeric health value
+      description: Guide to creating Monitors (formerly "SLIs" / Service Level Indicators) - Tasks that run on a schedule and emit a 0-1 numeric health value
       keywords:
         - sli
         - monitor
@@ -39,7 +39,7 @@ documentation:
 
     - name: TaskSet Development
       url: https://docs.runwhen.com/public/runwhen-authors/codebundle-development/taskset-development
-      description: Guide to creating Runbooks (formerly "TaskSets") - Tools that run on demand in response to events and emit structured findings
+      description: Guide to creating Runbooks (formerly "TaskSets") - Tasks that run on demand in response to events and emit structured findings
       keywords:
         - taskset
         - runbook

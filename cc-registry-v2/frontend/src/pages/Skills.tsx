@@ -228,7 +228,7 @@ const Skills: React.FC = () => {
             >
               <MenuItem value="name">Name (A-Z)</MenuItem>
               <MenuItem value="updated">Recently Updated</MenuItem>
-              <MenuItem value="tasks">Most Tools</MenuItem>
+              <MenuItem value="tasks">Most Tasks</MenuItem>
             </Select>
           </FormControl>
         </Box>
@@ -353,7 +353,7 @@ const Skills: React.FC = () => {
 
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2" color="text.secondary">
-                      {(codebundle.task_count || 0) + (codebundle.sli_count || 0)} Tool{((codebundle.task_count || 0) + (codebundle.sli_count || 0)) !== 1 ? 's' : ''}
+                      {(codebundle.task_count || 0) + (codebundle.sli_count || 0)} Task{((codebundle.task_count || 0) + (codebundle.sli_count || 0)) !== 1 ? 's' : ''}
                       {codebundle.sli_count > 0 && (
                         <Typography component="span" variant="caption" sx={{ ml: 0.5 }}>
                           ({codebundle.sli_count} Monitor{codebundle.sli_count !== 1 ? 's' : ''})

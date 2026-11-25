@@ -223,7 +223,7 @@ def sync_all_collections_task(self):
             for stale in stale_collections:
                 stale.is_active = False
                 # Public endpoints filter on Codebundle.is_active but not on
-                # the parent collection, so retire its Skill Templates too —
+                # the parent collection, so retire its Skills too —
                 # otherwise a collection removed from the YAML keeps showing.
                 db.query(Codebundle).filter(
                     Codebundle.codecollection_id == stale.id,

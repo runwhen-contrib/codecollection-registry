@@ -100,7 +100,7 @@ const Home: React.FC = () => {
   };
 
   const handleTagClick = (tag: string) => {
-    navigate(`/all-tools?support_tags=${encodeURIComponent(tag)}`);
+    navigate(`/all-tasks?support_tags=${encodeURIComponent(tag)}`);
   };
 
   useEffect(() => {
@@ -326,12 +326,12 @@ const Home: React.FC = () => {
               {
                 icon: BundleIcon, label: 'Skills', count: stats?.codebundles || 0, to: '/skills',
                 desc: 'Diagnostic & remediation packages',
-                tooltip: 'A Skill is a reusable package targeting a specific service or resource — like k8s-postgres-operator-health or azure-aks-health — containing executable Tools, settings, inputs, and operational guidance.',
+                tooltip: 'A Skill is a reusable package targeting a specific service or resource — like k8s-postgres-operator-health or azure-aks-health — containing executable Tasks, settings, inputs, and operational guidance.',
               },
               {
-                icon: TaskIcon, label: 'Tools', count: stats?.tasks || 0, to: '/all-tools',
-                desc: 'CLI & API actions to run',
-                tooltip: 'Tools are the runnable units inside a Skill. Each Tool is a scripted action — CLI commands, API calls, or queries — that performs a specific operation like "Check Pod Restarts" or "Query Connection Pool." Tools are either Runbooks (run on demand in response to an event) or Monitors (run on a schedule, emit a 0-1 health score). They execute on private runners in your environment.',
+                icon: TaskIcon, label: 'Tasks', count: stats?.tasks || 0, to: '/all-tasks',
+                desc: 'Executable actions inside a Skill',
+                tooltip: 'Tasks are the runnable units inside a Skill. Each Task is a scripted action — CLI commands, API calls, or queries — that performs a specific operation like "Check Pod Restarts" or "Query Connection Pool." Tasks are either Runbooks (run on demand in response to an event) or Monitors (run on a schedule, emit a 0-1 health score). They execute on private runners in your environment.',
               },
               {
                 icon: DocsIcon, label: 'Docs', count: null, to: '/chat',
@@ -430,7 +430,7 @@ const Home: React.FC = () => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: 700, position: 'relative', zIndex: 1 }}>
               {[
                 { label: 'Ask', color: '#2F80ED', muiIcon: ChatIcon },
-                { label: 'Run Tools', color: '#2F80ED', muiIcon: RunnerIcon },
+                { label: 'Run Tasks', color: '#2F80ED', muiIcon: RunnerIcon },
                 { label: 'Collect Insights', color: '#2F80ED', img: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png' },
                 { label: 'Resolve', color: '#2F80ED', muiIcon: ResolveIcon },
               ].map((step) => (
@@ -762,7 +762,7 @@ const Home: React.FC = () => {
                   letterSpacing: '-0.2px'
                 }}
               >
-                Recently Updated Tools
+                Recently Updated Tasks
               </Typography>
             </Box>
             

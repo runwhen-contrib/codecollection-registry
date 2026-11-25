@@ -120,7 +120,7 @@ async def get_example_queries():
                 ]
             },
             {
-                "category": "Libraries & Tools",
+                "category": "Libraries & Tasks",
                 "queries": [
                     "Which library is useful for running CLI commands?",
                     "What tools are available for Kubernetes management?",

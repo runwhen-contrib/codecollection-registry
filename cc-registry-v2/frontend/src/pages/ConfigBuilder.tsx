@@ -425,7 +425,7 @@ codeCollections:${repositoryConfigs.map(repo => `
 
 # Skills included:${repositoryConfigs.map(repo => `
 # ${repo.collection_name} (${repo.git_ref}):${repo.codebundles.map(item => `
-#   - ${item.codebundle.display_name || item.codebundle.name} (${item.codebundle.task_count} Tools, ${item.codebundle.sli_count} Monitors)`).join('')}`).join('')}
+#   - ${item.codebundle.display_name || item.codebundle.name} (${item.codebundle.task_count} Tasks, ${item.codebundle.sli_count} Monitors)`).join('')}`).join('')}
 `;
   };
 
@@ -2090,7 +2090,7 @@ ${yamlString}`;
 
               <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" color="text.secondary">
-                  Total Tools
+                  Total Tasks
                 </Typography>
                 <Typography variant="h4" color="primary">
                   {items.reduce((sum, item) => sum + item.codebundle.task_count, 0)}

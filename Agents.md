@@ -8,14 +8,14 @@ The registry uses **two parallel vocabularies**:
 
 | Internal (unchanged) | New display name |
 |---|---|
-| `Task` (registry concept) | **Tool** |
-| `CodeBundle` | **Skill Template** (registry artifact — vars/secrets unresolved) |
-| (no internal equivalent — runtime only) | **Skill** (runtime instantiation of a Skill Template inside a workspace; also used colloquially as the umbrella term in page titles like "All Skills") |
-| `SLI` (`type: "SLI"`) | **Monitor** — Tool that runs on a schedule, emits 0–1 numeric value |
-| `TaskSet` (`type: "TaskSet"`) | **Runbook** — Tool that runs on demand, emits structured findings |
-| `CodeCollection` | **CodeCollection** (unchanged) |
+| `Task` (registry concept) | **Task** — any invocable unit; a Runbook or a Monitor |
+| `CodeBundle` | **Skill** (registry artifact — vars/secrets unresolved) |
+| (no internal equivalent — runtime only) | **Runtime Skill** (instantiation of a Skill inside a workspace, with vars/secrets resolved) |
+| `SLI` (`type: "SLI"`) | **Monitor** — Task that runs on a schedule, emits 0–1 numeric value |
+| `TaskSet` (`type: "TaskSet"`) | **Runbook** — Task that runs on demand, emits structured findings |
+| `CodeCollection` | **Plugin** |
 
-A workspace **renders** a Skill Template into a Skill at runtime (vars + secrets substituted in). The registry only ever stores Skill Templates; Skills only exist inside workspaces.
+A workspace **renders** a Skill into a runtime Skill at runtime (vars + secrets substituted in). The registry only ever stores registry-side Skills; runtime Skills only exist inside workspaces.
 
 Use the **new vocabulary** in all user-facing surfaces (UI, MCP markdown output, chat replies, docs). Leave internal identifiers (DB columns, JSON `type` enums, MCP tool function names like `find_codebundle`, API paths like `/api/v1/codebundles`) as-is for backward compatibility. Canonical mapping table and "where each vocabulary applies" matrix live in [`cc-registry-v2/AGENTS.md`](cc-registry-v2/AGENTS.md#terminology).
 
@@ -337,7 +337,7 @@ POST /api/v1/chat/query
 4. ❌ Don't commit `az.secret` or other credential files
 5. ❌ Don't run database operations in request handlers (use Celery tasks)
 6. ❌ Don't show raw database IDs in UI (use slugs)
-7. ❌ Don't mix vocabularies in display copy. Use the new vocabulary (Skill Templates, Tools, Monitors, Runbooks) in **all user-facing surfaces** — UI labels, MCP markdown output, chat replies, docs. Internal identifiers (DB columns `tasks`/`slis`, JSON `type: "TaskSet" | "SLI" | "CodeBundle"`, MCP tool function names like `find_codebundle`, API paths `/api/v1/codebundles`) stay as legacy names for backward compatibility. See `cc-registry-v2/AGENTS.md` § Terminology for the full mapping table.
+7. ❌ Don't mix vocabularies in display copy. Use the new vocabulary (Skills, Plugins, Tasks, Monitors, Runbooks) in **all user-facing surfaces** — UI labels, MCP markdown output, chat replies, docs. Internal identifiers (DB columns `tasks`/`slis`, JSON `type: "TaskSet" | "SLI" | "CodeBundle"`, MCP tool function names like `find_codebundle`, API paths `/api/v1/codebundles`) stay as legacy names for backward compatibility. See `cc-registry-v2/AGENTS.md` § Terminology for the full mapping table.
 
 ---
 

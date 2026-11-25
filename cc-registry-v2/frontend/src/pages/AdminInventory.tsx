@@ -416,7 +416,7 @@ const AdminInventory: React.FC = () => {
                 <TableRow>
                   <TableCell>Name</TableCell>
                   <TableCell>Plugin</TableCell>
-                  <TableCell>Tools</TableCell>
+                  <TableCell>Tasks</TableCell>
                   <TableCell>Enhancement Status</TableCell>
                   <TableCell>Access Level</TableCell>
                   <TableCell>AI Enhanced</TableCell>
@@ -528,7 +528,7 @@ const AdminInventory: React.FC = () => {
                         </Grid>
                         <Grid item xs={6}>
                           <Typography variant="body2">
-                            <strong>Tools:</strong> {collection.total_tasks}
+                            <strong>Tasks:</strong> {collection.total_tasks}
                           </Typography>
                         </Grid>
                         <Grid item xs={6}>

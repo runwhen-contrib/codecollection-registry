@@ -39,7 +39,7 @@ class CodeBundleRequest:
     callers; the user-facing vocabulary is "Skill".
     """
     platform: str                    # What cloud platform(s) should this support?
-    tasks: List[str]                 # Key Tools that should be performed
+    tasks: List[str]                 # Key Tasks that should be performed
     original_query: Optional[str] = None  # The user's original search query
     context: Optional[str] = None    # Any other helpful context
     contact_ok: bool = False         # Willing to be contacted?
@@ -173,9 +173,9 @@ class GitHubIssueClient:
         return bool(self._app_mgr and self._app_mgr.available) or bool(self.token)
     
     def _format_tasks(self, tasks: List[str]) -> str:
-        """Format Tools as a numbered list."""
+        """Format Tasks as a numbered list."""
         if not tasks:
-            return "No specific Tools provided"
+            return "No specific Tasks provided"
         return "\n".join(f"{i+1}. {task}" for i, task in enumerate(tasks))
     
     def _build_issue_body(self, request: CodeBundleRequest) -> str:
@@ -189,8 +189,8 @@ class GitHubIssueClient:
         # Cloud platform(s)
         sections.append(f"## What cloud platform(s) should this support?\n{request.platform}")
         
-        # Key Tools (Runbooks/Monitors)
-        sections.append(f"## What are some key Tools that should be performed?\n{self._format_tasks(request.tasks)}")
+        # Key Tasks (Runbooks/Monitors)
+        sections.append(f"## What are some key Tasks that should be performed?\n{self._format_tasks(request.tasks)}")
         
         # Additional context
         if request.context:
@@ -347,7 +347,7 @@ class RequestCodeBundleTool(BaseTool):
                 ToolParameter(
                     name="tasks",
                     type="array",
-                    description="List of key Tools (Runbooks or Monitors) that should be performed",
+                    description="List of key Tasks (Runbooks or Monitors) that should be performed",
                     required=True,
                     items="string"
                 ),

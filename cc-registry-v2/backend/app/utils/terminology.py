@@ -7,7 +7,7 @@ vocabulary, while leaving every internal identifier (DB columns, JSON
 byte-identical to the previous schema.
 
 Mapping (internal -> display):
-    Task        -> Tool
+    Task        -> Task (umbrella concept; Runbook and Monitor are its subtypes)
     CodeBundle  -> Skill
     SLI         -> Monitor    (scheduled, continuous, numeric output)
     TaskSet     -> Runbook    (on-demand, event-triggered, findings)
@@ -38,7 +38,7 @@ TYPE_LABELS: dict[str, dict[str, str]] = {
 }
 
 CONCEPTS: dict[str, dict[str, str]] = {
-    "TASK": {"singular": "Tool", "plural": "Tools"},
+    "TASK": {"singular": "Task", "plural": "Tasks"},
     "CODEBUNDLE": {"singular": "Skill", "plural": "Skills"},
     # Runtime instantiation of a Skill inside a workspace.
     "SKILL": {"singular": "Skill", "plural": "Skills"},
@@ -49,16 +49,16 @@ CONCEPTS: dict[str, dict[str, str]] = {
 
 VOCABULARY_BLOCK = """\
 RunWhen registry vocabulary (2026):
-- Tool: an invocable unit (formerly "Task").
-- Skill: a reusable, parameterised package of Tools that lives in a
-  Plugin in the registry (formerly "CodeBundle"). Has placeholder vars and
-  unresolved secrets.
-- Plugin: a git-repo-level grouping of Skills and their platform
-  integration (formerly "CodeCollection").
-- Monitor: a Tool that runs on a schedule, continuously, in the background
-  and emits a numeric 0-1 health value (formerly "SLI").
-- Runbook: a Tool that runs on demand in response to an event or request
-  and emits structured findings with next-steps (formerly "TaskSet").
+- Task: an invocable unit inside a Skill. Every Task is either a Runbook or a
+  Monitor.
+- Skill: a reusable, parameterised package of Tasks that lives in a Plugin in
+  the registry. Has placeholder vars and unresolved secrets.
+- Plugin: a git-repo-level grouping of Skills and their platform integration
+  (formerly "CodeCollection").
+- Monitor: a Task that runs on a schedule, continuously, in the background and
+  emits a numeric 0-1 health value (formerly "SLI").
+- Runbook: a Task that runs on demand in response to an event or request and
+  emits structured findings with next-steps (formerly "TaskSet").
 
 Users may use either vocabulary interchangeably. Internal JSON `type`
 values returned by the API remain "TaskSet", "SLI", and "CodeBundle" for

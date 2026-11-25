@@ -176,7 +176,7 @@ IF NO RELEVANT TASKS EXIST, respond with:
 
 **No Matching Tasks Found**
 
-I couldn't find any Tools in the Plugin registry that match your request for "{user_question}".
+I couldn't find any Tasks in the Plugin registry that match your request for "{user_question}".
 
 **Would you like these tasks added to the registry?**
 

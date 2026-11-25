@@ -176,7 +176,7 @@ const Plugins: React.FC = () => {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <TaskIcon color="primary" fontSize="small" />
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {collection.statistics.total_tasks} Tools
+                        {collection.statistics.total_tasks} Tasks
                       </Typography>
                     </Box>
                   </Box>

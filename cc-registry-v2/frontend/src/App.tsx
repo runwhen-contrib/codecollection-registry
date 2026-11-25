@@ -41,8 +41,8 @@ function AppContent() {
           <Route path="/skills" element={<Skills />} />
           <Route path="/plugins/:collectionSlug/skills/:codebundleSlug" element={<SkillDetail />} />
 
-          {/* Tools (formerly "Tasks") */}
-          <Route path="/all-tools" element={<AllTasks />} />
+          {/* Tasks */}
+          <Route path="/all-tasks" element={<AllTasks />} />
 
           {/* Backward-compatible aliases so old bookmarks do not 404 */}
           <Route path="/collections" element={<Navigate to="/plugins" replace />} />
@@ -50,7 +50,7 @@ function AppContent() {
           <Route path="/collections/:collectionSlug/versions/:versionName" element={<VersionDetail />} />
           <Route path="/codebundles" element={<Navigate to="/skills" replace />} />
           <Route path="/collections/:collectionSlug/codebundles/:codebundleSlug" element={<SkillDetail />} />
-          <Route path="/all-tasks" element={<AllTasks />} />
+          <Route path="/all-tools" element={<Navigate to="/all-tasks" replace />} />
 
           <Route path="/chat" element={<Chat />} />
           <Route path="/intake" element={<IntakeWizard />} />

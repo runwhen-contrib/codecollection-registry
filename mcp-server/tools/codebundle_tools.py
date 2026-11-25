@@ -1,7 +1,7 @@
 """
-Skill Tools (internal class names preserved for backward compatibility).
+Skill registry helpers (internal class names preserved for backward compatibility).
 
-Tools for finding, listing, and getting details about Skills
+Task helpers for finding, listing, and getting details about Skills
 (internally still called ``CodeBundle`` everywhere — see Phase 1 cosmetic
 rename notes in ``mcp-server/utils/terminology.py``). All data is fetched
 from the Registry API.
@@ -63,7 +63,7 @@ class FindCodeBundleTool(BaseTool):
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="find_codebundle",
-            description="Find Skills (formerly 'CodeBundles') for your use case. A Skill is a reusable package of Tools — Runbooks that run on demand and Monitors that run on a schedule. Describe what you need in natural language. Examples: 'troubleshoot Kubernetes pods', 'monitor AWS EKS', 'check database health'.",
+            description="Find Skills (formerly 'CodeBundles') for your use case. A Skill is a reusable package of Tasks — Runbooks that run on demand and Monitors that run on a schedule. Describe what you need in natural language. Examples: 'troubleshoot Kubernetes pods', 'monitor AWS EKS', 'check database health'.",
             category="search",
             parameters=[
                 ToolParameter(
@@ -176,14 +176,14 @@ class FindCodeBundleTool(BaseTool):
             if description:
                 output += f"**Description:** {description[:500]}\n\n"
             
-            # The Registry API's `tasks` field contains the Runbook entries
-            # parsed from runbook.robot (TaskSet type). SLI / Monitor entries
-            # live in a separate `slis` field. Internal field names are kept
-            # for backward compatibility; the markdown label uses the new
+            # The Registry API's `tasks` field contains the Task entries
+            # parsed from runbook.robot (Runbook / TaskSet type). SLI / Monitor
+            # entries live in a separate `slis` field. Internal field names are
+            # kept for backward compatibility; the markdown label uses the new
             # display vocabulary.
             tasks = cb.get('tasks', [])
             if tasks:
-                output += "**Runbooks:**\n"
+                output += "**Tasks:**\n"
                 for task in tasks[:8]:
                     if isinstance(task, dict):
                         label = task.get('title') or task.get('name') or str(task)
@@ -449,7 +449,7 @@ class GetCodeBundleDetailsTool(BaseTool):
         # markdown label uses the new display vocabulary.
         tasks = cb.get('tasks', [])
         if tasks:
-            output += f"## Runbooks ({len(tasks)})\n\n"
+            output += f"## Tasks ({len(tasks)})\n\n"
             for task in tasks:
                 if isinstance(task, dict):
                     label = task.get('title') or task.get('name') or str(task)

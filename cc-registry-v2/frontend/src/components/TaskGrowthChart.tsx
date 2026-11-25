@@ -98,7 +98,7 @@ const TaskGrowthChart: React.FC = () => {
       <CardContent>
         <Box sx={{ mb: 2 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            Tool Library Growth
+            Task Library Growth
           </Typography>
         </Box>
 
@@ -124,7 +124,7 @@ const TaskGrowthChart: React.FC = () => {
               tickFormatter={(value) => value.toLocaleString()}
             />
             <Tooltip 
-              formatter={(value: number | undefined) => [`${(value ?? 0).toLocaleString()} Tools`, 'Total Tools']}
+              formatter={(value: number | undefined) => [`${(value ?? 0).toLocaleString()} Tasks`, 'Total Tasks']}
               contentStyle={{
                 backgroundColor: isDark ? '#2a2a2a' : 'rgba(255, 255, 255, 0.95)',
                 border: `1px solid ${isDark ? '#444' : '#ccc'}`,

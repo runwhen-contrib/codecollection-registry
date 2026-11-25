@@ -60,7 +60,7 @@ export default function IntakeWizard() {
     if (healthyLooksLike.trim()) parts.push(`\n**What healthy looks like:** ${healthyLooksLike.trim()}`);
     if (anythingElse.trim()) parts.push(`\n**Additional context:** ${anythingElse.trim()}`);
     if (mode === 'explicit' && (explicitTasks.trim() || explicitVariables.trim())) {
-      if (explicitTasks.trim()) parts.push(`\n**Suggested Tools:**\n${explicitTasks.trim()}`);
+      if (explicitTasks.trim()) parts.push(`\n**Suggested Tasks:**\n${explicitTasks.trim()}`);
       if (explicitVariables.trim()) parts.push(`\n**Variables/config:**\n${explicitVariables.trim()}`);
     }
     return parts.join('\n');
@@ -168,7 +168,7 @@ export default function IntakeWizard() {
           <Typography variant="caption" sx={{ ml: 2, alignSelf: 'center', color: 'text.secondary' }}>
             {mode === 'simple'
               ? 'Describe naturally — the designer has autonomy'
-              : 'Specify Tools and variables if you know them'}
+              : 'Specify Tasks and variables if you know them'}
           </Typography>
         </Box>
 
@@ -246,7 +246,7 @@ export default function IntakeWizard() {
               fullWidth
               multiline
               minRows={2}
-              label="Suggested Tools (one per line)"
+              label="Suggested Tasks (one per line)"
               placeholder="Check for failed CronJobs\nCheck for suspended CronJobs\n..."
               value={explicitTasks}
               onChange={(e) => setExplicitTasks(e.target.value)}

@@ -89,7 +89,7 @@ const Header: React.FC = () => {
     handleMobileMenuClose();
   };
 
-  const isBrowseActive = ['/plugins', '/skills', '/all-tools', '/collections', '/codebundles', '/all-tasks'].some(
+  const isBrowseActive = ['/plugins', '/skills', '/all-tasks', '/all-tools', '/collections', '/codebundles'].some(
     path => location.pathname.startsWith(path)
   );
 
@@ -183,8 +183,8 @@ const Header: React.FC = () => {
               <MenuItem onClick={() => handleMenuNavigate('/skills')}>
                 Skills
               </MenuItem>
-              <MenuItem onClick={() => handleMenuNavigate('/all-tools')}>
-                All Tools
+              <MenuItem onClick={() => handleMenuNavigate('/all-tasks')}>
+                All Tasks
               </MenuItem>
             </Menu>
 
@@ -388,8 +388,8 @@ const Header: React.FC = () => {
             <MenuItem onClick={() => handleMenuNavigate('/skills')}>
               Skills
             </MenuItem>
-            <MenuItem onClick={() => handleMenuNavigate('/all-tools')}>
-              All Tools
+            <MenuItem onClick={() => handleMenuNavigate('/all-tasks')}>
+              All Tasks
             </MenuItem>
             <MenuItem onClick={() => handleMenuNavigate('/intake')}>
               Request

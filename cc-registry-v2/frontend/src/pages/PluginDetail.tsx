@@ -132,7 +132,7 @@ const PluginDetail: React.FC = () => {
                   />
                   <Chip 
                     icon={<TaskIcon />}
-                    label={`${collection.statistics.total_tasks} Tools`} 
+                    label={`${collection.statistics.total_tasks} Tasks`} 
                     size="small" 
                     variant="outlined"
                   />
@@ -216,7 +216,7 @@ const PluginDetail: React.FC = () => {
 
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                         <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8125rem' }}>
-                          {toolCount} Tool{toolCount !== 1 ? 's' : ''}
+                          {toolCount} Task{toolCount !== 1 ? 's' : ''}
                         </Typography>
                         {tags.map((tag) => (
                           <Chip key={tag} label={tag} size="small" sx={{ height: 20, fontSize: '0.6875rem' }} />

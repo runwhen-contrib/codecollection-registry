@@ -349,7 +349,7 @@ const Chat: React.FC = () => {
             </Box>
 
             <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 600, mx: 'auto', fontSize: '0.9rem', lineHeight: 1.6 }}>
-              Ask Eager Edgar to help explore Skills, documentation, and authoring guidelines. Get assistance with troubleshooting Tools, Monitors, and Runbooks across the Plugin ecosystem.
+              Ask Eager Edgar to help explore Skills, documentation, and authoring guidelines. Get assistance with troubleshooting Tasks, Monitors, and Runbooks across the Plugin ecosystem.
             </Typography>
 
             {chatHealth && chatHealth.status !== 'healthy' && (

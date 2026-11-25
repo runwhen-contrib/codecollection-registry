@@ -259,10 +259,10 @@ const AllTasks: React.FC = () => {
       <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" component="h1" gutterBottom sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' }, fontWeight: 600, mb: 0.5 }}>
-            All Tools
+            All Tasks
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ fontSize: '0.9375rem' }}>
-            {filteredTasks.length} Tools across {Object.keys(groupedTasks).length} Skills
+            {filteredTasks.length} Tasks across {Object.keys(groupedTasks).length} Skills
           </Typography>
         </Box>
 
@@ -303,7 +303,7 @@ const AllTasks: React.FC = () => {
       <Box sx={{ mb: 2 }}>
         <TextField
           fullWidth
-          placeholder="Search Tools and Skills..."
+          placeholder="Search Tasks and Skills..."
           value={taskSearch}
           onChange={(e) => setTaskSearch(e.target.value)}
           InputProps={{
@@ -459,7 +459,7 @@ const AllTasks: React.FC = () => {
                     </Box>
                   ) : (
                     <Box sx={{ textAlign: 'center', py: 8 }}>
-                      <Typography variant="h6" color="text.secondary" gutterBottom>No Tools found</Typography>
+                      <Typography variant="h6" color="text.secondary" gutterBottom>No Tasks found</Typography>
                       <Typography variant="body2" color="text.secondary">Try adjusting your search criteria or clearing filters.</Typography>
                     </Box>
                   )}
@@ -480,7 +480,7 @@ const AllTasks: React.FC = () => {
             <Box sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  {Object.keys(groupedTasks).length} Skill{Object.keys(groupedTasks).length !== 1 ? 's' : ''} • {filteredTasks.length} Tool{filteredTasks.length !== 1 ? 's' : ''}
+                  {Object.keys(groupedTasks).length} Skill{Object.keys(groupedTasks).length !== 1 ? 's' : ''} • {filteredTasks.length} Task{filteredTasks.length !== 1 ? 's' : ''}
                   {selectedSupportTags.length > 0 && ` • ${selectedSupportTags.length} tag${selectedSupportTags.length > 1 ? 's' : ''}`}
                   {selectedCollection && ` • ${selectedCollection}`}
                 </Typography>
@@ -506,7 +506,7 @@ const AllTasks: React.FC = () => {
                                 {group.codebundle.name}
                               </Typography>
                               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                                {group.codebundle.collection_name} • {group.tasks.length} Tool{group.tasks.length !== 1 ? 's' : ''}
+                                {group.codebundle.collection_name} • {group.tasks.length} Task{group.tasks.length !== 1 ? 's' : ''}
                               </Typography>
                             </Box>
                             <Box sx={{ ml: 1.5, display: 'flex', flexDirection: 'row', gap: 0.75, alignItems: 'center' }}>
@@ -559,7 +559,7 @@ const AllTasks: React.FC = () => {
                   </Box>
                 ) : (
                   <Box sx={{ textAlign: 'center', py: 8 }}>
-                    <Typography variant="h6" color="text.secondary" gutterBottom>No Tools found</Typography>
+                    <Typography variant="h6" color="text.secondary" gutterBottom>No Tasks found</Typography>
                     <Typography variant="body2" color="text.secondary">Try adjusting your search criteria or clearing filters.</Typography>
                   </Box>
                 )}

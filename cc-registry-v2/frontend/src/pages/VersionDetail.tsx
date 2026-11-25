@@ -244,7 +244,7 @@ const VersionDetail: React.FC = () => {
                           </Box>
                         )}
                         <Typography variant="caption" color="text.secondary">
-                          {codebundle.task_count} Tools
+                          {codebundle.task_count} Tasks
                         </Typography>
                         {codebundle.sli_count > 0 && (
                           <Typography variant="caption" color="text.secondary">

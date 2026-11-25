@@ -1,5 +1,5 @@
 """
-Chat Debug Router - Tools for diagnosing chat quality issues
+Chat Debug Router - endpoints for diagnosing chat quality issues
 """
 import logging
 import json

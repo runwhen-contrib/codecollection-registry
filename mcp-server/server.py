@@ -3,7 +3,7 @@
 RunWhen Skills Registry MCP Server
 
 A Model Context Protocol server for querying RunWhen Skills Registry data
-(Skills, Plugins, Tools, libraries, and documentation resources).
+(Skills, Plugins, Tasks, libraries, and documentation resources).
 """
 import asyncio
 import json
@@ -237,7 +237,7 @@ async def handle_list_codebundles(arguments: Dict[str, Any]) -> List[TextContent
                     result += f"- **Use Cases:** {', '.join(cb.get('use_cases', []))}\n"
                     
                     if cb.get('tasks'):
-                        result += f"- **Tools:** {len(cb['tasks'])} Runbook(s)\n"
+                        result += f"- **Tasks:** {len(cb['tasks'])} Runbook(s)\n"
                     
                     if cb.get('documentation_url'):
                         result += f"- **Documentation:** {cb['documentation_url']}\n"

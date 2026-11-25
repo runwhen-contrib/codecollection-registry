@@ -14,9 +14,9 @@ that ship *skills*:
             SKILL.md                 # YAML frontmatter + Markdown body
             tasks.yaml               # runtime, defaults, settings, tasks[]
 
-A skill is what the registry calls a "Skill Template" (`Codebundle` in the
-database).  Each skill maps 1:1 onto one `codebundles` row; each entry in
-`tasks.yaml` maps onto one Tool inside it (`tasks` JSON column).
+A Skill is the registry-side package (`Codebundle` in the database). Each
+skill maps 1:1 onto one `codebundles` row; each entry in `tasks.yaml` maps
+onto one Task inside it (`tasks` JSON column).
 
 This module only *parses and shapes* data.  Persistence lives in
 `registry_tasks.py` / `admin.py`.

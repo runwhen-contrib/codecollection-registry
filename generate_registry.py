@@ -312,7 +312,7 @@ def generate_plugin_content(collection, clone_path, plugin_dir):
             f'**Platform:** {platform}  ',
             f'**Source:** [{skill}]({source_url})',
             '',
-            '## Tools',
+            '## Tasks',
             '',
         ]
         for task in task_entries:
@@ -346,10 +346,10 @@ def generate_plugin_content(collection, clone_path, plugin_dir):
             '',
             f'- **Plugin:** {plugin_slug}',
             f'- **Platform:** {platform}',
-            f'- **Tools:** {len(task_entries)}',
+            f'- **Tasks:** {len(task_entries)}',
             f'- **Source:** [{skill}]({source_url})',
             '',
-            '[View Tools](tasks.md)',
+            '[View Tasks](tasks.md)',
             '',
         ]
         with open(os.path.join(dir_path, 'index.md'), 'w') as md_file:
@@ -372,7 +372,7 @@ def generate_plugin_content(collection, clone_path, plugin_dir):
 
 def generate_codebundle_task_list(data):
     """
-    Generate an interactive Markdown file listing Skills, their Tools, Monitors, categories, and page URLs with filtering for MkDocs.
+    Generate an interactive Markdown file listing Skills, their Tasks, Monitors, categories, and page URLs with filtering for MkDocs.
     """
     task_list_template_file_name = f"./{mkdocs_root}/templates/all-tasks-template.md.j2"
     task_list_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
@@ -390,7 +390,7 @@ def generate_codebundle_task_list(data):
 
 def generate_skill_task_content(collection, clone_path):
     """
-    Generates a structured dataset for Skills, ensuring Tools and Monitors appear together and generating index.md.
+    Generates a structured dataset for Skills, ensuring Tasks and Monitors appear together and generating index.md.
     """
     codecollection = collection["git_url"].split('/')[-1].replace('.git', '')
     runbook_files = find_files(f"{clone_path}/{codecollection}/codebundles", 'runbook.robot')

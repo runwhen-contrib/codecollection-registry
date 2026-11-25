@@ -315,14 +315,14 @@ async def query_codecollections(
 
 I have access to:
 
-1. **Skills** (formerly "CodeBundles") - Automation packages containing Tools for troubleshooting and managing infrastructure:
+1. **Skills** (formerly "CodeBundles") - Automation packages containing Tasks for troubleshooting and managing infrastructure:
    - Kubernetes (pods, deployments, services, ingress, etc.)
    - AWS (EC2, EKS, RDS, Lambda, S3, etc.)
    - Azure (AKS, App Service, VMs, databases, etc.)
    - GCP (GKE, Cloud Run, Cloud SQL, etc.)
    - Databases (PostgreSQL, Redis, MongoDB, etc.)
 
-   Each Skill ships **Tools** of two flavors:
+   Each Skill ships **Tasks** of two flavors:
    - **Runbooks** (formerly "TaskSets") run on demand in response to an event or request.
    - **Monitors** (formerly "SLIs") run on a schedule, continuously, emitting a 0–1 numeric health value.
 
@@ -747,7 +747,7 @@ async def get_example_queries():
                 "queries": [
                     "I'm new here, what are the most useful Skills for SRE work?",
                     "Show me some basic health check examples I can learn from",
-                    "What Tools can I run with minimal cloud permissions?",
+                    "What Tasks can I run with minimal cloud permissions?",
                     "Can you give me an overview of all the Plugins?"
                 ]
             }
@@ -897,19 +897,19 @@ async def _generate_llm_answer(
         system_prompt = """You are a helpful assistant that helps users find and use RunWhen Skills (also known as "CodeBundles"), Plugins, documentation, and guides.
 
 VOCABULARY (2026 — accept either set of terms from users):
-- **Tool** = an invocable unit (formerly "Task").
-- **Skill** (formerly "CodeBundle") = a reusable, parameterised package of Tools that lives in a Plugin in the registry.
+- **Task** = an invocable unit inside a Skill; every Task is either a Runbook or a Monitor.
+- **Skill** (formerly "CodeBundle") = a reusable, parameterised package of Tasks that lives in a Plugin in the registry.
 - **Plugin** (formerly "CodeCollection") = a git-repo-level grouping of Skills with their platform integration (resource types, facets, credentials).
-- **Monitor** = a Tool that runs on a schedule, continuously, emitting a 0–1 numeric value (formerly "SLI" / "Service Level Indicator").
-- **Runbook** = a Tool that runs on demand in response to an event or request, emitting structured findings (formerly "TaskSet").
+- **Monitor** = a Task that runs on a schedule, continuously, emitting a 0–1 numeric value (formerly "SLI" / "Service Level Indicator").
+- **Runbook** = a Task that runs on demand in response to an event or request, emitting structured findings (formerly "TaskSet").
 
-Users may use either the new or legacy vocabulary interchangeably. Treat "Skill" and "CodeBundle" as synonyms. Treat "Plugin" and "CodeCollection" as synonyms. Treat "Monitor" and "SLI" as synonyms. Treat "Runbook" and "TaskSet" as synonyms. Treat "Tool" and "Task" as synonyms. In your replies, PREFER the new vocabulary (Skill, Plugin, Tool, Monitor, Runbook) but legacy terms are also acceptable. Internal JSON `type` values still emit "TaskSet", "SLI", and "CodeBundle" for backward compatibility — that is expected and not a bug.
+Users may use either the new or legacy vocabulary interchangeably. Treat "Skill" and "CodeBundle" as synonyms. Treat "Plugin" and "CodeCollection" as synonyms. Treat "Monitor" and "SLI" as synonyms. Treat "Runbook" and "TaskSet" as synonyms. Treat "Task" and "Tool" as synonyms. In your replies, PREFER the new vocabulary (Skill, Plugin, Task, Monitor, Runbook) but legacy terms are also acceptable. Internal JSON `type` values still emit "TaskSet", "SLI", and "CodeBundle" for backward compatibility — that is expected and not a bug.
 
 Skills are automation packages for troubleshooting and managing infrastructure (Kubernetes, AWS, Azure, GCP, databases, etc.).
 
 You have access to TWO key sources of knowledge:
-1. **Skills** (formerly "CodeBundles") - automation packages containing Tools for specific operational needs (troubleshooting, monitoring, scaling, etc.)
-2. **Documentation** - guides, tutorials, installation instructions, configuration references, FAQs, and conceptual explanations about RunWhen products, runwhen-local, generation rules, secrets, Monitors, Tools, etc.
+1. **Skills** (formerly "CodeBundles") - automation packages containing Tasks for specific operational needs (troubleshooting, monitoring, scaling, etc.)
+2. **Documentation** - guides, tutorials, installation instructions, configuration references, FAQs, and conceptual explanations about RunWhen products, runwhen-local, generation rules, secrets, Monitors, Tasks, etc.
 
 Additionally:
 3. Libraries - Robot Framework keyword libraries (RW.CLI, RW.K8s, etc.)
@@ -924,7 +924,7 @@ CRITICAL: ANSWERING FROM DOCUMENTATION
 
 FORMATTING RULES:
 - Always use **bold** for Skill names (e.g., **azure-appservice-webapp-ops**)
-- Use bullet points for listing Tools or capabilities
+- Use bullet points for listing Tasks or capabilities
 - Keep responses focused and scannable
 
 CRITICAL RULES:
@@ -953,7 +953,7 @@ When recommending:
 - Always use **bold** for Skill names
 - Explain what each resource does in plain language
 - For documentation: EXPLAIN what the docs say (don't just link) and include the URL as a reference
-- For Skills: mention the SPECIFIC Tools (Runbooks / Monitors) it contains that are relevant
+- For Skills: mention the SPECIFIC Tasks (Runbooks / Monitors) it contains that are relevant
 - Be conversational and keep responses concise but informative
 - If multiple layers of troubleshooting exist (e.g., Pod-level AND Deployment-level), mention both options
 - For Kubernetes issues, consider both workload-level (Deployment, StatefulSet) and resource-level (Pod, Container) Skills
@@ -1017,7 +1017,7 @@ ANSWER SOURCE CLASSIFICATION - You MUST start your response with exactly one of 
 
 RULES:
 - When Skills are listed in search results that relate to the user's topic, use [SOURCE:codebundles] or [SOURCE:mixed]
-- Mention the most relevant Skill(s) by name, explain what they do, and list their key Tools (Runbooks / Monitors)
+- Mention the most relevant Skill(s) by name, explain what they do, and list their key Tasks (Runbooks / Monitors)
 - Quality over quantity - 1-2 good matches is better than 5 mediocre ones
 - If the user is asking a follow-up about a previously mentioned Skill, answer based on the conversation history
 - Only use [SOURCE:documentation] when NO Skills are available and docs answer the question"""
@@ -1053,13 +1053,13 @@ def _build_task_context(tasks: List[RelevantTask]) -> str:
         ]
         if task.description:
             task_info.append(f"Description: {task.description}")
-        # Include actual Tools/capabilities - this is what users search for
+        # Include actual Tasks/capabilities - this is what users search for
         if task.tasks:
             task_labels = [
                 (t.get('title') or t.get('name')) if isinstance(t, dict) else str(t)
                 for t in task.tasks[:8]
             ]
-            task_info.append(f"Available Runbooks (Tools): {', '.join(task_labels)}")
+            task_info.append(f"Available Runbooks (Tasks): {', '.join(task_labels)}")
         if task.slis:
             sli_labels = [
                 (s.get('name') if isinstance(s, dict) else str(s)) for s in task.slis[:5]
@@ -1076,12 +1076,12 @@ def _build_task_context(tasks: List[RelevantTask]) -> str:
 def _generate_fallback_answer(question: str, tasks: List[RelevantTask]) -> str:
     """Generate a simple fallback answer when LLM is not available"""
     if not tasks:
-        return f"""I couldn't find any Tools matching your question: "{question}"
+        return f"""I couldn't find any Tasks matching your question: "{question}"
 
-Would you like to request these Tools be added to the registry? You can create a GitHub issue to request new automation Skills."""
+Would you like to request these Tasks be added to the registry? You can create a GitHub issue to request new automation Skills."""
 
     answer_parts = [
-        f"Here are the most relevant Tools for: **{question}**\n"
+        f"Here are the most relevant Tasks for: **{question}**\n"
     ]
     
     for i, task in enumerate(tasks[:3], 1):
@@ -1090,7 +1090,7 @@ Would you like to request these Tools be added to the registry? You can create a
             answer_parts.append(f"   {task.description[:200]}...")
         answer_parts.append("")
     
-    answer_parts.append("\nSee the detailed results below for more information on each Tool.")
+    answer_parts.append("\nSee the detailed results below for more information on each Task.")
     
     return "\n".join(answer_parts)
 

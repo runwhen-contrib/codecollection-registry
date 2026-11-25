@@ -8,7 +8,7 @@ Note: the directory name (`cc-registry-v2`) and GitHub repo (`codecollection-reg
 
 ## Project Overview
 
-The RunWhen Skills Registry is a public-facing web app for browsing, searching, and configuring RunWhen automation (Skill Templates, formerly "CodeBundles"). It consists of 8 Docker services:
+The RunWhen Skills Registry is a public-facing web app for browsing, searching, and configuring RunWhen automation (Skills, formerly "CodeBundles"). It consists of 8 Docker services:
 
 | Service | Stack | Port | Purpose |
 |---------|-------|------|---------|
@@ -31,19 +31,19 @@ The codecollection-registry uses **two parallel vocabularies**: a new user-facin
 
 | Internal name (unchanged) | New display name | Behavioral definition |
 |---|---|---|
-| `Task` (registry concept) | **Tool** | Any invocable unit. Parent concept covering both sub-types. Maps to MCP/OpenAI/Anthropic "Tool". |
-| `CodeBundle` | **Skill Template** | Reusable, parameterizable package containing one or more Tools. Lives in the registry. Vars and secrets are unresolved placeholders. |
-| (no internal equivalent — runtime concept) | **Skill** | The runtime instantiation of a Skill Template inside a workspace, with vars/secrets materialized against real infrastructure. The registry itself never holds Skills — only Skill Templates. "Skill" is also used colloquially as the umbrella word in user-facing page titles (e.g. "All Skills") because it reads naturally and aligns with Anthropic Agent Skills / industry usage. |
-| `SLI` (`type: "SLI"`) | **Monitor** | A Tool that runs on a schedule, continuously, in the background. Emits a 0–1 numeric value. |
-| `TaskSet` (`type: "TaskSet"`) | **Runbook** | A Tool that is invoked on demand in response to an event or request. Emits structured findings with next-steps. |
-| `CodeCollection` | **CodeCollection** (unchanged) | Git-repo-level grouping of Skill Templates. |
+| `Task` (registry concept) | **Task** | Any invocable unit; every Task is either a Runbook or a Monitor. |
+| `CodeBundle` | **Skill** | Reusable, parameterizable package containing one or more Tasks. Lives in the registry. Vars and secrets are unresolved placeholders. |
+| (no internal equivalent — runtime concept) | **Runtime Skill** | The runtime instantiation of a Skill inside a workspace, with vars/secrets materialized against real infrastructure. The registry itself never holds runtime Skills — only the registry-side Skill. "Skill" is also used colloquially as the umbrella word in user-facing page titles (e.g. "All Skills") because it reads naturally and aligns with Anthropic Agent Skills / industry usage. |
+| `SLI` (`type: "SLI"`) | **Monitor** | A Task that runs on a schedule, continuously, in the background. Emits a 0–1 numeric value. |
+| `TaskSet` (`type: "TaskSet"`) | **Runbook** | A Task that is invoked on demand in response to an event or request. Emits structured findings with next-steps. |
+| `CodeCollection` | **Plugin** | Git-repo-level grouping of Skills. |
 
-Tagline (for chat/docs/intro copy): *"A Skill Template packages Tools. Workspaces render Skill Templates into Skills at runtime. Monitors are Tools that run themselves on a schedule. Runbooks are Tools that run on demand."*
+Tagline (for chat/docs/intro copy): *"A Skill packages Tasks. Monitors are Tasks that run themselves on a schedule. Runbooks are Tasks that run on demand."*
 
-#### Skill vs Skill Template — when to use which
+#### Skill vs runtime Skill — when to use which
 
-- Use **Skill Template** when referring to the registry-side artifact: search results, browse pages, "request a new Skill Template" copy, GitHub issue templates, OpenAPI descriptions, MCP markdown output that describes what the registry holds.
-- Use **Skill** when referring to the runtime/workspace artifact, or as the colloquial umbrella term in short page titles (e.g. "All Skills"). When in doubt in long-form copy, prefer **Skill Template** for precision.
+- Use **Skill** when referring to the registry-side artifact: search results, browse pages, "request a new Skill" copy, GitHub issue templates, OpenAPI descriptions, MCP markdown output that describes what the registry holds.
+- Use **runtime Skill** when referring to the workspace artifact, or use **Skill** as the colloquial umbrella term in short page titles (e.g. "All Skills"). When in doubt in long-form copy, prefer **Skill** for the registry-side artifact.
 
 ### Where each vocabulary applies
 
@@ -52,7 +52,7 @@ Tagline (for chat/docs/intro copy): *"A Skill Template packages Tools. Workspace
 | React UI labels, page titles, badges, tabs, hero copy | **NEW** | Routed through `frontend/src/lib/terminology.ts` |
 | MCP server markdown output (`get_codebundle_details`, `find_codebundle`, etc.) | **NEW** | Strings are user-facing in chat clients |
 | Chat system prompt + LLM-generated replies | **NEW** (with legacy aliases) | System prompt teaches both vocabularies so legacy queries still resolve |
-| GitHub issue templates (`codebundle-wanted.yaml`) user-facing copy | **NEW** | "Request a Skill Template" |
+| GitHub issue templates (`codebundle-wanted.yaml`) user-facing copy | **NEW** | "Request a Skill" |
 | Docs (`AGENTS.md`, `ARCHITECTURE.md`, `MCP_WORKFLOW.md`, `sources.yaml`, indexed glossaries) | **NEW** (with parenthetical legacy term on first mention) | Feeds chat indexing |
 | OpenAPI summaries/descriptions | **NEW** (with parenthetical legacy term) | Paths and schemas unchanged |
 | **MCP tool function names** (`find_codebundle`, `list_codebundles`, `search_codebundles`, `get_codebundle_details`, `request_codebundle`) | **LEGACY** | External AI integrations depend on these identifiers |
@@ -65,8 +65,8 @@ Tagline (for chat/docs/intro copy): *"A Skill Template packages Tools. Workspace
 
 - **RunWhen Platform** — the orchestration platform (not "RunWhen Core")
 - **Workspace Chat** — the AI chat feature (not "AI Chat" or "Eager Edgar Chat")
-- **Support Tags** — metadata tags on Skill Templates (e.g., `kubernetes`, `aws`, `azure`)
-- **Data Tags** — per-Tool data classification tags (`data:config`, `data:logs-regexp`, etc.)
+- **Support Tags** — metadata tags on Skills (e.g., `kubernetes`, `aws`, `azure`)
+- **Data Tags** — per-Task data classification tags (`data:config`, `data:logs-regexp`, etc.)
 
 ---
 

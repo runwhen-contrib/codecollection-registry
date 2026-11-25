@@ -362,7 +362,7 @@ const SkillDetail: React.FC = () => {
               />
             )}
             <Chip
-              label={`${totalTools} Tool${totalTools !== 1 ? 's' : ''}`}
+              label={`${totalTools} Task${totalTools !== 1 ? 's' : ''}`}
               size="small"
               variant="outlined"
               sx={{ height: 24, fontSize: '0.75rem' }}
@@ -380,7 +380,7 @@ const SkillDetail: React.FC = () => {
             />
           }
           onClick={() => {
-            const context = `I have a question about the "${codebundle.display_name}" Skill from the ${codebundle.codecollection?.name || 'unknown'} plugin.\n\nSkill Details:\n- Description: ${codebundle.description || 'N/A'}\n- Platform: ${platformName}\n- Tools: ${codebundle.task_count || 0}\n- Access Level: ${codebundle.access_level || 'N/A'}`;
+            const context = `I have a question about the "${codebundle.display_name}" Skill from the ${codebundle.codecollection?.name || 'unknown'} plugin.\n\nSkill Details:\n- Description: ${codebundle.description || 'N/A'}\n- Platform: ${platformName}\n- Tasks: ${codebundle.task_count || 0}\n- Access Level: ${codebundle.access_level || 'N/A'}`;
             
             navigate('/chat', { 
               state: { 
@@ -680,11 +680,11 @@ const SkillDetail: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                   <CodeIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
                   <Typography variant="caption" color="text.secondary">
-                    Total Tools
+                    Total Tasks
                   </Typography>
                 </Box>
                 <Typography variant="body2" sx={{ fontWeight: 500, pl: 2.5 }}>
-                  {`${totalTools} Tools`}
+                  {`${totalTools} Tasks`}
                   {codebundle.sli_count > 0 && codebundle.task_count > 0 && (
                     <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
                       ({codebundle.task_count} {labelForType('TaskSet')} + {codebundle.sli_count} {labelForType('SLI')})
@@ -746,15 +746,15 @@ const SkillDetail: React.FC = () => {
           <Card sx={{ mb: 4 }}>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
               <Tabs value={mainTab} onChange={(e, newValue) => setMainTab(newValue)} variant="scrollable" allowScrollButtonsMobile>
-                <Tab label="Documentation" sx={{ textTransform: 'none' }} />
-                <Tab label={`Tools (${toolCount})`} sx={{ textTransform: 'none' }} />
+                <Tab label="Skill" sx={{ textTransform: 'none' }} />
+                <Tab label={`Tasks (${toolCount})`} sx={{ textTransform: 'none' }} />
                 <Tab label={`Variables (${variableCount})`} sx={{ textTransform: 'none' }} />
                 <Tab label="Security" sx={{ textTransform: 'none' }} />
                 <Tab label="Updates" sx={{ textTransform: 'none' }} />
               </Tabs>
             </Box>
             
-            {/* Documentation Tab */}
+            {/* Skill Tab */}
             {mainTab === 0 && (
               <CardContent>
                 {docMarkdown ? (
@@ -786,13 +786,13 @@ const SkillDetail: React.FC = () => {
                   </>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
-                    No documentation available.
+                    No skill definition available.
                   </Typography>
                 )}
               </CardContent>
             )}
             
-            {/* Tools Tab */}
+            {/* Tasks Tab */}
             {mainTab === 1 && (
               <CardContent>
                 {((codebundle.tasks && codebundle.tasks.length > 0) || (codebundle.slis && codebundle.slis.length > 0)) ? (
@@ -807,7 +807,7 @@ const SkillDetail: React.FC = () => {
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                   {labelForType('TaskSet')} ({codebundle.tasks.length})
                                   <Tooltip 
-                                    title="A Runbook is a Tool that runs on demand in response to an event or request and emits structured findings with next-steps. Use them for troubleshooting, operations, and incident response."
+                                    title="A Runbook is a Task that runs on demand in response to an event or request and emits structured findings with next-steps. Use them for troubleshooting, operations, and incident response."
                                     arrow
                                   >
                                     <InfoIcon sx={{ fontSize: '1rem', color: 'text.secondary' }} />
@@ -822,7 +822,7 @@ const SkillDetail: React.FC = () => {
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                   {labelForType('SLI')} ({codebundle.slis.length})
                                   <Tooltip 
-                                    title="A Monitor is a Tool that runs on a schedule, continuously, in the background. It emits a numeric 0-1 health value used to track service health and performance over time."
+                                    title="A Monitor is a Task that runs on a schedule, continuously, in the background. It emits a numeric 0-1 health value used to track service health and performance over time."
                                     arrow
                                   >
                                     <InfoIcon sx={{ fontSize: '1rem', color: 'text.secondary' }} />
@@ -840,7 +840,7 @@ const SkillDetail: React.FC = () => {
                       <Box>
                         {codebundle.tasks.map((raw, index) => {
                           const task: any = typeof raw === 'string' ? { name: raw } : (raw as any) || {};
-                          const taskName: string = task.name || task.title || 'Unnamed Tool';
+                          const taskName: string = task.name || task.title || 'Unnamed Task';
                           const taskTitle: string = task.title || taskName;
                           const taskDoc: string | undefined = task.description || task.doc;
                           const readOnly = task.readOnly;
@@ -995,7 +995,7 @@ const SkillDetail: React.FC = () => {
                   </Box>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
-                    No Tools defined for this Skill.
+                    No Tasks defined for this Skill.
                   </Typography>
                 )}
               </CardContent>
@@ -1222,7 +1222,7 @@ const SkillDetail: React.FC = () => {
                       </Typography>
                     </Box>
                     <Typography variant="body2" sx={{ mb: 1 }}>
-                      <strong>Tools:</strong> {totalTools} Tool{totalTools !== 1 ? 's' : ''}
+                      <strong>Tasks:</strong> {totalTools} Task{totalTools !== 1 ? 's' : ''}
                       {codebundle.tasks && codebundle.tasks.length > 0 && ` (${codebundle.tasks.length} ${labelForType('TaskSet', codebundle.tasks.length !== 1)})`}
                       {codebundle.slis && codebundle.slis.length > 0 && ` + ${codebundle.slis.length} ${labelForType('SLI', codebundle.slis.length !== 1)}`}
                     </Typography>
@@ -1270,7 +1270,7 @@ const SkillDetail: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                   <AutoAwesomeIcon sx={{ mr: 1, color: 'primary.main' }} />
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Enhanced Tool Details ({codebundle.ai_enhanced_metadata.enhanced_tasks.length})
+                    Enhanced Task Details ({codebundle.ai_enhanced_metadata.enhanced_tasks.length})
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

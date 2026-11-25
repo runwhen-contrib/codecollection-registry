@@ -9,7 +9,7 @@
 ## Available Pages
 <ul>
     {% if task_page %}
-    <li><a href="{{ task_page }}">View Runbooks (Tools)</a></li>
+    <li><a href="{{ task_page }}">View Runbooks (Tasks)</a></li>
     {% endif %}
     {% if sli_page %}
     <li><a href="{{ sli_page }}">View Monitors</a></li>
@@ -18,7 +18,7 @@
 {% endif %}
 
 {% if tasks %}
-## Runbooks (Tools)
+## Runbooks (Tasks)
 <ul>
     {% for task in tasks %}
     <li>{{ task }}</li>
