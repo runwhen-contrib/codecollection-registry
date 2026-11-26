@@ -23,6 +23,7 @@ import {
   Sort as SortIcon,
   CodeOutlined,
   TimelineOutlined,
+  ChevronRightOutlined,
 } from '@mui/icons-material';
 import { apiService, Task, TasksResponse } from '../services/api';
 
@@ -478,6 +479,8 @@ const AllTasks: React.FC = () => {
                         borderBottom: idx < sortedFlatTasks.length - 1 ? '1px solid' : 'none',
                         borderBottomColor: 'divider',
                         '&:hover': { bgcolor: 'action.hover' },
+                        '&:hover .row-chevron': { color: 'primary.main', transform: 'translateX(2px)' },
+                        '&:hover .row-skill': { textDecoration: 'underline' },
                         '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '-2px' },
                         transition: 'background-color 0.1s',
                       }}
@@ -503,6 +506,7 @@ const AllTasks: React.FC = () => {
                         </Typography>
                       </Box>
                       <Typography
+                        className="row-skill"
                         sx={{
                           width: 240,
                           display: { xs: 'none', md: 'block' },
@@ -559,6 +563,16 @@ const AllTasks: React.FC = () => {
                           —
                         </Typography>
                       )}
+                      <ChevronRightOutlined
+                        className="row-chevron"
+                        sx={{
+                          ml: 1,
+                          fontSize: 18,
+                          color: 'text.disabled',
+                          flexShrink: 0,
+                          transition: 'color 0.1s, transform 0.1s',
+                        }}
+                      />
                     </Box>
                     ))}
                   </Box>
