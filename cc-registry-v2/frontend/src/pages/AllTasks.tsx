@@ -27,11 +27,70 @@ import {
   ViewList as ListIcon,
   ViewModule as GroupedIcon,
   Sort as SortIcon,
+  CodeOutlined,
+  TimelineOutlined,
 } from '@mui/icons-material';
 import { apiService, Task, TasksResponse } from '../services/api';
 
 type ViewMode = 'grouped' | 'presentation';
 type SortOrder = 'alpha' | 'diverse' | 'codebundle';
+
+/** Accent colour per platform, used by the presentation-mode language dot. */
+const PLATFORM_COLORS: Record<string, string> = {
+  Kubernetes: '#326CE5',
+  AWS: '#FF9900',
+  Azure: '#0078D4',
+  GCP: '#4285F4',
+  PostgreSQL: '#336791',
+  Misc: '#64748B',
+};
+
+const platformColor = (platform?: string | null): string =>
+  (platform && PLATFORM_COLORS[platform]) || '#2F80ED';
+
+/**
+ * Language bar — a slim stacked bar of Task counts per platform plus a legend.
+ * Modelled on the GitHub repo language summary: it makes the view read as an
+ * inventory of executable automation rather than a list of documents.
+ */
+const PlatformBar: React.FC<{ tasks: Task[] }> = ({ tasks }) => {
+  const counts = useMemo(() => {
+    const map = new Map<string, number>();
+    tasks.forEach(task => {
+      const key = task.platform || 'Other';
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [tasks]);
+
+  if (tasks.length === 0 || counts.length === 0) return null;
+  const total = tasks.length;
+
+  return (
+    <Box sx={{ mb: 1.5 }}>
+      <Box sx={{ display: 'flex', height: 6, borderRadius: 999, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
+        {counts.map(([platform, count]) => (
+          <Box
+            key={platform}
+            sx={{ width: `${(count / total) * 100}%`, bgcolor: platformColor(platform) }}
+            title={`${platform}: ${count}`}
+          />
+        ))}
+      </Box>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 0.75 }}>
+        {counts.map(([platform, count]) => (
+          <Box key={platform} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: platformColor(platform) }} />
+            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+              <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>{platform}</Box>
+              {` ${count}`}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+};
 
 const AllTasks: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -413,48 +472,109 @@ const AllTasks: React.FC = () => {
               {!loading && !error && (
                 <>
                   {sortedFlatTasks.length > 0 ? (
-                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-                      {sortedFlatTasks.map((task, idx) => (
+                    <Box>
+                      {/* Language bar — Tasks by platform, like a GitHub repo language summary */}
+                      <PlatformBar tasks={sortedFlatTasks} />
+                      <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                        {/* Header row */}
                         <Box
-                          key={task.id}
                           sx={{
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'space-between',
-                            px: 3,
-                            py: 1.5,
-                            minHeight: 52,
+                            px: 2,
+                            py: 0.75,
+                            bgcolor: 'action.hover',
+                            borderBottom: '1px solid',
+                            borderColor: 'divider',
+                          }}
+                        >
+                          <Typography sx={{ flex: 1, fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}>
+                            Task
+                          </Typography>
+                          <Typography sx={{ width: 240, display: { xs: 'none', md: 'block' }, fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}>
+                            Skill
+                          </Typography>
+                          <Typography sx={{ width: 150, display: { xs: 'none', sm: 'block' }, fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}>
+                            Platform
+                          </Typography>
+                          <Typography sx={{ width: 220, display: { xs: 'none', lg: 'block' }, fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}>
+                            Script
+                          </Typography>
+                        </Box>
+                        {sortedFlatTasks.map((task, idx) => (
+                        <Box
+                          key={task.id}
+                          title={task.support_tags.length > 0 ? task.support_tags.join('  ·  ') : undefined}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            px: 2,
+                            py: 0.75,
+                            minHeight: 40,
                             borderBottom: idx < sortedFlatTasks.length - 1 ? '1px solid' : 'none',
                             borderBottomColor: 'divider',
                             '&:hover': { bgcolor: 'action.hover' },
                             transition: 'background-color 0.1s',
                           }}
                         >
-                          <Typography sx={{ fontSize: '1.0625rem', fontWeight: 500, color: 'text.primary', flex: 1, mr: 2 }}>
-                            {task.name}
-                          </Typography>
-                          <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                            {task.support_tags.slice(0, 3).map(tag => (
-                              <Chip
-                                key={tag}
-                                label={tag}
-                                size="small"
-                                variant="outlined"
-                                onClick={() => handleSupportTagAdd(tag)}
-                                sx={{
-                                  height: 22,
-                                  fontSize: '0.6875rem',
-                                  fontWeight: 500,
-                                  borderColor: 'divider',
-                                  color: 'text.secondary',
-                                  cursor: 'pointer',
-                                  '&:hover': { borderColor: 'primary.main', color: 'primary.main' },
-                                }}
-                              />
-                            ))}
+                          <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                            {task.type === 'SLI' ? (
+                              <TimelineOutlined sx={{ fontSize: 15, color: 'secondary.main', flexShrink: 0 }} />
+                            ) : (
+                              <CodeOutlined sx={{ fontSize: 15, color: 'text.secondary', flexShrink: 0 }} />
+                            )}
+                            <Typography
+                              sx={{
+                                fontFamily: '"SF Mono", "Consolas", "Roboto Mono", monospace',
+                                fontSize: '0.8125rem',
+                                fontWeight: 500,
+                                color: 'text.primary',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {task.title || task.name}
+                            </Typography>
                           </Box>
+                          <Typography
+                            sx={{
+                              width: 240,
+                              display: { xs: 'none', md: 'block' },
+                              fontSize: '0.75rem',
+                              color: 'text.secondary',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              pl: 2,
+                            }}
+                          >
+                            {task.codebundle_name}
+                          </Typography>
+                          <Box sx={{ width: 150, display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 0.625, flexShrink: 0, pl: 2 }}>
+                            <Box sx={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, bgcolor: platformColor(task.platform) }} />
+                            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {task.platform || 'Other'}
+                            </Typography>
+                          </Box>
+                          <Typography
+                            sx={{
+                              width: 220,
+                              display: { xs: 'none', lg: 'block' },
+                              fontFamily: '"SF Mono", "Consolas", "Roboto Mono", monospace',
+                              fontSize: '0.6875rem',
+                              color: 'text.disabled',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              pl: 2,
+                            }}
+                          >
+                            {task.script || '—'}
+                          </Typography>
                         </Box>
-                      ))}
+                        ))}
+                      </Box>
                     </Box>
                   ) : (
                     <Box sx={{ textAlign: 'center', py: 8 }}>
