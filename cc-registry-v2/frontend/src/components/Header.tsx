@@ -20,20 +20,19 @@ import {
   LightMode as LightModeIcon,
   ChatBubbleOutline as ChatIcon,
 } from '@mui/icons-material';
-import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useThemeMode } from '../contexts/ThemeContext';
 
 const Header: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { itemCount } = useCart();
   const { isAuthenticated, user, logout } = useAuth();
   const { mode, toggleTheme } = useThemeMode();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [moreMenuAnchor, setMoreMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [browseMenuAnchor, setBrowseMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [linksMenuAnchor, setLinksMenuAnchor] = React.useState<null | HTMLElement>(null);
+  const [mobileMenuAnchor, setMobileMenuAnchor] = React.useState<null | HTMLElement>(null);
 
   const isHomePage = location.pathname === '/';
 
@@ -69,6 +68,14 @@ const Header: React.FC = () => {
     setLinksMenuAnchor(null);
   };
 
+  const handleMobileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setMobileMenuAnchor(event.currentTarget);
+  };
+
+  const handleMobileMenuClose = () => {
+    setMobileMenuAnchor(null);
+  };
+
   const handleLogout = () => {
     logout();
     handleUserMenuClose();
@@ -79,9 +86,10 @@ const Header: React.FC = () => {
     navigate(path);
     handleMoreMenuClose();
     handleBrowseMenuClose();
+    handleMobileMenuClose();
   };
 
-  const isBrowseActive = ['/collections', '/codebundles', '/all-tasks'].some(
+  const isBrowseActive = ['/plugins', '/skills', '/all-tasks', '/all-tools', '/collections', '/codebundles'].some(
     path => location.pathname.startsWith(path)
   );
 
@@ -169,14 +177,14 @@ const Header: React.FC = () => {
                 horizontal: 'left',
               }}
             >
-              <MenuItem onClick={() => handleMenuNavigate('/collections')}>
-                CodeCollections
+              <MenuItem onClick={() => handleMenuNavigate('/plugins')}>
+                Plugins
               </MenuItem>
-              <MenuItem onClick={() => handleMenuNavigate('/codebundles')}>
-                Skill Templates
+              <MenuItem onClick={() => handleMenuNavigate('/skills')}>
+                Skills
               </MenuItem>
               <MenuItem onClick={() => handleMenuNavigate('/all-tasks')}>
-                All Skills
+                All Tasks
               </MenuItem>
             </Menu>
 
@@ -288,15 +296,6 @@ const Header: React.FC = () => {
               horizontal: 'right',
             }}
           >
-            <MenuItem onClick={() => handleMenuNavigate('/config-builder')}>
-              Config Builder
-              {itemCount > 0 && (
-                <Typography variant="caption" sx={{ ml: 1, color: 'primary.main' }}>
-                  ({itemCount})
-                </Typography>
-              )}
-            </MenuItem>
-            <Divider />
             {!isAuthenticated && (
               <MenuItem onClick={() => handleMenuNavigate('/login')}>
                 Admin Login
@@ -366,10 +365,41 @@ const Header: React.FC = () => {
           
           <IconButton
             color="inherit"
+            onClick={handleMobileMenuOpen}
+            aria-label="Open navigation menu"
             sx={{ display: { xs: 'block', md: 'none' } }}
           >
             <MenuIcon />
           </IconButton>
+          <Menu
+            anchorEl={mobileMenuAnchor}
+            open={Boolean(mobileMenuAnchor)}
+            onClose={handleMobileMenuClose}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem onClick={() => handleMenuNavigate('/chat')}>
+              <ChatIcon sx={{ fontSize: 18, mr: 1 }} />
+              Chat
+            </MenuItem>
+            <MenuItem onClick={() => handleMenuNavigate('/plugins')}>
+              Plugins
+            </MenuItem>
+            <MenuItem onClick={() => handleMenuNavigate('/skills')}>
+              Skills
+            </MenuItem>
+            <MenuItem onClick={() => handleMenuNavigate('/all-tasks')}>
+              All Tasks
+            </MenuItem>
+            <MenuItem onClick={() => handleMenuNavigate('/intake')}>
+              Request
+            </MenuItem>
+            <Divider />
+            <MenuItem onClick={() => { toggleTheme(); handleMobileMenuClose(); }}>
+              {mode === 'dark' ? <LightModeIcon sx={{ fontSize: 18, mr: 1 }} /> : <DarkModeIcon sx={{ fontSize: 18, mr: 1 }} />}
+              {mode === 'dark' ? 'Light Mode' : 'Dark Mode'}
+            </MenuItem>
+          </Menu>
         </Box>
       </Toolbar>
     </AppBar>

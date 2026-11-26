@@ -22,9 +22,13 @@ from app.core.database import SessionLocal
 from app.models import CodeCollection, Codebundle
 from app.models.raw_data import RawRepositoryData
 from app.tasks.fixed_parser import parse_robot_file_content
+from app.tasks.plugin_sync import (
+    parse_collection_plugin_from_files,
+    sync_plugin_collection,
+)
 
 def clone_repository(git_url: str, clone_dir: str, ref: str = 'main'):
-    """Clone a git repository"""
+    """Clone a git repository at `ref` (skips when already present)."""
     print(f"Cloning {git_url} (ref: {ref}) to {clone_dir}")
     try:
         subprocess.run(['git', 'clone', '-b', ref, '--single-branch', git_url, clone_dir], 
@@ -43,8 +47,20 @@ def find_robot_files(directory: str):
                 robot_files.append(os.path.join(root, file))
     return robot_files
 
-def store_robot_file(db, collection_slug: str, file_path: str, repo_path: str):
-    """Store a robot file in the database"""
+def find_plugin_files(directory: str):
+    """Find V13 plugin files (SKILL.md / tasks.yaml / plugin.yaml)."""
+    wanted = {'SKILL.md', 'tasks.yaml', 'plugin.yaml', 'integration.yaml'}
+    plugin_files = []
+    for root, dirs, files in os.walk(directory):
+        if '.git' in root:
+            continue
+        for file in files:
+            if file in wanted:
+                plugin_files.append(os.path.join(root, file))
+    return plugin_files
+
+def store_robot_file(db, collection_slug: str, file_path: str, repo_path: str, file_type: str = 'robot'):
+    """Store a repository file in the database"""
     relative_path = os.path.relpath(file_path, repo_path)
     
     # Read file content
@@ -63,7 +79,7 @@ def store_robot_file(db, collection_slug: str, file_path: str, repo_path: str):
             repository_path=repo_path,
             file_path=relative_path,
             file_content=content,
-            file_type='robot',
+            file_type=file_type,
             is_processed=False
         )
         db.add(raw_data)
@@ -98,29 +114,46 @@ def main():
             print("ERROR: No collections found. Make sure YAML data is stored first.")
             return
         
-        # Step 4: Clone repositories and store robot files
+        # Step 4: Clone repositories and store robot/plugin files
         temp_dir = tempfile.mkdtemp()
         total_robot_files = 0
+        clone_cache = {}
         
         try:
             for collection in collections:
                 print(f"\\nProcessing collection: {collection.name}")
                 
-                # Clone repository
-                repo_name = collection.git_url.split('/')[-1].replace('.git', '')
-                repo_path = os.path.join(temp_dir, repo_name)
-                
-                if clone_repository(collection.git_url, repo_path, collection.git_ref):
+                # Clone repository once per (git_url, git_ref). V13 plugins
+                # share a monorepo, so this avoids cloning it six times.
+                ref = collection.git_ref or 'main'
+                cache_key = (collection.git_url, ref)
+                if cache_key not in clone_cache:
+                    repo_path = os.path.join(temp_dir, f"repo-{abs(hash(cache_key))}")
+                    if clone_repository(collection.git_url, repo_path, ref):
+                        clone_cache[cache_key] = repo_path
+                    else:
+                        clone_cache[cache_key] = None
+                repo_path = clone_cache[cache_key]
+
+                if repo_path:
                     # Find and store robot files
                     robot_files = find_robot_files(repo_path)
                     print(f"Found {len(robot_files)} robot files")
-                    
+
                     files_stored = 0
                     for robot_file in robot_files:
                         if store_robot_file(db, collection.slug, robot_file, repo_path):
                             files_stored += 1
-                    
-                    print(f"Stored {files_stored} new robot files")
+
+                    # Find and store V13 plugin files (SKILL.md / tasks.yaml)
+                    plugin_files = find_plugin_files(repo_path)
+                    print(f"Found {len(plugin_files)} plugin files")
+                    for plugin_file in plugin_files:
+                        file_type = 'markdown' if plugin_file.endswith('.md') else 'yaml'
+                        if store_robot_file(db, collection.slug, plugin_file, repo_path, file_type):
+                            files_stored += 1
+
+                    print(f"Stored {files_stored} new files")
                     total_robot_files += files_stored
                     
                     # Commit after each collection
@@ -130,10 +163,36 @@ def main():
             # Clean up temp directory
             shutil.rmtree(temp_dir, ignore_errors=True)
         
-        print(f"\\nStep 4 Complete: Stored {total_robot_files} robot files total")
+        print(f"\\nStep 4 Complete: Stored {total_robot_files} files total")
         
-        # Step 5: Parse robot files with working parser
-        print("\\nStep 5: Parsing robot files...")
+        # Step 5: Parse V13 plugin files, then legacy robot files
+        print("\\nStep 5a: Parsing V13 plugin skills...")
+        plugin_rows = db.query(RawRepositoryData).all()
+        plugin_files_by_collection = {}
+        for raw_file in plugin_rows:
+            path = raw_file.file_path or ""
+            if not (path.startswith("plugins/") or path in ("plugin.yaml", "integration/integration.yaml")):
+                continue
+            plugin_files_by_collection.setdefault(raw_file.collection_slug, {})[path] = raw_file.file_content or ""
+
+        plugin_skills_created = 0
+        for collection_slug, files in plugin_files_by_collection.items():
+            collection = db.query(CodeCollection).filter(CodeCollection.slug == collection_slug).first()
+            if not collection:
+                continue
+            parsed_plugin = parse_collection_plugin_from_files(
+                collection_slug,
+                files,
+                git_url=collection.git_url,
+                git_ref=collection.git_ref,
+            )
+            if parsed_plugin and parsed_plugin.get("skills"):
+                created, updated, _ = sync_plugin_collection(db, collection, "", parsed_plugin)
+                plugin_skills_created += created
+                print(f"[{collection_slug}] {created} created, {updated} updated skills")
+        db.commit()
+
+        print("\\nStep 5b: Parsing robot files...")
         robot_files = db.query(RawRepositoryData).filter(RawRepositoryData.file_type == 'robot').all()
         
         codebundles_created = 0
@@ -184,7 +243,7 @@ def main():
         total_tasks = sum(cb.task_count for cb in db.query(Codebundle).all())
         
         print(f"\\n=== SUCCESS ===")
-        print(f"Created {codebundles_created} codebundles")
+        print(f"Created {codebundles_created} codebundles and {plugin_skills_created} plugin skills")
         print(f"Final count: {final_codebundles} codebundles with {total_tasks} tasks")
         
     finally:

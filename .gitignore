@@ -117,3 +117,6 @@ celerybeat.pid
 hack/mcp/data/**
 hack/mcp/data/**/*
 mcp-server/data/**
+
+# OpenChamber local artifacts
+.openchamber/

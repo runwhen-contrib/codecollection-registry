@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -15,27 +15,91 @@ import {
   Alert,
   Pagination,
   InputAdornment,
-  ToggleButtonGroup,
-  ToggleButton,
 } from '@mui/material';
 import {
   Search as SearchIcon,
-  Clear as ClearIcon,
   FilterList as FilterIcon,
-  Launch as LaunchIcon,
   Close as CloseIcon,
-  Add as AddIcon,
-  Remove as RemoveIcon,
-  ViewList as ListIcon,
-  ViewModule as GroupedIcon,
   Sort as SortIcon,
+  CodeOutlined,
+  TimelineOutlined,
+  ChevronRightOutlined,
 } from '@mui/icons-material';
 import { apiService, Task, TasksResponse } from '../services/api';
-import { useCart } from '../contexts/CartContext';
-import { labelForType } from '../lib/terminology';
 
-type ViewMode = 'grouped' | 'presentation';
-type SortOrder = 'alpha' | 'diverse' | 'codebundle';
+type SortOrder = 'alpha' | 'skill' | 'plugin' | 'diverse';
+
+/** Accent colour per plugin label, used by the dense list dot and language bar. */
+const PLUGIN_COLORS: Record<string, string> = {
+  Kubernetes: '#326CE5',
+  AWS: '#FF9900',
+  Azure: '#0078D4',
+  GCP: '#4285F4',
+  PostgreSQL: '#336791',
+  Miscellaneous: '#64748B',
+};
+
+/** Alternates used when a plugin has no explicit colour, so unknowns rarely collide. */
+const PLUGIN_FALLBACK_COLORS = ['#2F80ED', '#8250DF', '#0F766E'];
+
+/** Short plugin (collection) label: "RunWhen Kubernetes Plugin" -> "Kubernetes". */
+const pluginLabel = (task: Task): string =>
+  (task.collection_name || '').replace(/^RunWhen\s+/i, '').replace(/\s*Plugin$/i, '').trim() ||
+  task.collection_slug;
+
+const pluginColor = (label?: string | null): string => {
+  if (label && PLUGIN_COLORS[label]) return PLUGIN_COLORS[label];
+  const key = label || '';
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return PLUGIN_FALLBACK_COLORS[hash % PLUGIN_FALLBACK_COLORS.length];
+};
+
+/**
+ * Language bar — a slim stacked bar of Task counts per plugin plus a legend.
+ * Modelled on the GitHub repo language summary: it makes the view read as an
+ * inventory of executable automation rather than a list of documents.
+ */
+const PluginBar: React.FC<{ tasks: Task[] }> = ({ tasks }) => {
+  const counts = useMemo(() => {
+    const map = new Map<string, number>();
+    tasks.forEach(task => {
+      const key = pluginLabel(task) || 'Other';
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [tasks]);
+
+  if (tasks.length === 0 || counts.length === 0) return null;
+  const total = tasks.length;
+
+  return (
+    <Box sx={{ mb: 1.5 }}>
+      <Box sx={{ display: 'flex', height: 6, borderRadius: 999, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
+        {counts.map(([plugin, count]) => (
+          <Box
+            key={plugin}
+            sx={{ width: `${(count / total) * 100}%`, bgcolor: pluginColor(plugin) }}
+            title={`${plugin}: ${count}`}
+          />
+        ))}
+      </Box>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 0.75 }}>
+        {counts.map(([plugin, count]) => (
+          <Box key={plugin} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: pluginColor(plugin) }} />
+            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+              <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>{plugin}</Box>
+              {` ${count}`}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+};
 
 const AllTasks: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -43,9 +107,9 @@ const AllTasks: React.FC = () => {
   const [supportTags, setSupportTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
   
   const initialTags = searchParams.get('support_tags');
-  const initialView = searchParams.get('view') as ViewMode | null;
   const initialSort = searchParams.get('sort') as SortOrder | null;
   
   const [selectedSupportTags, setSelectedSupportTags] = useState<string[]>(
@@ -61,21 +125,16 @@ const AllTasks: React.FC = () => {
   const [hasMore, setHasMore] = useState(false);
   const tasksPerPage = 200;
   
-  const validViews: ViewMode[] = ['grouped', 'presentation'];
-  const validSorts: SortOrder[] = ['alpha', 'diverse', 'codebundle'];
-  const [viewMode, setViewMode] = useState<ViewMode>(initialView && validViews.includes(initialView) ? initialView : 'grouped');
+  const validSorts: SortOrder[] = ['alpha', 'skill', 'plugin', 'diverse'];
   const [sortOrder, setSortOrder] = useState<SortOrder>(initialSort && validSorts.includes(initialSort) ? initialSort : 'alpha');
 
-  // Keep URL params in sync with view/sort state
+  // Keep the sort param in sync with sort state
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
-    if (viewMode !== 'grouped') { params.set('view', viewMode); } else { params.delete('view'); }
     if (sortOrder !== 'alpha') { params.set('sort', sortOrder); } else { params.delete('sort'); }
     setSearchParams(params, { replace: true });
-  }, [viewMode, sortOrder]);
+  }, [sortOrder]);
   
-  const { addToCart, removeFromCart, isInCart } = useCart();
-
   const fetchTasks = async (
     search?: string,
     supportTags?: string[],
@@ -169,19 +228,6 @@ const AllTasks: React.FC = () => {
     supportTagSearch.length < 2 || tag.toLowerCase().includes(supportTagSearch.toLowerCase())
   );
 
-  interface CodeBundleGroup {
-    id: number;
-    name: string;
-    slug: string;
-    collection_name: string;
-    collection_slug: string;
-    description: string;
-    support_tags: string[];
-    author: string;
-    runbook_path: string;
-    runbook_source_url: string;
-  }
-
   const filteredTasks = tasks.filter(task => {
     // Hide generic templated tasks that accept arbitrary user input
     if (task.name.includes('${TASK_TITLE}')) return false;
@@ -193,36 +239,19 @@ const AllTasks: React.FC = () => {
     );
   });
 
-  const groupedTasks = filteredTasks.reduce((groups, task) => {
-    const key = `${task.collection_slug}/${task.codebundle_slug}`;
-    if (!groups[key]) {
-      groups[key] = {
-        codebundle: {
-          id: task.codebundle_id,
-          name: task.codebundle_name,
-          slug: task.codebundle_slug,
-          collection_name: task.collection_name,
-          collection_slug: task.collection_slug,
-          description: task.description,
-          support_tags: task.support_tags,
-          author: task.author,
-          runbook_path: task.runbook_path,
-          runbook_source_url: task.runbook_source_url
-        },
-        tasks: []
-      };
-    }
-    groups[key].tasks.push(task);
-    return groups;
-  }, {} as Record<string, { codebundle: CodeBundleGroup; tasks: Task[] }>);
+  const skillCount = new Set(
+    filteredTasks.map(task => `${task.collection_slug}/${task.codebundle_slug}`)
+  ).size;
 
-  // Sorted flat task list for presentation mode
+  // Sorted flat task list for the dense list
   const sortedFlatTasks = useMemo(() => {
     const list = [...filteredTasks];
     if (sortOrder === 'alpha') {
-      list.sort((a, b) => a.name.localeCompare(b.name));
-    } else if (sortOrder === 'codebundle') {
-      list.sort((a, b) => a.codebundle_name.localeCompare(b.codebundle_name) || a.name.localeCompare(b.name));
+      list.sort((a, b) => (a.title || a.name).localeCompare(b.title || b.name));
+    } else if (sortOrder === 'skill') {
+      list.sort((a, b) => a.codebundle_name.localeCompare(b.codebundle_name) || (a.title || a.name).localeCompare(b.title || b.name));
+    } else if (sortOrder === 'plugin') {
+      list.sort((a, b) => pluginLabel(a).localeCompare(pluginLabel(b)) || a.codebundle_name.localeCompare(b.codebundle_name) || (a.title || a.name).localeCompare(b.title || b.name));
     } else if (sortOrder === 'diverse') {
       // Round-robin across primary support tag to interleave platforms
       const buckets: Record<string, Task[]> = {};
@@ -256,51 +285,34 @@ const AllTasks: React.FC = () => {
 
   const totalPages = Math.ceil(totalCount / tasksPerPage);
 
-  const isPresentation = viewMode === 'presentation';
-
   return (
     <Box sx={{ p: 3 }}>
-      {/* Header with view toggle */}
+      {/* Header */}
       <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
         <Box>
-          <Typography variant="h4" component="h1" gutterBottom sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' }, fontWeight: 700, mb: 0.5 }}>
-            All Skills
+          <Typography variant="h4" component="h1" gutterBottom sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' }, fontWeight: 600, mb: 0.5 }}>
+            All Tasks
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ fontSize: '0.9375rem' }}>
-            {filteredTasks.length} Tools across {Object.keys(groupedTasks).length} Skill Templates
+            {filteredTasks.length} Tasks across {skillCount} Skills
           </Typography>
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          {/* Sort (presentation mode only) */}
-          {isPresentation && (
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <Select
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-                startAdornment={<SortIcon sx={{ mr: 0.5, fontSize: 18, color: 'text.secondary' }} />}
-                sx={{ fontSize: '0.875rem' }}
-              >
-                <MenuItem value="alpha">Alphabetical</MenuItem>
-                <MenuItem value="diverse">Platform Diversity</MenuItem>
-                <MenuItem value="codebundle">By Skill Template</MenuItem>
-              </Select>
-            </FormControl>
-          )}
-
-          <ToggleButtonGroup
-            value={viewMode}
-            exclusive
-            onChange={(_, v) => { if (v) setViewMode(v); }}
-            size="small"
-          >
-            <ToggleButton value="grouped" sx={{ px: 1.5, textTransform: 'none', fontSize: '0.8125rem' }}>
-              <GroupedIcon sx={{ fontSize: 18, mr: 0.5 }} /> Grouped
-            </ToggleButton>
-            <ToggleButton value="presentation" sx={{ px: 1.5, textTransform: 'none', fontSize: '0.8125rem' }}>
-              <ListIcon sx={{ fontSize: 18, mr: 0.5 }} /> Presentation
-            </ToggleButton>
-          </ToggleButtonGroup>
+          {/* Sort */}
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <Select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+              startAdornment={<SortIcon sx={{ mr: 0.5, fontSize: 18, color: 'text.secondary' }} />}
+              sx={{ fontSize: '0.875rem' }}
+            >
+              <MenuItem value="alpha">By Task</MenuItem>
+              <MenuItem value="skill">By Skill</MenuItem>
+              <MenuItem value="plugin">By Plugin</MenuItem>
+              <MenuItem value="diverse">Platform Diversity</MenuItem>
+            </Select>
+          </FormControl>
         </Box>
       </Box>
 
@@ -308,7 +320,7 @@ const AllTasks: React.FC = () => {
       <Box sx={{ mb: 2 }}>
         <TextField
           fullWidth
-          placeholder="Search Tools and Skill Templates..."
+          placeholder="Search Tasks and Skills..."
           value={taskSearch}
           onChange={(e) => setTaskSearch(e.target.value)}
           InputProps={{
@@ -325,11 +337,11 @@ const AllTasks: React.FC = () => {
               '&.Mui-focused fieldset': { borderColor: 'primary.main' },
             }
           }}
-          sx={{ maxWidth: isPresentation ? '100%' : 600 }}
+          sx={{ maxWidth: '100%' }}
         />
       </Box>
 
-      {/* Main Layout: Sidebar + Content (shared across both modes) */}
+      {/* Main Layout: Sidebar + Content */}
       <Box sx={{ display: 'flex', gap: 1.5, height: 'calc(100vh - 220px)' }}>
         {/* Left: Support Tags Filter */}
         <Box sx={{ width: 280, flexShrink: 0 }}>
@@ -391,7 +403,7 @@ const AllTasks: React.FC = () => {
               <Box sx={{ mt: 1 }}>
                 <FormControl fullWidth size="small" sx={{ mb: 1 }}>
                   <Select value={selectedCollection} onChange={(e) => handleCollectionChange(e.target.value)} displayEmpty sx={{ fontSize: '0.8125rem' }}>
-                    <MenuItem value="">All Collections</MenuItem>
+                    <MenuItem value="">All Plugins</MenuItem>
                     {uniqueCollections.map((collection) => (<MenuItem key={collection} value={collection}>{collection}</MenuItem>))}
                   </Select>
                 </FormControl>
@@ -403,201 +415,180 @@ const AllTasks: React.FC = () => {
 
         {/* Right Content */}
         <Box sx={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
-          {isPresentation ? (
-            /* ============================================================
-               PRESENTATION MODE — flat task list
-               ============================================================ */
+          {loading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <CircularProgress />
+            </Box>
+          )}
+
+          {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
+          {!loading && !error && (
             <>
-              {loading && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                  <CircularProgress />
+              {sortedFlatTasks.length > 0 ? (
+                <Box>
+                  {/* Language bar — Tasks by plugin, like a GitHub repo language summary */}
+                  <PluginBar tasks={sortedFlatTasks} />
+                  <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                    {/* Header row */}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        px: 2,
+                        py: 0.75,
+                        bgcolor: 'action.hover',
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Typography sx={{ flex: 1, fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}>
+                        Task
+                      </Typography>
+                      <Typography sx={{ width: 240, display: { xs: 'none', md: 'block' }, fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}>
+                        Skill
+                      </Typography>
+                      <Typography sx={{ width: 150, display: { xs: 'none', sm: 'block' }, fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}>
+                        Plugin
+                      </Typography>
+                      <Typography sx={{ width: 220, display: { xs: 'none', lg: 'block' }, fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}>
+                        Script
+                      </Typography>
+                    </Box>
+                    {sortedFlatTasks.map((task, idx) => (
+                    <Box
+                      key={task.id}
+                      role="link"
+                      tabIndex={0}
+                      aria-label={`${task.title || task.name} — ${task.codebundle_name}`}
+                      onClick={() => navigate(`/plugins/${task.collection_slug}/skills/${task.codebundle_slug}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          navigate(`/plugins/${task.collection_slug}/skills/${task.codebundle_slug}`);
+                        }
+                      }}
+                      title={task.support_tags.length > 0 ? task.support_tags.join('  ·  ') : undefined}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        px: 2,
+                        py: 0.75,
+                        minHeight: 40,
+                        cursor: 'pointer',
+                        borderBottom: idx < sortedFlatTasks.length - 1 ? '1px solid' : 'none',
+                        borderBottomColor: 'divider',
+                        '&:hover': { bgcolor: 'action.hover' },
+                        '&:hover .row-chevron': { color: 'primary.main', transform: 'translateX(2px)' },
+                        '&:hover .row-skill': { textDecoration: 'underline' },
+                        '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '-2px' },
+                        transition: 'background-color 0.1s',
+                      }}
+                    >
+                      <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        {task.type === 'SLI' ? (
+                          <TimelineOutlined sx={{ fontSize: 15, color: 'secondary.main', flexShrink: 0 }} />
+                        ) : (
+                          <CodeOutlined sx={{ fontSize: 15, color: 'text.secondary', flexShrink: 0 }} />
+                        )}
+                        <Typography
+                          sx={{
+                            fontFamily: '"SF Mono", "Consolas", "Roboto Mono", monospace',
+                            fontSize: '0.8125rem',
+                            fontWeight: 500,
+                            color: 'text.primary',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {task.title || task.name}
+                        </Typography>
+                      </Box>
+                      <Typography
+                        className="row-skill"
+                        sx={{
+                          width: 240,
+                          display: { xs: 'none', md: 'block' },
+                          fontSize: '0.75rem',
+                          color: 'text.secondary',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          pl: 2,
+                        }}
+                      >
+                        {task.codebundle_name}
+                      </Typography>
+                      <Box sx={{ width: 150, display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 0.625, flexShrink: 0, pl: 2 }}>
+                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, bgcolor: pluginColor(pluginLabel(task)) }} />
+                        <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {pluginLabel(task)}
+                        </Typography>
+                      </Box>
+                      {task.script ? (
+                        <Box
+                          component="a"
+                          href={`${task.runbook_source_url}/${task.script}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          sx={{
+                            width: 220,
+                            display: { xs: 'none', lg: 'block' },
+                            fontFamily: '"SF Mono", "Consolas", "Roboto Mono", monospace',
+                            fontSize: '0.6875rem',
+                            color: 'text.disabled',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            pl: 2,
+                            textDecoration: 'none',
+                            '&:hover': { textDecoration: 'underline' },
+                          }}
+                        >
+                          {task.script}
+                        </Box>
+                      ) : (
+                        <Typography
+                          sx={{
+                            width: 220,
+                            display: { xs: 'none', lg: 'block' },
+                            fontFamily: '"SF Mono", "Consolas", "Roboto Mono", monospace',
+                            fontSize: '0.6875rem',
+                            color: 'text.disabled',
+                            pl: 2,
+                          }}
+                        >
+                          —
+                        </Typography>
+                      )}
+                      <ChevronRightOutlined
+                        className="row-chevron"
+                        sx={{
+                          ml: 1,
+                          fontSize: 18,
+                          color: 'text.disabled',
+                          flexShrink: 0,
+                          transition: 'color 0.1s, transform 0.1s',
+                        }}
+                      />
+                    </Box>
+                    ))}
+                  </Box>
+                </Box>
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 8 }}>
+                  <Typography variant="h6" color="text.secondary" gutterBottom>No Tasks found</Typography>
+                  <Typography variant="body2" color="text.secondary">Try adjusting your search criteria or clearing filters.</Typography>
                 </Box>
               )}
 
-              {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
-              {!loading && !error && (
-                <>
-                  {sortedFlatTasks.length > 0 ? (
-                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-                      {sortedFlatTasks.map((task, idx) => (
-                        <Box
-                          key={task.id}
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            px: 3,
-                            py: 1.5,
-                            minHeight: 52,
-                            borderBottom: idx < sortedFlatTasks.length - 1 ? '1px solid' : 'none',
-                            borderBottomColor: 'divider',
-                            '&:hover': { bgcolor: 'action.hover' },
-                            transition: 'background-color 0.1s',
-                          }}
-                        >
-                          <Typography sx={{ fontSize: '1.0625rem', fontWeight: 500, color: 'text.primary', flex: 1, mr: 2 }}>
-                            {task.name}
-                          </Typography>
-                          <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                            {task.support_tags.slice(0, 3).map(tag => (
-                              <Chip
-                                key={tag}
-                                label={tag}
-                                size="small"
-                                variant="outlined"
-                                onClick={() => handleSupportTagAdd(tag)}
-                                sx={{
-                                  height: 22,
-                                  fontSize: '0.6875rem',
-                                  fontWeight: 500,
-                                  borderColor: 'divider',
-                                  color: 'text.secondary',
-                                  cursor: 'pointer',
-                                  '&:hover': { borderColor: 'primary.main', color: 'primary.main' },
-                                }}
-                              />
-                            ))}
-                          </Box>
-                        </Box>
-                      ))}
-                    </Box>
-                  ) : (
-                    <Box sx={{ textAlign: 'center', py: 8 }}>
-                      <Typography variant="h6" color="text.secondary" gutterBottom>No Tools found</Typography>
-                      <Typography variant="body2" color="text.secondary">Try adjusting your search criteria or clearing filters.</Typography>
-                    </Box>
-                  )}
-
-                  {totalPages > 1 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-                      <Pagination count={totalPages} page={page} onChange={handlePageChange} color="primary" size="large" showFirstButton showLastButton />
-                    </Box>
-                  )}
-                </>
+              {totalPages > 1 && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                  <Pagination count={totalPages} page={page} onChange={handlePageChange} color="primary" size="large" showFirstButton showLastButton />
+                </Box>
               )}
-            </>
-          ) : (
-            /* ============================================================
-               GROUPED MODE — codebundle cards
-               ============================================================ */
-            <>
-            <Box sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  {Object.keys(groupedTasks).length} Skill Template{Object.keys(groupedTasks).length !== 1 ? 's' : ''} • {filteredTasks.length} Tool{filteredTasks.length !== 1 ? 's' : ''}
-                  {selectedSupportTags.length > 0 && ` • ${selectedSupportTags.length} tag${selectedSupportTags.length > 1 ? 's' : ''}`}
-                  {selectedCollection && ` • ${selectedCollection}`}
-                </Typography>
-                {(selectedSupportTags.length > 0 || selectedCollection) && (
-                  <Button size="small" variant="text" onClick={clearFilters} startIcon={<ClearIcon />} sx={{ fontSize: '0.75rem', minHeight: 'auto', py: 0.25, px: 0.5 }}>Clear</Button>
-                )}
-              </Box>
-            </Box>
-
-            {loading && (<Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>)}
-            {error && (<Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>)}
-
-            {!loading && !error && (
-              <>
-                {Object.keys(groupedTasks).length > 0 ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    {Object.entries(groupedTasks).map(([key, group]) => (
-                      <Card key={key}>
-                        <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-                            <Box sx={{ flex: 1 }}>
-                              <Typography variant="h6" component="h2" sx={{ mb: 0.5, fontSize: '1.125rem', fontWeight: 600, color: 'text.primary' }}>
-                                {group.codebundle.name}
-                              </Typography>
-                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                                {group.codebundle.collection_name} • {group.tasks.filter(t => t.type === 'TaskSet').length} Runbooks • {group.tasks.filter(t => t.type === 'SLI').length} Monitors
-                              </Typography>
-                            </Box>
-                            <Box sx={{ ml: 1.5, display: 'flex', flexDirection: 'row', gap: 0.75, alignItems: 'center' }}>
-                              <Button
-                                variant={isInCart(group.codebundle.id) ? "contained" : "outlined"} size="small"
-                                color={isInCart(group.codebundle.id) ? "error" : "primary"}
-                                startIcon={isInCart(group.codebundle.id) ? <RemoveIcon /> : <AddIcon />}
-                                sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, whiteSpace: 'nowrap' }}
-                                onClick={() => {
-                                  if (isInCart(group.codebundle.id)) {
-                                    removeFromCart(group.codebundle.id);
-                                  } else {
-                                    const codebundleItem = {
-                                      id: group.codebundle.id, name: group.codebundle.name, slug: group.codebundle.slug,
-                                      display_name: group.codebundle.name, description: group.codebundle.description,
-                                      doc: '', readme: null, author: group.codebundle.author, support_tags: group.codebundle.support_tags,
-                                      tasks: group.tasks.filter(t => t.type === 'TaskSet').map(t => ({name: t.name, doc: t.description || '', tags: []})),
-                                      slis: group.tasks.filter(t => t.type === 'SLI').map(t => ({name: t.name, doc: t.description || '', tags: []})),
-                                      task_count: group.tasks.filter(t => t.type === 'TaskSet').length,
-                                      sli_count: group.tasks.filter(t => t.type === 'SLI').length,
-                                      runbook_source_url: group.codebundle.runbook_source_url || '',
-                                      created_at: new Date().toISOString(), updated_at: new Date().toISOString(), git_updated_at: null,
-                                      configuration_type: { type: 'Manual' as const, has_generation_rules: false, platform: null, resource_types: [], match_patterns: [], templates: [], output_items: [], level_of_detail: null, runwhen_directory_path: null },
-                                      codecollection: { id: 0, name: group.codebundle.collection_name, slug: group.codebundle.collection_slug, git_url: group.tasks[0]?.git_url || '', git_ref: (group.tasks[0] as any)?.git_ref || 'main' }
-                                    };
-                                    addToCart(codebundleItem);
-                                  }
-                                }}
-                              >
-                                {isInCart(group.codebundle.id) ? "Remove" : "Select Skill Template"}
-                              </Button>
-                              <Button variant="outlined" size="small" startIcon={<LaunchIcon />}
-                                href={`/collections/${group.codebundle.collection_slug}/codebundles/${group.codebundle.slug}`}
-                                sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, whiteSpace: 'nowrap' }}
-                              >View</Button>
-                            </Box>
-                          </Box>
-
-                          <Box>
-                            {group.tasks.filter(task => task.type === 'TaskSet').length > 0 && (
-                              <Box sx={{ mb: 1.5 }}>
-                                <Typography variant="subtitle2" sx={{ color: 'primary.main', fontWeight: 600, mb: 0.5, fontSize: '0.875rem' }}>
-                                  {labelForType('TaskSet')} ({group.tasks.filter(task => task.type === 'TaskSet').length})
-                                </Typography>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                  {group.tasks.filter(task => task.type === 'TaskSet').map((task) => (
-                                    <Box key={task.id} sx={{ px: 1.5, py: 0.75, minHeight: 40, bgcolor: 'action.hover', borderRadius: 0.5, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center' }}>
-                                      <Typography variant="body2" sx={{ fontSize: '0.9375rem', fontWeight: 500, color: 'text.primary' }}>{task.name}</Typography>
-                                    </Box>
-                                  ))}
-                                </Box>
-                              </Box>
-                            )}
-                            {group.tasks.filter(task => task.type === 'SLI').length > 0 && (
-                              <Box>
-                                <Typography variant="subtitle2" sx={{ color: 'secondary.main', fontWeight: 600, mb: 0.5, fontSize: '0.875rem' }}>
-                                  {labelForType('SLI')} ({group.tasks.filter(task => task.type === 'SLI').length})
-                                </Typography>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                  {group.tasks.filter(task => task.type === 'SLI').map((task) => (
-                                    <Box key={task.id} sx={{ px: 1.5, py: 0.75, minHeight: 40, bgcolor: 'action.hover', borderRadius: 0.5, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center' }}>
-                                      <Typography variant="body2" sx={{ fontSize: '0.9375rem', fontWeight: 500, color: 'text.primary' }}>{task.name}</Typography>
-                                    </Box>
-                                  ))}
-                                </Box>
-                              </Box>
-                            )}
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </Box>
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 8 }}>
-                    <Typography variant="h6" color="text.secondary" gutterBottom>No Tools found</Typography>
-                    <Typography variant="body2" color="text.secondary">Try adjusting your search criteria or clearing filters.</Typography>
-                  </Box>
-                )}
-
-                {totalPages > 1 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-                    <Pagination count={totalPages} page={page} onChange={handlePageChange} color="primary" size="large" showFirstButton showLastButton />
-                  </Box>
-                )}
-              </>
-            )}
             </>
           )}
         </Box>

@@ -18,6 +18,12 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models import CodeCollection, Codebundle, RawRepositoryData
 from app.models.version import CodeCollectionVersion
+from app.tasks.plugin_sync import (
+    clone_repository_cached,
+    deactivate_stale_codebundles,
+    parse_collection_plugin,
+    sync_plugin_collection,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +121,7 @@ def sync_all_collections_task(self):
         logger.info(f"Loaded {len(collections_data)} collections from YAML")
 
         collections_synced = 0
+        synced_slugs: set = set()
         # Collect per-CC ingestion warnings so the task result surfaces
         # them in one place (task_executions.result), instead of forcing
         # operators to scrape worker logs. Non-fatal: a single CC with a
@@ -192,6 +199,10 @@ def sync_all_collections_task(self):
                     collection.name = collection_data.get('name', collection_slug)
                     collection.git_url = git_url
                     collection.description = collection_data.get('description', '')
+                    collection.owner = collection_data.get('owner', '')
+                    collection.owner_email = collection_data.get('owner_email', '')
+                    collection.owner_icon = collection_data.get('owner_icon', '')
+                    collection.git_ref = collection_data.get('git_ref', 'main')
                     collection.visibility = visibility
                     collection.is_active = True
                     collection.last_synced = now
@@ -199,14 +210,38 @@ def sync_all_collections_task(self):
                 
                 db.commit()
                 collections_synced += 1
+                synced_slugs.add(collection_slug)
+
+            # Collections removed from codecollections.yaml are retired rather
+            # than deleted, so their historical versions/metrics stay intact.
+            stale_collections = []
+            if synced_slugs:
+                stale_collections = db.query(CodeCollection).filter(
+                    CodeCollection.is_active == True,  # noqa: E712 - SQLAlchemy comparison
+                    CodeCollection.slug.notin_(synced_slugs),
+                ).all()
+            for stale in stale_collections:
+                stale.is_active = False
+                # Public endpoints filter on Codebundle.is_active but not on
+                # the parent collection, so retire its Skills too —
+                # otherwise a collection removed from the YAML keeps showing.
+                db.query(Codebundle).filter(
+                    Codebundle.codecollection_id == stale.id,
+                    Codebundle.is_active == True,  # noqa: E712 - SQLAlchemy comparison
+                ).update({Codebundle.is_active: False}, synchronize_session=False)
+                logger.info(f"Deactivated collection no longer in YAML: {stale.slug}")
+            if stale_collections:
+                db.commit()
             
             logger.info(
                 f"Synced {collections_synced} collections "
-                f"({len(ingestion_warnings)} ingestion warning(s))"
+                f"({len(ingestion_warnings)} ingestion warning(s), "
+                f"{len(stale_collections)} deactivated)"
             )
             return {
                 "status": "success",
                 "collections_synced": collections_synced,
+                "collections_deactivated": len(stale_collections),
                 "ingestion_warnings": ingestion_warnings,
             }
 
@@ -236,30 +271,77 @@ def parse_all_codebundles_task(self):
         db = SessionLocal()
         codebundles_created = 0
         codebundles_updated = 0
+        codebundles_deactivated = 0
         
         try:
             collections = db.query(CodeCollection).filter(CodeCollection.is_active == True).all()
             logger.info(f"Found {len(collections)} active collections to parse")
+
+            # `plugin_path` lives in codecollections.yaml, not in the DB, so
+            # load it once here and use it to find each plugin inside its repo.
+            plugin_paths: Dict[str, str] = {}
+            try:
+                if os.path.exists(settings.CODECOLLECTIONS_FILE):
+                    with open(settings.CODECOLLECTIONS_FILE, 'r') as fh:
+                        cfg = yaml.safe_load(fh) or {}
+                    for entry in cfg.get('codecollections', []):
+                        if entry.get('slug') and entry.get('plugin_path'):
+                            plugin_paths[entry['slug']] = entry['plugin_path']
+            except Exception as cfg_err:  # noqa: BLE001
+                logger.warning(f"Could not read plugin_path from codecollections.yaml: {cfg_err}")
             
+            # One clone per (git_url, git_ref). V13 plugins share the
+            # `runwhen-plugins` monorepo, so six collections clone once.
+            clone_cache: Dict[tuple, Optional[str]] = {}
             with tempfile.TemporaryDirectory() as tmp_dir:
                 for collection in collections:
                     try:
-                        # Clone repository
-                        repo_path = os.path.join(tmp_dir, collection.slug)
-                        logger.info(f"Cloning {collection.git_url} to {repo_path}")
-                        
-                        try:
-                            Repo.clone_from(collection.git_url, repo_path)
-                        except Exception as clone_err:
-                            logger.error(f"Failed to clone {collection.git_url}: {clone_err}")
+                        repo_path = clone_repository_cached(
+                            collection.git_url,
+                            collection.git_ref,
+                            tmp_dir,
+                            clone_cache,
+                        )
+                        if not repo_path:
+                            logger.error(f"Failed to clone {collection.git_url}; skipping {collection.slug}")
                             continue
-                        
-                        # Find and parse codebundles
+
+                        # --- V13 plugins: plugins/<slug>/skills/<skill> ---
+                        plugin_parsed = parse_collection_plugin(
+                            repo_path,
+                            collection.slug,
+                            git_url=collection.git_url,
+                            git_ref=collection.git_ref,
+                            plugin_path=plugin_paths.get(collection.slug),
+                        )
+                        if plugin_parsed is not None:
+                            git_date = _get_git_last_commit_date(
+                                repo_path, plugin_parsed.get("plugin_path", f"plugins/{collection.slug}")
+                            )
+                            created, updated, deactivated = sync_plugin_collection(
+                                db, collection, repo_path, plugin_parsed, git_date
+                            )
+                            codebundles_created += created
+                            codebundles_updated += updated
+                            codebundles_deactivated += deactivated
+                            db.commit()
+                            logger.info(
+                                f"[{collection.slug}] {len(plugin_parsed.get('skills', []))} skills "
+                                f"({created} created, {updated} updated, {deactivated} deactivated)"
+                            )
+                            if plugin_parsed.get("errors"):
+                                logger.warning(
+                                    f"[{collection.slug}] plugin parse errors: {plugin_parsed['errors']}"
+                                )
+                            continue
+
+                        # --- Legacy fallback: codebundles/<bundle>/runbook.robot ---
                         codebundles_dir = os.path.join(repo_path, 'codebundles')
                         if not os.path.exists(codebundles_dir):
-                            logger.warning(f"No codebundles directory in {collection.slug}")
+                            logger.warning(f"No plugin or codebundles directory in {collection.slug}")
                             continue
                         
+                        legacy_active_slugs = set()
                         for bundle_name in os.listdir(codebundles_dir):
                             bundle_path = os.path.join(codebundles_dir, bundle_name)
                             if not os.path.isdir(bundle_path):
@@ -315,7 +397,8 @@ def parse_all_codebundles_task(self):
                                 Codebundle.codecollection_id == collection.id
                             ).first()
                             
-                            runbook_source_url = f"{collection.git_url.rstrip('.git')}/tree/main/codebundles/{bundle_name}"
+                            runbook_source_url = f"{collection.git_url.rstrip('/').removesuffix('.git')}/tree/{collection.git_ref or 'main'}/codebundles/{bundle_name}"
+                            legacy_active_slugs.add(primary_parsed['slug'])
                             
                             # Get git date
                             git_date = _get_git_last_commit_date(repo_path, f"codebundles/{bundle_name}")
@@ -367,16 +450,26 @@ def parse_all_codebundles_task(self):
                                 codebundles_created += 1
                             
                             db.commit()
+
+                        # Retire legacy codebundles removed from the repo.
+                        codebundles_deactivated += deactivate_stale_codebundles(
+                            db, collection, list(legacy_active_slugs)
+                        )
+                        db.commit()
                             
                     except Exception as e:
                         logger.error(f"Error processing collection {collection.slug}: {e}")
                         continue
             
-            logger.info(f"Parsed codebundles: {codebundles_created} created, {codebundles_updated} updated")
+            logger.info(
+                f"Parsed codebundles: {codebundles_created} created, "
+                f"{codebundles_updated} updated, {codebundles_deactivated} deactivated"
+            )
             return {
                 "status": "success",
                 "codebundles_created": codebundles_created,
-                "codebundles_updated": codebundles_updated
+                "codebundles_updated": codebundles_updated,
+                "codebundles_deactivated": codebundles_deactivated,
             }
 
         finally:

@@ -30,33 +30,33 @@ hide:
 <div class="home-column-container">
 
 <div class="home-column">
-  <h2> Featured CodeCollections </h2><hr>
+  <h2> Featured Plugins </h2><hr>
   <div class="card-grid" markdown>
-  {% for codecollection in codecollections %}
+  {% for plugin in plugins %}
     <div class="card">
-    <img class="card-icon" src="{{ codecollection['owner_icon'] }}" alt="Icon" />
-    <a href="/CodeCollection/{{ codecollection['slug'] }}"><br>
-    {{ codecollection['name'] }}
+    <img class="card-icon" src="{{ plugin['owner_icon'] }}" alt="Icon" />
+    <a href="/Plugins/{{ plugin['slug'] }}"><br>
+    {{ plugin['name'] }}
     </a>
     </div>
   {% endfor %}
   </div>
 </div>
 <div class="home-column">
-  <h2> Latest CodeBundle Updates </h2><hr>
+  <h2> Latest Skill Updates </h2><hr>
   <div class="card-grid" markdown>
-  {% for codebundle in top_latest_files %}
+  {% for skill in top_latest_files %}
     <div class="card">
-    {% if 'health' in codebundle["slug"].split("/")[-1] %}
+    {% if 'health' in skill["slug"].split("/")[-1] %}
       <img class="card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/ecg_heart.svg" alt="Icon" />
-    {% elif 'tasks' in codebundle["slug"].split("/")[-1] %}
+    {% elif 'tasks' in skill["slug"].split("/")[-1] %}
       <img class="card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/task.svg" alt="Icon" />
     {% endif %}
     <p>
-    <a href="{{ codebundle['slug'] }}">
-    {{ codebundle['name'] }}
+    <a href="{{ skill['slug'] }}">
+    {{ skill['name'] }}
     </a>
-    <span style="font-size: 12px">&nbsp;{{ codebundle['age'] }}</span>
+    <span style="font-size: 12px">&nbsp;{{ skill['age'] }}</span>
     </p>
     </div>
   {% endfor %}
@@ -73,7 +73,7 @@ hide:
     </div>
     <div class="card">
         <a href="https://github.com/runwhen-contrib/codecollection-registry/issues/new/choose" target="_blank">
-        <img class="card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/help_center.svg" alt="Icon" /> Request New CodeBundles
+        <img class="card-icon" src="https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/help_center.svg" alt="Icon" /> Request New Skills
       </a>
     </div> 
         <div class="card">

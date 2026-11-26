@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
-from typing import Optional
+from typing import List, Optional
 from app.core.config import settings
 from app.core.database import engine, Base
 import logging
@@ -263,12 +263,12 @@ async def get_all_tasks(
     limit: int = 100,
     offset: int = 0
 ):
-    """Search Tools (formerly "tasks") across all Skill Templates (codebundles) with filtering and pagination.
+    """Search Tasks across all Skills (codebundles) with filtering and pagination.
 
     The path `/api/v1/registry/tasks` and the JSON field `tasks[]` are kept for backward
     compatibility. Each returned item carries a `type` field of `"TaskSet"` (Runbook) or
     `"SLI"` (Monitor). User-facing surfaces (UI, MCP markdown, chat) map these to the
-    new vocabulary (Skill Template, Tool, Runbook, Monitor)."""
+    new vocabulary (Skill, Plugin, Task, Runbook, Monitor)."""
     try:
         from app.core.database import SessionLocal
         from app.models import CodeCollection, Codebundle
@@ -279,7 +279,7 @@ async def get_all_tasks(
         try:
             from app.core.visibility import public_only
             # Build the query — always join CodeCollection so we can scope to
-            # public-visibility collections (hidden CCs and their Skill Templates
+            # public-visibility collections (hidden CCs and their Skills
             # do not appear on the public registry website).
             query = (
                 db.query(Codebundle)
@@ -336,31 +336,48 @@ async def get_all_tasks(
                 if codebundle.support_tags:
                     clean_support_tags = [tag.strip() for tag in codebundle.support_tags if tag and tag.strip()]
                 
-                # Add TaskSet tasks (handle both old string format and new object format)
+                # Add TaskSet tasks (handle both old string format and new V13 object format)
                 if codebundle.tasks:
                     for task in codebundle.tasks:
+                        task_desc = codebundle.description
+                        read_only = None
+                        task_tags = []
+                        task_slug = None
+                        task_title = None
+
                         # Handle both old string format and new object format
                         if isinstance(task, str):
                             # Old format - just task name
                             task_name = task
                             task_id = codebundle.task_index.get(task_name, f"{codebundle.id}_task_{hash(task_name) % 10000}")
                         elif isinstance(task, dict):
-                            # New format - task object
-                            task_name = task.get('name', 'Unknown Task')
+                            # V13 plugin task object
+                            task_title = task.get('title')
+                            task_slug = task.get('name')
+                            task_name = task_title or task_slug or 'Unknown Task'
                             task_id = task.get('id', f"{codebundle.id}_task_{hash(task_name) % 10000}")
+                            task_desc = task.get('description') or task.get('doc') or codebundle.description
+                            read_only = task.get('readOnly', True)
+                            task_tags = [t.strip() for t in (task.get('tags') or []) if t]
                         else:
                             continue
                         
                         all_tasks.append({
                             "id": task_id,
                             "name": task_name,
+                            "title": task_title,
+                            "slug": task_slug,
                             "type": "TaskSet",
                             "codebundle_id": codebundle.id,
                             "codebundle_name": codebundle.display_name or codebundle.name,
                             "codebundle_slug": codebundle.slug,
                             "collection_name": codebundle.codecollection.name,
                             "collection_slug": codebundle.codecollection.slug,
-                            "description": codebundle.description,
+                            "description": task_desc,
+                            "read_only": read_only,
+                            "task_tags": task_tags,
+                            "script": task.get('script') if isinstance(task, dict) else None,
+                            "platform": codebundle.discovery_platform,
                             "support_tags": clean_support_tags,
                             "categories": codebundle.categories or [],
                             "author": codebundle.author,
@@ -396,6 +413,8 @@ async def get_all_tasks(
                             "collection_name": codebundle.codecollection.name,
                             "collection_slug": codebundle.codecollection.slug,
                             "description": codebundle.description,
+                            "script": sli.get('script') if isinstance(sli, dict) else None,
+                            "platform": codebundle.discovery_platform,
                             "support_tags": clean_support_tags,
                             "categories": codebundle.categories or [],
                             "author": codebundle.author,
@@ -564,9 +583,12 @@ async def list_codebundles(
                 if tag_conditions:
                     query = query.filter(or_(*tag_conditions))
             
-            # Apply platform filter
+            # Apply platform filter (case-insensitive: callers may send
+            # "kubernetes", "Kubernetes", "POSTGRESQL", ...).
             if platform:
-                query = query.filter(Codebundle.discovery_platform == platform)
+                query = query.filter(
+                    func.lower(Codebundle.discovery_platform) == platform.strip().lower()
+                )
             
             # Apply access level filter
             if access_level:
@@ -639,7 +661,8 @@ async def list_codebundles(
                         "id": collection.id,
                         "name": collection.name,
                         "slug": collection.slug,
-                        "git_url": collection.git_url
+                        "git_url": collection.git_url,
+                        "git_ref": collection.git_ref,
                     } if collection else None
                 })
             
@@ -726,6 +749,8 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
                 "minimum_iam_requirements": codebundle.minimum_iam_requirements or [],
                 "ai_enhanced_metadata": codebundle.ai_enhanced_metadata or {},
                 "last_enhanced": codebundle.last_enhanced,
+                # Top-level platform for easy access by MCP / API consumers
+                "platform": codebundle.discovery_platform,
                 # Discovery information
                 "configuration_type": {
                     "type": "Automatically Discovered" if codebundle.has_genrules else "Manual",
@@ -742,7 +767,8 @@ async def get_codebundle_by_slug(collection_slug: str, codebundle_slug: str):
                     "id": collection.id,
                     "name": collection.name,
                     "slug": collection.slug,
-                    "git_url": collection.git_url
+                    "git_url": collection.git_url,
+                    "git_ref": collection.git_ref,
                 }
             }
         finally:
@@ -809,9 +835,9 @@ async def get_recent_codebundles():
 
 @app.get("/api/v1/registry/recent-tasks")
 async def get_recent_tasks():
-    """Get the 10 most recently added Tools (Runbooks / Monitors) based on git update date.
+    """Get the 10 most recently added Tasks (Runbooks / Monitors) based on git update date.
 
-    Path and response field names retained for backward compatibility; `tasks` → `Tools`."""
+    Path and response field names retained for backward compatibility; `tasks` → `Tasks`."""
     try:
         from app.core.database import SessionLocal
         from app.models import CodeCollection, Codebundle
@@ -835,7 +861,8 @@ async def get_recent_tasks():
                 desc(Codebundle.git_updated_at)
             ).limit(100).all()
             
-            result = []
+            result: List[dict] = []
+            task_lists = []
             for cb in codebundles:
                 collection = db.query(CodeCollection).filter(
                     CodeCollection.id == cb.codecollection_id
@@ -845,32 +872,42 @@ async def get_recent_tasks():
                 if collection and collection.slug == 'rw-generic-codecollection':
                     continue
                 
-                # Extract task names from the codebundle
+                # Extract task names from the codebundle. `title` is the
+                # human-readable label; `name` remains the stable tool slug.
+                entries = []
                 if cb.tasks:
                     for task in cb.tasks:
-                        # Handle both string and dict formats
                         if isinstance(task, str):
                             task_name = task
+                            task_slug = task
                         elif isinstance(task, dict):
-                            task_name = task.get('name', 'Unknown Task')
+                            task_name = task.get('title') or task.get('name') or 'Unknown Task'
+                            task_slug = task.get('name') or task_name
                         else:
                             continue
                         
-                        result.append({
+                        entries.append({
                             "task_name": task_name,
+                            "task_slug": task_slug,
                             "codebundle_name": cb.display_name or cb.name,
                             "codebundle_slug": cb.slug,
                             "collection_name": collection.name if collection else "Unknown",
                             "collection_slug": collection.slug if collection else "",
                             "git_updated_at": cb.git_updated_at.isoformat() if cb.git_updated_at else None,
                         })
-                        
-                        # Stop once we have 20 tasks
+                if entries:
+                    task_lists.append(entries)
+            
+            # Round-robin across skills so the flipboard shows diverse tools
+            # instead of five consecutive tools from the same skill.
+            index = 0
+            while len(result) < 20 and any(index < len(entries) for entries in task_lists):
+                for entries in task_lists:
+                    if index < len(entries):
+                        result.append(entries[index])
                         if len(result) >= 20:
                             break
-                
-                if len(result) >= 20:
-                    break
+                index += 1
             
             return result[:20]
         finally:

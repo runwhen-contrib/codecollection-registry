@@ -277,7 +277,7 @@ async def handle_check_existing_requests(arguments: Dict[str, Any]) -> str:
 
 @app.get("/api/codebundles", response_model=Dict[str, Any])
 async def get_codebundles(
-    format: str = Query("json", enum=["markdown", "json", "summary"]),
+    format: str = Query("json", pattern="^(markdown|json|summary)$"),
     collection_slug: Optional[str] = None
 ):
     """Get all codebundles (REST endpoint)"""
@@ -325,7 +325,7 @@ async def get_codebundle_by_slug(
 
 @app.get("/api/collections", response_model=Dict[str, Any])
 async def get_collections(
-    format: str = Query("json", enum=["markdown", "json", "summary"])
+    format: str = Query("json", pattern="^(markdown|json|summary)$")
 ):
     """Get all codecollections (REST endpoint)"""
     result = await handle_list_codecollections({"format": format})
@@ -339,7 +339,7 @@ async def get_collections(
 @app.get("/api/libraries/search", response_model=Dict[str, Any])
 async def search_libraries_api(
     query: str,
-    category: str = Query("all", enum=["cli", "python", "shell", "all"])
+    category: str = Query("all", pattern="^(cli|python|shell|all)$")
 ):
     """Search libraries (REST endpoint)"""
     result = await handle_find_library_info({

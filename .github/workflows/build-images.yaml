@@ -5,6 +5,7 @@ on:
     paths:
       - 'cc-registry-v2/**'
       - 'mcp-server/**'
+      - 'codecollections.yaml'
       - '.github/workflows/build-images.yaml'
 
   workflow_dispatch:
@@ -76,6 +77,9 @@ jobs:
     needs: [generate-tag]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Copy codecollections.yaml to backend build context
+        run: cp codecollections.yaml cc-registry-v2/backend/codecollections.yaml
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2

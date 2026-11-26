@@ -7,19 +7,19 @@ vocabulary, while leaving every internal identifier (DB columns, JSON
 byte-identical to the previous schema.
 
 Mapping (internal -> display):
-    Task        -> Tool
-    CodeBundle  -> Skill Template
+    Task        -> Task (umbrella concept; Runbook and Monitor are its subtypes)
+    CodeBundle  -> Skill
     SLI         -> Monitor    (scheduled, continuous, numeric output)
     TaskSet     -> Runbook    (on-demand, event-triggered, findings)
 
 Lifecycle distinction:
-    - A **Skill Template** is the registry-side, parameterised package
-      (formerly "CodeBundle"). Vars and secrets are unresolved placeholders.
-    - A **Skill** is the runtime instantiation of a Skill Template inside
-      a workspace, with vars/secrets materialised against real infra.
-      The registry only stores Skill Templates; Skills only exist at
-      runtime in a workspace. "Skill" is used colloquially as an umbrella
-      term in user-facing copy (e.g. "All Skills" page titles).
+    - A **Skill** is the registry-side, parameterised package (formerly
+      "CodeBundle"). Vars and secrets are unresolved placeholders.
+    - A **runtime Skill** is the instantiation of a Skill inside a workspace,
+      with vars/secrets materialised against real infra. The registry only
+      stores Skills; runtime Skills only exist in a workspace. "Skill" is
+      used colloquially as an umbrella term in user-facing copy
+      (e.g. "All Skills" page titles).
 
 The MCP server consumes the registry's REST API and renders markdown for
 LLM consumers. The REST API still returns ``type: "TaskSet" | "SLI" |
@@ -34,16 +34,15 @@ InternalType = Literal["TaskSet", "SLI", "CodeBundle"]
 TYPE_LABELS: dict[str, dict[str, str]] = {
     "TaskSet": {"singular": "Runbook", "plural": "Runbooks"},
     "SLI": {"singular": "Monitor", "plural": "Monitors"},
-    "CodeBundle": {"singular": "Skill Template", "plural": "Skill Templates"},
+    "CodeBundle": {"singular": "Skill", "plural": "Skills"},
 }
 
 CONCEPTS: dict[str, dict[str, str]] = {
-    "TASK": {"singular": "Tool", "plural": "Tools"},
-    "CODEBUNDLE": {"singular": "Skill Template", "plural": "Skill Templates"},
-    # Runtime instantiation of a Skill Template (vars/secrets materialised
-    # inside a workspace). Used colloquially as an umbrella term in page titles.
+    "TASK": {"singular": "Task", "plural": "Tasks"},
+    "CODEBUNDLE": {"singular": "Skill", "plural": "Skills"},
+    # Runtime instantiation of a Skill inside a workspace.
     "SKILL": {"singular": "Skill", "plural": "Skills"},
-    "CODECOLLECTION": {"singular": "CodeCollection", "plural": "CodeCollections"},
+    "CODECOLLECTION": {"singular": "Plugin", "plural": "Plugins"},
     "SLI": {"singular": "Monitor", "plural": "Monitors"},
     "TASKSET": {"singular": "Runbook", "plural": "Runbooks"},
 }

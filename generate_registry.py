@@ -33,9 +33,9 @@ docs_dir='docs'
 all_support_tags = []
 support_tags_to_remove = []
 
-#Global CodeCollection Stats
+# Global Plugin Stats
 ## collection['slug'] is used as the unique key
-all_codecollection_stats={}
+all_plugin_stats={}
 
 
 
@@ -121,38 +121,37 @@ def read_yaml(file_path):
     with open(file_path, 'r') as file:
         return yaml.safe_load(file)
 
-def generate_cc_list(data):
+def generate_plugin_list(data):
     """
     Generate Markdown content based on the provided data and a Jinja2 template file.
     """
-    cc_list_template_file_name=f"./{mkdocs_root}/templates/cc-list-template.j2"
-    cc_list_markdown_content = ""
-    cc_list_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
-    cc_list_jinja_template = cc_list_jinja_env.get_template(cc_list_template_file_name)
-    cc_list_content = cc_list_jinja_template.render(
-        data=data,
-        all_codecollection_stats=all_codecollection_stats
+    plugin_list_template_file_name=f"./{mkdocs_root}/templates/plugin-list-template.j2"
+    plugin_list_markdown_content = ""
+    plugin_list_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
+    plugin_list_jinja_template = plugin_list_jinja_env.get_template(plugin_list_template_file_name)
+    plugin_list_content = plugin_list_jinja_template.render(
+        data={"plugins": data.get('codecollections', [])},
+        all_plugin_stats=all_plugin_stats
     )
-    with open(f'{mkdocs_root}/{docs_dir}/all_codecollections.md', 'w') as md_file:
-        md_file.write(cc_list_content)
-    cc_index_template_file_name=f"./{mkdocs_root}/templates/cc-index-template.j2"
-    cc_index_markdown_content = ""
-    cc_index_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
-    cc_index_jinja_template = cc_index_jinja_env.get_template(cc_index_template_file_name)
-    for codecollection in data['codecollections']: 
-        # print(codecollection)
-        cc_index_file_path=f'{mkdocs_root}/{docs_dir}/CodeCollection/{codecollection["slug"]}/index.md'
+    with open(f'{mkdocs_root}/{docs_dir}/all_plugins.md', 'w') as md_file:
+        md_file.write(plugin_list_content)
+    plugin_index_template_file_name=f"./{mkdocs_root}/templates/plugin-index-template.j2"
+    plugin_index_markdown_content = ""
+    plugin_index_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
+    plugin_index_jinja_template = plugin_index_jinja_env.get_template(plugin_index_template_file_name)
+    for plugin in data['codecollections']:
+        plugin_index_file_path=f'{mkdocs_root}/{docs_dir}/Plugins/{plugin["slug"]}/index.md'
         # Ensure the directory exists before writing
-        os.makedirs(os.path.dirname(cc_index_file_path), exist_ok=True)
-        cc_index_content = cc_index_jinja_template.render(
-            codecollection=codecollection,
-            codecollection_stats=all_codecollection_stats[codecollection['slug']]
+        os.makedirs(os.path.dirname(plugin_index_file_path), exist_ok=True)
+        plugin_index_content = plugin_index_jinja_template.render(
+            plugin=plugin,
+            plugin_stats=all_plugin_stats[plugin['slug']]
         )
-        with open(cc_index_file_path, 'w') as md_file:
-            md_file.write(cc_index_content)
+        with open(plugin_index_file_path, 'w') as md_file:
+            md_file.write(plugin_index_content)
     # for collection in data.get('codecollections', []):
     #     markdown_content += jinja_template.render(**collection)
-    # return cc_list_content
+    # return plugin_list_content
 
 def clean_path(path):
     """
@@ -179,9 +178,201 @@ def count_directories_at_depth_one(path):
     directory_count = sum(os.path.isdir(os.path.join(path, item)) for item in items)
     return directory_count
 
+
+# ---------------------------------------------------------------------------
+# V13 plugins (`runwhen-plugins`): plugins/<plugin>/skills/<skill>/
+# ---------------------------------------------------------------------------
+def parse_skill_md_file(fpath):
+    """Return (frontmatter dict, markdown body) from a SKILL.md file."""
+    if not os.path.exists(fpath):
+        return {}, ""
+    with open(fpath, 'r', encoding='utf-8') as f:
+        content = f.read()
+    if not content.startswith('---'):
+        return {}, content
+    parts = content.split('---', 2)
+    if len(parts) < 3:
+        return {}, content
+    try:
+        frontmatter = yaml.safe_load(parts[1]) or {}
+    except yaml.YAMLError:
+        frontmatter = {}
+    return frontmatter if isinstance(frontmatter, dict) else {}, parts[2]
+
+
+def parse_tasks_yaml_file(fpath):
+    """Return the parsed tasks.yaml mapping (empty dict on any problem)."""
+    if not os.path.exists(fpath):
+        return {}
+    try:
+        with open(fpath, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f) or {}
+        return data if isinstance(data, dict) else {}
+    except yaml.YAMLError as e:
+        print(f"Error loading tasks.yaml {fpath}: {e}")
+        return {}
+
+
+def find_plugin_dir(collection, clone_path):
+    """Locate the V13 plugin directory for a collection, or None."""
+    repo_name = collection["git_url"].split('/')[-1].replace('.git', '')
+    repo_root = os.path.join(clone_path, repo_name)
+    candidates = []
+    if collection.get('plugin_path'):
+        candidates.append(os.path.join(repo_root, collection['plugin_path']))
+    candidates.append(os.path.join(repo_root, 'plugins', collection['slug']))
+    for candidate in candidates:
+        if os.path.exists(os.path.join(candidate, 'plugin.yaml')):
+            return candidate
+    return None
+
+
+def generate_plugin_content(collection, clone_path, plugin_dir):
+    """Generate Markdown for every skill of a V13 plugin.
+
+    Returns entries shaped like `generate_skill_task_content` output so
+    the all-tasks index keeps working.
+    """
+    repo_name = collection["git_url"].split('/')[-1].replace('.git', '')
+    plugin_slug = collection['slug']
+    git_ref = collection.get('git_ref', 'main')
+    git_url = collection["git_url"].rstrip('/')
+    if git_url.endswith('.git'):
+        git_url = git_url[:-4]
+
+    integration_meta = {}
+    integration_path = os.path.join(plugin_dir, 'integration', 'integration.yaml')
+    if os.path.exists(integration_path):
+        integration_meta = read_yaml(integration_path) or {}
+    platform = integration_meta.get('platform', plugin_slug)
+
+    stats = all_plugin_stats.setdefault(
+        f"{collection['slug']}",
+        {"total_skills": 0, "total_tasks": 0, "total_slis": 0},
+    )
+
+    skills_dir = os.path.join(plugin_dir, 'skills')
+    if not os.path.isdir(skills_dir):
+        return []
+
+    entries = []
+    for skill in sorted(os.listdir(skills_dir)):
+        skill_dir = os.path.join(skills_dir, skill)
+        if not os.path.isdir(skill_dir) or skill.startswith('.'):
+            continue
+
+        frontmatter, body = parse_skill_md_file(os.path.join(skill_dir, 'SKILL.md'))
+        tasks_data = parse_tasks_yaml_file(os.path.join(skill_dir, 'tasks.yaml'))
+        runwhen_meta = frontmatter.get('runwhen') or {}
+        display_name = frontmatter.get('name') or skill
+        description = frontmatter.get('description') or ''
+        if isinstance(description, list):
+            description = ' '.join(str(d) for d in description)
+        description = ' '.join(str(description).split())
+
+        support_tags = [str(t).upper() for t in (
+            [plugin_slug]
+            + [str(t) for t in (runwhen_meta.get('tags') or [])]
+            + ([str(runwhen_meta['role'])] if runwhen_meta.get('role') else [])
+        )]
+        all_support_tags.extend(support_tags)
+
+        task_entries = []
+        for task in tasks_data.get('tasks', []) or []:
+            if not isinstance(task, dict) or not task.get('name'):
+                continue
+            task_entries.append({
+                'name': task.get('title') or task['name'],
+                'slug': task['name'],
+                'doc': task.get('description', '') or '',
+                'tags': task.get('tags', []) or [],
+                'readOnly': task.get('readOnly', True),
+            })
+
+        stats['total_skills'] += 1
+        stats['total_tasks'] += len(task_entries)
+
+        dir_path = f'{mkdocs_root}/{docs_dir}/Plugins/{plugin_slug}/{skill}'
+        os.makedirs(dir_path, exist_ok=True)
+
+        source_url = f"{git_url}/tree/{git_ref}/plugins/{plugin_slug}/skills/{skill}"
+        lines = [
+            '---',
+            f'title: "{display_name}"',
+            'tags:',
+            '  - skills',
+            f'  - {platform}',
+            '---',
+            '',
+            f'# {display_name}',
+            '',
+            description,
+            '',
+            f'**Plugin:** {plugin_slug}  ',
+            f'**Platform:** {platform}  ',
+            f'**Source:** [{skill}]({source_url})',
+            '',
+            '## Tasks',
+            '',
+        ]
+        for task in task_entries:
+            access = 'read-write' if task['readOnly'] is False else 'read-only'
+            lines.append(f"### {task['name']}")
+            lines.append('')
+            if task['doc']:
+                lines.append(task['doc'])
+                lines.append('')
+            lines.append(f"`{access}`" + (f" &middot; tags: {', '.join(task['tags'])}" if task['tags'] else ''))
+            lines.append('')
+
+        if body.strip():
+            lines.append('## Documentation')
+            lines.append('')
+            lines.append(body.strip())
+            lines.append('')
+
+        with open(os.path.join(dir_path, 'tasks.md'), 'w') as md_file:
+            md_file.write('\n'.join(lines))
+
+        # Skill index page
+        index_lines = [
+            '---',
+            f'title: "{display_name}"',
+            '---',
+            '',
+            f'# {display_name}',
+            '',
+            description,
+            '',
+            f'- **Plugin:** {plugin_slug}',
+            f'- **Platform:** {platform}',
+            f'- **Tasks:** {len(task_entries)}',
+            f'- **Source:** [{skill}]({source_url})',
+            '',
+            '[View Tasks](tasks.md)',
+            '',
+        ]
+        with open(os.path.join(dir_path, 'index.md'), 'w') as md_file:
+            md_file.write('\n'.join(index_lines))
+
+        entries.append({
+            "codecollection": plugin_slug,
+            "codebundle": skill,
+            "display_name": display_name,
+            "doc": description,
+            "tasks": [t['name'] for t in task_entries],
+            "slis": [],
+            "categories": support_tags,
+            "task_page": "tasks/",
+            "sli_page": None,
+            "page_url": f"../Plugins/{plugin_slug}/{skill}",
+        })
+
+    return entries
+
 def generate_codebundle_task_list(data):
     """
-    Generate an interactive Markdown file listing CodeBundles, their tasks, SLIs, categories, and page URLs with filtering for MkDocs.
+    Generate an interactive Markdown file listing Skills, their Tasks, Monitors, categories, and page URLs with filtering for MkDocs.
     """
     task_list_template_file_name = f"./{mkdocs_root}/templates/all-tasks-template.md.j2"
     task_list_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
@@ -197,18 +388,17 @@ def generate_codebundle_task_list(data):
     
     print(f"Generated interactive task list at {output_file_path}")
 
-def generate_codebundle_task_content(collection, clone_path):
+def generate_skill_task_content(collection, clone_path):
     """
-    Generates a structured dataset for CodeBundles, ensuring tasks and SLIs appear together and generating index.md.
+    Generates a structured dataset for Skills, ensuring Tasks and Monitors appear together and generating index.md.
     """
     codecollection = collection["git_url"].split('/')[-1].replace('.git', '')
     runbook_files = find_files(f"{clone_path}/{codecollection}/codebundles", 'runbook.robot')
-    sli_files = find_files(f"{clone_path}/{codecollection}", 'sli.robot')
 
-    codebundle_task_data = {}
+    skill_task_data = {}
 
     # Load Jinja template for the index file
-    index_template = jinja2.Environment(loader=jinja2.FileSystemLoader(".")).get_template(f"./{mkdocs_root}/templates/codebundle-index-template.j2")
+    index_template = jinja2.Environment(loader=jinja2.FileSystemLoader(".")).get_template(f"./{mkdocs_root}/templates/skill-index-template.j2")
 
     def get_display_name(parsed_file, default_name):
         return parsed_file.get("display_name", default_name)
@@ -219,8 +409,8 @@ def generate_codebundle_task_content(collection, clone_path):
         parsed_runbook = parse_robot_file(runbook)
         display_name = get_display_name(parsed_runbook, codebundle)
         
-        if codebundle not in codebundle_task_data:
-            codebundle_task_data[codebundle] = {
+        if codebundle not in skill_task_data:
+            skill_task_data[codebundle] = {
                 "codecollection": codecollection,
                 "codebundle": codebundle,
                 "display_name": display_name,
@@ -230,46 +420,22 @@ def generate_codebundle_task_content(collection, clone_path):
                 "categories": [],
                 "task_page": None,
                 "sli_page": None,
-                "page_url": f"../CodeCollection/{codecollection}/{codebundle}"
+                "page_url": f"../Plugins/{codecollection}/{codebundle}"
             }
 
         task_names = [task["name"] for task in parsed_runbook.get("tasks", [])]
-        codebundle_task_data[codebundle]["tasks"].extend(task_names)
-        codebundle_task_data[codebundle]["categories"].extend(parsed_runbook.get("support_tags", []))
-        codebundle_task_data[codebundle]["task_page"] = "tasks/"
+        skill_task_data[codebundle]["tasks"].extend(task_names)
+        skill_task_data[codebundle]["categories"].extend(parsed_runbook.get("support_tags", []))
+        skill_task_data[codebundle]["task_page"] = "tasks/"
 
-    # Process SLIs
-    for sli in sli_files:
-        codebundle = sli.split('/')[5]
-        parsed_sli = parse_robot_file(sli)
-        display_name = get_display_name(parsed_sli, codebundle)
-
-        if codebundle not in codebundle_task_data:
-            codebundle_task_data[codebundle] = {
-                "codecollection": codecollection,
-                "codebundle": codebundle,
-                "display_name": display_name,
-                "doc": parsed_sli.get("doc", ""),  # Store SLI description
-                "tasks": [],
-                "slis": [],
-                "categories": [],
-                "task_page": None,
-                "sli_page": None
-            }
-
-        sli_names = [sli_task["name"] for sli_task in parsed_sli.get("tasks", [])]
-        codebundle_task_data[codebundle]["slis"].extend(sli_names)
-        codebundle_task_data[codebundle]["categories"].extend(parsed_sli.get("support_tags", []))
-        codebundle_task_data[codebundle]["sli_page"] = "health/"
-
-    # Generate index.md for each CodeBundle
-    for codebundle, data in codebundle_task_data.items():
-        dir_path = f'{mkdocs_root}/{docs_dir}/CodeCollection/{codecollection}/{codebundle}'
+    # Generate index.md for each Skill
+    for codebundle, data in skill_task_data.items():
+        dir_path = f'{mkdocs_root}/{docs_dir}/Plugins/{codecollection}/{codebundle}'
         os.makedirs(dir_path, exist_ok=True)
         index_path = os.path.join(dir_path, "index.md")
 
         index_content = index_template.render(
-            codebundle=data["display_name"],
+            skill=data["display_name"],
             doc=data["doc"],
             tasks=data["tasks"],
             slis=data["slis"],
@@ -280,21 +446,21 @@ def generate_codebundle_task_content(collection, clone_path):
         with open(index_path, 'w') as index_file:
             index_file.write(index_content)
 
-    return list(codebundle_task_data.values())
+    return list(skill_task_data.values())
 
-def generate_codebundle_content(collection, clone_path):
+def generate_skill_content(collection, clone_path):
     """
     Generate Markdown content based on the provided codebundle data and a Jinja2 template file.
     """
     codecollection=collection["git_url"].split('/')[-1].replace('.git', '')
-    codecollection_path = f'{mkdocs_root}/{docs_dir}/CodeCollection/{codecollection}/'
+    codecollection_path = f'{mkdocs_root}/{docs_dir}/Plugins/{codecollection}/'
     clean_path(codecollection_path)
 
     # Update the dictionary with the new or incremented count
     codebundle_count = count_directories_at_depth_one(f"{clone_path}/{codecollection}/codebundles")
-    all_codecollection_stats[f"{collection['slug']}"]['total_codebundles'] += codebundle_count
+    all_plugin_stats[f"{collection['slug']}"]['total_skills'] += codebundle_count
 
-    runbook_template_file_name=f"./{mkdocs_root}/templates/codebundle-runbook-template.j2"
+    runbook_template_file_name=f"./{mkdocs_root}/templates/skill-tasks-template.j2"
     runbook_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
     runbook_jinja_template = runbook_jinja_env.get_template(runbook_template_file_name)
     runbook_files=find_files(f"{clone_path}/{codecollection}/codebundles", 'runbook.robot')
@@ -314,13 +480,13 @@ def generate_codebundle_content(collection, clone_path):
         # Generate the directory path
         meta_path=f'{clone_path}/{codecollection}/codebundles/{codebundle}/meta.yaml'
         # print(meta_path)
-        dir_path = f'{mkdocs_root}/docs/CodeCollection/{codecollection}/{codebundle}'
+        dir_path = f'{mkdocs_root}/docs/Plugins/{codecollection}/{codebundle}'
         # Ensure the directory exists
         os.makedirs(dir_path, exist_ok=True)
         parsed_runbook = parse_robot_file(runbook)
         runbook_source_url = f'{collection["git_url"]}/blob/main/codebundles/{codebundle}/runbook.robot'
-        codecollection_total_tasks = all_codecollection_stats[f"{collection['slug']}"]['total_tasks'] + len(parsed_runbook["tasks"])
-        all_codecollection_stats[f"{collection['slug']}"]['total_tasks']=codecollection_total_tasks
+        codecollection_total_tasks = all_plugin_stats[f"{collection['slug']}"]['total_tasks'] + len(parsed_runbook["tasks"])
+        all_plugin_stats[f"{collection['slug']}"]['total_tasks']=codecollection_total_tasks
         meta = {"commands": []}
         if os.path.exists(meta_path):
             try:
@@ -360,7 +526,7 @@ def generate_codebundle_content(collection, clone_path):
         # print(parsed_runbook)
         file_path = os.path.join(dir_path, f'tasks.md')
         runbook_codebundle_content = runbook_jinja_template.render(
-            codecollection_slug=collection['slug'],
+            plugin_slug=collection['slug'],
             runbook_source_url=runbook_source_url,
             parsed_runbook=parsed_runbook, 
             meta=meta, 
@@ -373,38 +539,7 @@ def generate_codebundle_content(collection, clone_path):
         with open(file_path, 'w') as md_file:
             md_file.write(runbook_codebundle_content)
 
-    sli_template_file_name=f"./{mkdocs_root}/templates/codebundle-sli-template.j2"
-    sli_jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
-    sli_jinja_template = sli_jinja_env.get_template(sli_template_file_name)
-    sli_files=find_files(f"{clone_path}/{codecollection}", 'sli.robot')
-    for sli in sli_files: 
-        codebundle=sli.split('/')[5]
-        gen_rules=find_files(f"{clone_path}/{codecollection}/codebundles/{codebundle}/.runwhen/generation-rules", '*.yaml')
-        has_genrules = "false"
-        if gen_rules != []: 
-            has_genrules = "true"
-        # Generate the directory path
-        dir_path = f'{mkdocs_root}/{docs_dir}/CodeCollection/{codecollection}/{codebundle}'
-        # Ensure the directory exists
-        os.makedirs(dir_path, exist_ok=True)
-        parsed_sli=parse_robot_file(sli)
-        sli_source_url = f'{collection["git_url"]}/blob/main/codebundles/{codebundle}/sli.robot'
-        codecollection_total_tasks = all_codecollection_stats[f"{collection['slug']}"]['total_tasks'] + len(parsed_sli["tasks"])
-        all_codecollection_stats[f"{collection['slug']}"]['total_tasks']=codecollection_total_tasks
-        # print(sli)
-        file_path = os.path.join(dir_path, 'health.md')
-        sli_codebundle_content = sli_jinja_template.render(
-            codecollection_slug=collection['slug'],
-            sli_source_url=sli_source_url,
-            parsed_sli=parsed_sli, 
-            total_tasks=len(parsed_sli["tasks"]),
-            file_path=file_path.replace(f'{mkdocs_root}/{docs_dir}', '').strip('.md'),
-            has_genrules=has_genrules
-        )
-        with open(file_path, 'w') as md_file:
-            md_file.write(sli_codebundle_content)
-
-def generate_index(all_support_tags_freq, all_codecollection_stats, top_latest_files, codecollections_yaml): 
+def generate_index(all_support_tags_freq, all_plugin_stats, top_latest_files, codecollections_yaml): 
     index_path = f'{mkdocs_root}/{docs_dir}/index.md'
     home_path = f'{mkdocs_root}/{docs_dir}/overrides/home.html'
     index_template_file = f"{mkdocs_root}/templates/index-template.j2"
@@ -425,20 +560,20 @@ def generate_index(all_support_tags_freq, all_codecollection_stats, top_latest_f
         "icon_url": tag_icon_url_map.get(tag)
     } for tag in top_10_support_tag_names]
 
-    total_contributors = sum(item['total_contributors'] for item in all_codecollection_stats.values())
-    total_tasks = sum(item['total_tasks'] for item in all_codecollection_stats.values())
-    total_codebundles = sum(item['total_codebundles'] for item in all_codecollection_stats.values())
+    total_contributors = sum(item['total_contributors'] for item in all_plugin_stats.values())
+    total_tasks = sum(item['total_tasks'] for item in all_plugin_stats.values())
+    total_skills = sum(item['total_skills'] for item in all_plugin_stats.values())
     index_output = index_template.render(
-        codecollections=codecollections_yaml.get('codecollections', []),
+        plugins=codecollections_yaml.get('codecollections', []),
         tags_with_icons=tags_with_icons,
-        total_codebundles=total_codebundles,
-        total_tasks=total_tasks,
+        total_skills=total_skills,
+        total_tools=total_tasks,
         total_contributors=total_contributors,
         top_latest_files=top_latest_files
     )
     home_output = home_template.render(
-        total_codebundles=total_codebundles,
-        total_tasks=total_tasks,
+        total_skills=total_skills,
+        total_tools=total_tasks,
         total_contributors=total_contributors
     )
 
@@ -528,9 +663,9 @@ def get_latest_files_by_pattern(repo_base, pattern='*', top_n=5):
             filepath = os.path.join(root, filename)
             commit_date = get_last_commit_date(repo_base, filepath)
             if 'runbook' in filename: 
-                slug = f'/CodeCollection/{root.split("/")[3]}/{root.split("/")[5]}/tasks'
+                slug = f'/Plugins/{root.split("/")[3]}/{root.split("/")[5]}/tasks'
             elif 'sli' in filename: 
-                slug = f'/CodeCollection/{root.split("/")[3]}/{root.split("/")[5]}/health'
+                slug = f'/Plugins/{root.split("/")[3]}/{root.split("/")[5]}/health'
             else:
                 slug = "None"
             parsed_robot_contents = parse_robot_file(filepath)
@@ -558,11 +693,11 @@ def generate_github_stats(collection):
     github_repo_api_url = f'{github_api_url}/repos/{owner}/{repo}/contributors'
     github_repo_api_contributors_url = f'{github_api_url}/repos/{owner}/{repo}/contributors'
     contributors = requests.get(github_repo_api_contributors_url, headers=headers).json()
-    all_codecollection_stats[f"{collection['slug']}"]={
+    all_plugin_stats[f"{collection['slug']}"]={
             'total_contributors': len(contributors),
             'contributors': [contributor['login'] for contributor in contributors],
             'total_tasks': 0,
-            'total_codebundles': 0
+            'total_skills': 0
     }
 
 def update_footer(): 
@@ -594,10 +729,10 @@ def main():
     all_files_with_dates = []
     all_codebundle_tasks = []
     clean_path(clone_dir)
-    clean_path(f"{mkdocs_root}/{docs_dir}/CodeCollection")
+    clean_path(f"{mkdocs_root}/{docs_dir}/Plugins")
     # Recreate the base directories after cleaning
     os.makedirs(clone_dir, exist_ok=True)
-    os.makedirs(f"{mkdocs_root}/{docs_dir}/CodeCollection", exist_ok=True)
+    os.makedirs(f"{mkdocs_root}/{docs_dir}/Plugins", exist_ok=True)
 
     for collection in data.get('codecollections', []):
         print(f"Cloning {collection['name']}...")
@@ -606,13 +741,25 @@ def main():
         clone_path=os.path.join(clone_dir, org)
         clone_repository(collection['git_url'], clone_path, ref)
         generate_github_stats(collection)
-        generate_codebundle_content(collection, clone_path)
-        codebundle_tasks = generate_codebundle_task_content(collection, clone_path)
+
+        plugin_dir = find_plugin_dir(collection, clone_path)
+        if plugin_dir:
+            # V13 plugins: one skill directory per "codebundle".
+            codebundle_tasks = generate_plugin_content(collection, clone_path, plugin_dir)
+            all_codebundle_tasks.extend(codebundle_tasks)
+            latest_files = get_latest_files_by_pattern(
+                f'{clone_path}/{collection["git_url"].split("/")[-1]}', 'SKILL.md', 5
+            )
+            all_files_with_dates.extend(latest_files)
+            continue
+
+        generate_skill_content(collection, clone_path)
+        codebundle_tasks = generate_skill_task_content(collection, clone_path)
         all_codebundle_tasks.extend(codebundle_tasks)    
         latest_files=get_latest_files_by_pattern(f'{clone_path}/{collection["git_url"].split("/")[-1]}', '*.robot', 5)
         all_files_with_dates.extend(latest_files)
     
-    cc_list_content = generate_cc_list(data)
+    plugin_list_content = generate_plugin_list(data)
     # print(all_codebundle_tasks)
     generate_codebundle_task_list({"codebundles": list(all_codebundle_tasks)})
 
@@ -657,7 +804,7 @@ def main():
 
     
     # # Generate stats and home page
-    generate_index(all_support_tags_freq, all_codecollection_stats, top_latest_files, codecollections_yaml=data)
+    generate_index(all_support_tags_freq, all_plugin_stats, top_latest_files, codecollections_yaml=data)
     update_footer()
 
 if __name__ == "__main__":

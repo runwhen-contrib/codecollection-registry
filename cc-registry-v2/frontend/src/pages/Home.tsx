@@ -23,9 +23,11 @@ import {
   IntegrationInstructionsOutlined as BundleIcon,
   TerminalOutlined as TaskIcon,
   MenuBookOutlined as DocsIcon,
-  ChatBubbleOutline as ChatIcon,
   SettingsSuggestOutlined as RunnerIcon,
   CheckCircleOutline as ResolveIcon,
+  AccountTreeOutlined as ContextIcon,
+  NotificationsActiveOutlined as EventIcon,
+  AutoFixHighOutlined as SkillLoopIcon,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { Link, useNavigate } from 'react-router-dom';
@@ -68,7 +70,7 @@ const EXAMPLE_SEARCHES = [
   "How do I troubleshoot Postgres connection timeouts?",
   "Help me check if my Prometheus instance is healthy",
   "I need to diagnose issues with my AKS cluster",
-  "Show me how to parse JSON output in Robot Framework"
+  "How do I check replication lag on my Patroni cluster?"
 ];
 
 const Home: React.FC = () => {
@@ -157,11 +159,11 @@ const Home: React.FC = () => {
     }, 3500);
     return () => clearInterval(interval);
 
-  // Category carousel — 4 pages of 4, cycle every 5s
+  // Category carousel — 2 pages of 4, cycle every 5s
   }, []);
   useEffect(() => {
     const interval = setInterval(() => {
-      setActiveCatPage((prev) => (prev + 1) % 4);
+      setActiveCatPage((prev) => (prev + 1) % 2);
     }, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -250,7 +252,40 @@ const Home: React.FC = () => {
           >
             RunWhen Skills Registry
           </Typography>
-          
+
+          {/* Hero pill badges */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 1, mb: 2.5 }}>
+            {[
+              { label: 'Open-Source Public Registry', accent: false, icon: CollectionIcon },
+              { label: 'Day-0 Observability', accent: false, icon: ContextIcon },
+              { label: 'Self-Improving Agent Loop', accent: true, icon: SkillLoopIcon },
+            ].map((pill) => (
+              <Box
+                key={pill.label}
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: '999px',
+                  bgcolor: pill.accent ? 'rgba(248,173,75,0.16)' : 'rgba(255,255,255,0.12)',
+                  border: '1px solid',
+                  borderColor: pill.accent ? 'rgba(248,173,75,0.65)' : 'rgba(255,255,255,0.28)',
+                  backdropFilter: 'blur(8px)',
+                  color: pill.accent ? '#ffd79a' : 'rgba(255,255,255,0.92)',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: '0.01em',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <pill.icon sx={{ fontSize: 14, color: pill.accent ? '#f8ad4b' : 'rgba(255,255,255,0.75)' }} />
+                {pill.label}
+              </Box>
+            ))}
+          </Box>
+
           <Typography 
             variant="body1" 
             align="center" 
@@ -260,11 +295,11 @@ const Home: React.FC = () => {
               fontWeight: 400,
               lineHeight: 1.5,
               color: 'rgba(255,255,255,0.90)',
-              maxWidth: '750px',
+              maxWidth: '820px',
               mx: 'auto'
             }}
           >
-            Grow your team's capability with safe-for-production skills for AI agents — across SRE, DevOps, FinOps, release engineering, and beyond. Describe your problem and the assistant will suggest the right skill to run securely in your own environment.
+            The public catalog of open-source Plugins, Skills, and Tasks built for production operations. Give your Agents Day-0 observability out of the box across cloud, Kubernetes, databases, APIs, CLIs, SaaS, and ticketing systems — so they can automatically investigate INC/CRQ tickets and alerts, deliver root-cause facts before an engineer is paged, and continuously author new private Skills as your environment evolves.
           </Typography>
 
           {/* Search Bar that routes to Registry Chat */}
@@ -319,19 +354,19 @@ const Home: React.FC = () => {
           }}>
             {[
               {
-                icon: CollectionIcon, label: 'CodeCollections', count: stats?.collections || 0, to: '/collections',
-                desc: 'Groups of Skill Templates by provider',
-                tooltip: 'CodeCollections group related Skill Templates by technology or provider — like aws-codecollection or k8s-codecollection. Each collection is backed by a Git repository maintained by the community.',
+                icon: CollectionIcon, label: 'Plugins', count: stats?.collections || 0, to: '/plugins',
+                desc: 'Integration & skill packages by platform',
+                tooltip: 'Plugins bundle an integration — resource types, facets, credentials and auth — for any API, CLI, cloud, Kubernetes, database, observability, or SaaS system, together with its diagnostic and remediation Skills.',
               },
               {
-                icon: BundleIcon, label: 'Skill Templates', count: stats?.codebundles || 0, to: '/codebundles',
-                desc: 'Scripted automation packages',
-                tooltip: 'A Skill Template is a self-contained automation package that targets a specific service or resource — like "Postgres Health" or "AKS Triage." Each Skill Template contains one or more executable Tools, configuration variables, and documentation.',
+                icon: BundleIcon, label: 'Skills', count: stats?.codebundles || 0, to: '/skills',
+                desc: 'Diagnostic & remediation packages',
+                tooltip: 'A Skill is a reusable package targeting a specific service or resource — like k8s-postgres-operator-health or azure-aks-health — containing executable Tasks, settings, inputs, and operational guidance.',
               },
               {
-                icon: TaskIcon, label: 'Tools', count: stats?.tasks || 0, to: '/all-tasks',
-                desc: 'CLI & API actions to run',
-                tooltip: 'Tools are the runnable units inside a Skill Template. Each Tool is a scripted action — CLI commands, API calls, or queries — that performs a specific operation like "Check Pod Restarts" or "Query Connection Pool." Tools are either Runbooks (run on demand in response to an event) or Monitors (run on a schedule, emit a 0-1 health score). They execute on private runners in your environment.',
+                icon: TaskIcon, label: 'Tasks', count: stats?.tasks || 0, to: '/all-tasks',
+                desc: 'Executable actions inside a Skill',
+                tooltip: 'Tasks are the runnable units inside a Skill. Each Task is a scripted action — CLI commands, API calls, or queries — that performs a specific operation like "Check Pod Restarts" or "Query Connection Pool." Tasks are either Runbooks (run on demand in response to an event) or Monitors (run on a schedule, emit a 0-1 health score). They execute on private runners in your environment.',
               },
               {
                 icon: DocsIcon, label: 'Docs', count: null, to: '/chat',
@@ -413,76 +448,225 @@ const Home: React.FC = () => {
       <Box sx={{ py: { xs: 3, md: 4 }, bgcolor: 'background.default', overflow: 'hidden' }}>
         <Container maxWidth="lg">
 
-          {/* ─── Flow timeline ─── */}
-          <Box sx={{ position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', mb: { xs: 3, md: 4 }, px: 2 }}>
-            {/* Connecting line */}
+          {/* ─── Option A: 5-step Day-0 → Event Triage → Self-Improving Skill Loop ─── */}
+          <Box sx={{ mb: { xs: 3, md: 4 } }}>
             <Box sx={{
-              position: 'absolute',
-              top: 20,
-              left: '12%',
-              right: '12%',
-              height: 2,
-              background: '#2F80ED',
-              borderRadius: 1,
-              zIndex: 0,
-            }} />
-            {/* Steps */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: 700, position: 'relative', zIndex: 1 }}>
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' },
+              gap: 1.5,
+            }}>
               {[
-                { label: 'Ask', color: '#2F80ED', muiIcon: ChatIcon },
-                { label: 'Run Tools', color: '#2F80ED', muiIcon: RunnerIcon },
-                { label: 'Collect Insights', color: '#2F80ED', img: 'https://storage.googleapis.com/runwhen-nonprod-shared-images/icons/Eager-Edgar-Happy.png' },
-                { label: 'Resolve', color: '#2F80ED', muiIcon: ResolveIcon },
+                {
+                  num: '1',
+                  kicker: 'Day-0 Context',
+                  title: 'Discover & Map',
+                  icon: ContextIcon,
+                  desc: 'Plugins connect to any API, CLI, cloud, Kubernetes, database, observability, or ticketing system — and map resources and dependencies on Day 0.',
+                  accent: false,
+                },
+                {
+                  num: '2',
+                  kicker: 'Event or Ask',
+                  title: 'Ticket, Alert, or Chat',
+                  icon: EventIcon,
+                  desc: 'Triggered automatically by INC/CRQ tickets, PagerDuty/Slack alerts, schedules, or human-in-the-loop.',
+                  accent: false,
+                },
+                {
+                  num: '3',
+                  kicker: 'First-Pass Run',
+                  title: 'Run Public & Private Skills',
+                  icon: RunnerIcon,
+                  desc: "Agents execute public Registry Skills alongside your team's private Skills on your own runners.",
+                  accent: false,
+                },
+                {
+                  num: '4',
+                  kicker: 'Fast MTTR',
+                  title: 'Context & Next Steps',
+                  icon: ResolveIcon,
+                  desc: 'Root-cause facts, dry-run remediations, code PRs, or smart routing land directly on the ticket.',
+                  accent: false,
+                },
+                {
+                  num: '5',
+                  kicker: 'Self-Improving',
+                  title: 'Build New Skills',
+                  icon: SkillLoopIcon,
+                  desc: 'Spot a coverage gap? Agents draft, test, and review new private Skills in the Skill Building Harness.',
+                  accent: true,
+                },
               ].map((step) => (
-                <Box key={step.label} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.75 }}>
-                  <Box sx={{
-                    width: 40, height: 40, borderRadius: '50%', bgcolor: 'background.paper',
-                    border: `2.5px solid ${step.color}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: (t: any) => `0 0 0 4px ${t.palette.background.default}, 0 2px 8px ${step.color}20`,
-                  }}>
-                    {step.img ? (
-                      <Box component="img" src={step.img} alt="" sx={{ width: 24, height: 24, borderRadius: '50%' }} />
-                    ) : step.muiIcon ? (
-                      <step.muiIcon sx={{ fontSize: 20, color: step.color }} />
-                    ) : null}
+                <Box
+                  key={step.num}
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    p: 1.75,
+                    borderRadius: 2,
+                    bgcolor: 'background.paper',
+                    border: '1px solid',
+                    borderColor: step.accent ? 'rgba(248,173,75,0.5)' : 'divider',
+                    boxShadow: step.accent ? '0 2px 14px rgba(248,173,75,0.14)' : 'none',
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      borderColor: step.accent ? '#f8ad4b' : 'primary.main',
+                      boxShadow: step.accent
+                        ? '0 4px 20px rgba(248,173,75,0.22)'
+                        : '0 4px 16px rgba(47,128,237,0.16)',
+                    },
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <Box sx={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 1.5,
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      bgcolor: step.accent
+                        ? 'rgba(248,173,75,0.14)'
+                        : isDark ? 'rgba(47,128,237,0.2)' : 'rgba(47,128,237,0.1)',
+                    }}>
+                      <step.icon sx={{ fontSize: 18, color: step.accent ? '#f8ad4b' : '#2F80ED' }} />
+                    </Box>
+                    <Typography sx={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      lineHeight: 1.2,
+                      color: step.accent
+                        ? (isDark ? '#f8ad4b' : '#a8681a')
+                        : 'text.secondary',
+                    }}>
+                      {step.num} · {step.kicker}
+                    </Typography>
                   </Box>
-                  <Typography sx={{ fontSize: 12, fontWeight: 600, color: step.color, textAlign: 'center', lineHeight: 1.2, whiteSpace: 'nowrap' }}>
-                    {step.label}
+                  <Typography sx={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: 'text.primary',
+                    mb: 0.5,
+                    lineHeight: 1.25,
+                  }}>
+                    {step.title}
+                  </Typography>
+                  <Typography sx={{ fontSize: 12, color: 'text.secondary', lineHeight: 1.45 }}>
+                    {step.desc}
                   </Typography>
                 </Box>
               ))}
+            </Box>
+
+            {/* Compact loop callout bar */}
+            <Box sx={{
+              mt: 1.5,
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' },
+              alignItems: { xs: 'flex-start', md: 'center' },
+              justifyContent: 'space-between',
+              gap: 1.5,
+              px: { xs: 2, md: 2.5 },
+              py: 1.5,
+              borderRadius: 2,
+              bgcolor: isDark ? 'rgba(248,173,75,0.08)' : 'rgba(248,173,75,0.07)',
+              border: '1px solid',
+              borderColor: isDark ? 'rgba(248,173,75,0.28)' : 'rgba(248,173,75,0.35)',
+            }}>
+              <Typography sx={{ fontSize: 12, lineHeight: 1.5, color: 'text.primary', minWidth: 0 }}>
+                <Box component="span" sx={{ color: '#f8ad4b', fontWeight: 700, mr: 0.5 }}>↻</Box>
+                <Box component="span" sx={{ fontWeight: 600 }}>The Agent Skill-Building Loop:</Box>{' '}
+                Every ticket teaches your workspace what to automate next — combining public Registry Skills with custom private Skills.
+              </Typography>
+              <Box
+                component="a"
+                href="https://www.runwhen.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: '999px',
+                  flexShrink: 0,
+                  border: '1px solid',
+                  borderColor: isDark ? 'rgba(248,173,75,0.45)' : 'rgba(248,173,75,0.55)',
+                  bgcolor: isDark ? 'rgba(248,173,75,0.1)' : '#fff',
+                  color: isDark ? '#f8ad4b' : '#a8681a',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    bgcolor: isDark ? 'rgba(248,173,75,0.18)' : 'rgba(248,173,75,0.12)',
+                    borderColor: '#f8ad4b',
+                  },
+                }}
+              >
+                Works standalone (CLI · Claude · MCP) or on RunWhen Platform →
+              </Box>
             </Box>
           </Box>
 
           {/* ─── Category Carousel ─── */}
           {(() => {
             const allCategories = [
-              // Page 1 — Core platforms
-              { name: 'Kubernetes', tag: 'KUBERNETES', color: '#326CE5', tasks: ['Inspect Deployment Health', 'Triage CrashLoopBackOff Pods', 'Check Namespace Resources', 'Audit RBAC Policies'] },
-              { name: 'AWS', tag: 'AWS', color: '#FF9900', tasks: ['Audit IAM Policies', 'Check CloudWatch Alerts', 'Monitor EC2 Health', 'Inspect S3 Buckets'] },
-              { name: 'Azure', tag: 'AZURE', color: '#0078D4', tasks: ['Check App Service Health', 'Monitor AKS Clusters', 'Audit Key Vault', 'Inspect Azure SQL'] },
-              { name: 'GCP', tag: 'GCP', color: '#4285F4', tasks: ['GKE Cluster Health', 'Cloud SQL Monitoring', 'IAM Audit', 'Load Balancer Check'] },
-              // Page 2 — Operations
-              { name: 'Database', tag: 'POSTGRES', color: '#336791', tasks: ['Check Connection Health', 'Monitor Replication Lag', 'Query Connection Pool', 'Inspect Slow Queries'] },
-              { name: 'Cost Optimization', tag: 'COST', color: '#2E7D32', tasks: ['Find Cost Savings', 'Identify Idle Resources', 'Right-Size Instances', 'Budget Alerts'] },
-              { name: 'Observability', tag: 'PROMETHEUS', color: '#E6522C', tasks: ['Verify Prometheus Health', 'Check Log Pipelines', 'Alert Rule Audit', 'Dashboard Health'] },
-              { name: 'Applications', tag: 'APPLICATION', color: '#7B1FA2', tasks: ['Troubleshoot Python Apps', 'Inspect Go Services', 'Check Runtime Health', 'Debug API Latency'],
-                langIcons: [
-                  'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg',
-                  'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/go/go-original-wordmark.svg',
-                ],
+              // Page 1 — Core Platforms
+              {
+                name: 'Kubernetes',
+                tag: 'KUBERNETES',
+                color: '#326CE5',
+                tasks: ['Rollout & Pod Status', 'Node Conditions & Capacity', 'PVC & Storage Health', 'Namespace Warning Events'],
               },
-              // Page 3 — DevOps & Engineering
-              { name: 'CI/CD Pipelines', tag: 'GITHUB', color: '#8b949e', tasks: ['GitHub Actions Health', 'Build Failure Triage', 'GitLab Pipeline Status', 'Artifact Registry Audit'] },
-              { name: 'GitOps', tag: 'ARGOCD', color: '#EF7B4D', tasks: ['ArgoCD Sync Health', 'FluxCD Drift Detection', 'Deployment Reconciliation', 'Helm Release Status'] },
-              { name: 'OpenShift', tag: 'OPENSHIFT', color: '#EE0000', tasks: ['Cluster Health', 'Route Monitoring', 'Build Config Audit', 'Operator Status'] },
-              { name: 'Cloud Governance', tag: 'CLOUDCUSTODIAN', color: '#1B9AAA', tasks: ['Policy Compliance', 'Tag Enforcement', 'Resource Rules Audit', 'Cost Policy Check'] },
-              // Page 4 — Security, Networking & Managed K8s
-              { name: 'Security & Certs', tag: 'CERT-MANAGER', color: '#D4A017', tasks: ['Certificate Expiry Check', 'Vault Secrets Audit', 'TLS Configuration', 'Issuer Health'] },
-              { name: 'Networking', tag: 'HTTP', color: '#0097A7', tasks: ['Ingress Health Check', 'DNS Resolution Audit', 'API Gateway Status', 'Endpoint Latency'] },
-              { name: 'Managed Kubernetes', tag: 'EKS', color: '#FF9900', tasks: ['EKS Node Health', 'AKS Upgrade Status', 'GKE Autopilot Check', 'Cluster Add-ons Audit'] },
-              { name: 'Monitoring Platforms', tag: 'DATADOG', color: '#632CA6', tasks: ['Datadog Agent Health', 'Sysdig Monitor Status', 'Grafana Dashboard Check', 'Alert Channel Audit'] },
+              {
+                name: 'PostgreSQL',
+                tag: 'POSTGRES',
+                color: '#336791',
+                tasks: ['Patroni Leader & Lag', 'Blocking Lock Chains', 'Connection Saturation', 'Long-Running Queries'],
+              },
+              {
+                name: 'Azure',
+                tag: 'AZURE',
+                color: '#0078D4',
+                tasks: ['AKS Cluster & Node Pools', 'Resource Health Status', 'Key Vault Secret Expiry', 'Activity Log Failures'],
+              },
+              {
+                name: 'AWS & GCP',
+                tag: 'DISCOVERY',
+                color: '#FF9900',
+                tasks: ['AWS Lambda Health & Errors', 'GCP Cloud Functions State', 'GCS Bucket IAM & Lifecycle', 'Multi-Region Account Discovery'],
+              },
+              // Page 2 — Workloads, Operators & Observability
+              {
+                name: 'Observability',
+                tag: 'PROMETHEUS',
+                color: '#E6522C',
+                tasks: ['Prometheus Target & TSDB Health', 'Loki Ingestion & Ring Status', 'Jaeger Trace Pipeline', 'OpenTelemetry Collector'],
+              },
+              {
+                name: 'GitOps & Delivery',
+                tag: 'ARGOCD',
+                color: '#EF7B4D',
+                tasks: ['Argo CD App Sync & Health', 'Flux Kustomization & Helm', 'Suspend & Resume Reconcile', 'Jenkins Queue & Executors'],
+              },
+              {
+                name: 'Security & Certificates',
+                tag: 'CERT-MANAGER',
+                color: '#D4A017',
+                tasks: ['Certificate Expiry & Issuers', 'Vault Sealed & HA Status', 'Key Vault Access Policies', 'RBAC Permission Checks'],
+              },
+              {
+                name: 'Resilience & Remediation',
+                tag: 'REMEDIATION',
+                color: '#7B1FA2',
+                tasks: ['Workload Rollback & Restart', 'HPA Bounds & Scaling', 'Patroni Switchover & Reinit', 'Controlled Chaos Experiments'],
+              },
             ];
             const pageSize = 4;
             const totalPages = Math.ceil(allCategories.length / pageSize);
@@ -582,7 +766,7 @@ const Home: React.FC = () => {
                   ))}
                   </Box>
                   <Typography sx={{ fontSize: 15, fontWeight: 600, color: 'text.secondary', mt: 0.25 }}>
-                    {['Platforms', 'Operations', 'DevOps & Engineering', 'Security & Networking'][activeCatPage]}
+                    {['Core Platforms', 'Workloads, Operators & Observability'][activeCatPage]}
                   </Typography>
                 </Box>
               </Box>
@@ -596,7 +780,7 @@ const Home: React.FC = () => {
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 4 }}>
           
-          {/* Left Column: Recently Updated CodeBundles */}
+          {/* Left Column: Recently Updated Skills */}
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
               <TrendingIcon sx={{ color: '#2F80ED', fontSize: 24 }} />
@@ -608,7 +792,7 @@ const Home: React.FC = () => {
                   letterSpacing: '-0.2px'
                 }}
               >
-                Recently Updated Skill Templates
+                Recently Updated Skills
               </Typography>
             </Box>
             
@@ -631,7 +815,7 @@ const Home: React.FC = () => {
                 <Box
                   key={`${cb.id}-${codebundleOffset}`}
                   component={Link}
-                  to={`/collections/${cb.collection_slug}/codebundles/${cb.slug}`}
+                  to={`/plugins/${cb.collection_slug}/skills/${cb.slug}`}
                   sx={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -687,7 +871,7 @@ const Home: React.FC = () => {
                         fontFamily: 'monospace'
                       }}
                     >
-                      {cb.collection_name.replace('rw-', '').replace('-codecollection', '').toUpperCase()}
+                      {cb.collection_name.replace(/^RunWhen\s+/i, '')}
                     </Box>
                   </Box>
                   <Box sx={{ textAlign: 'right' }}>
@@ -737,7 +921,7 @@ const Home: React.FC = () => {
                   letterSpacing: '-0.2px'
                 }}
               >
-                Recently Updated Tools
+                Recently Updated Tasks
               </Typography>
             </Box>
             
@@ -760,7 +944,7 @@ const Home: React.FC = () => {
                 <Box
                   key={`${task.codebundle_slug}-${task.task_name}-${taskOffset}`}
                   component={Link}
-                  to={`/collections/${task.collection_slug}/codebundles/${task.codebundle_slug}`}
+                  to={`/plugins/${task.collection_slug}/skills/${task.codebundle_slug}`}
                   sx={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -865,7 +1049,7 @@ const Home: React.FC = () => {
         }}>
           <Button
             component={Link}
-            to="/codebundles"
+            to="/skills"
             variant="contained"
             sx={{
               textTransform: 'none',
@@ -881,7 +1065,7 @@ const Home: React.FC = () => {
               }
             }}
           >
-            Browse All Skill Templates
+            Browse All Skills
           </Button>
           <Button
             variant="outlined"

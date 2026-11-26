@@ -142,8 +142,8 @@ class CodeCollectionIndexer:
             logger.error(f"Failed to load collections config: {e}")
             return []
     
-    def clone_or_update_repo(self, git_url: str, slug: str) -> Optional[Path]:
-        """Clone or update a git repository"""
+    def clone_or_update_repo(self, git_url: str, slug: str, git_ref: str = "main") -> Optional[Path]:
+        """Clone or update a git repository at `git_ref`"""
         repo_dir = self.workspace_dir / slug
         
         try:
@@ -160,9 +160,9 @@ class CodeCollectionIndexer:
                 if result.returncode != 0:
                     logger.warning(f"Git pull failed for {slug}, re-cloning...")
                     shutil.rmtree(repo_dir)
-                    return self._clone_repo(git_url, repo_dir, slug)
+                    return self._clone_repo(git_url, repo_dir, slug, git_ref)
             else:
-                return self._clone_repo(git_url, repo_dir, slug)
+                return self._clone_repo(git_url, repo_dir, slug, git_ref)
             
             return repo_dir
         except subprocess.TimeoutExpired:
@@ -172,12 +172,12 @@ class CodeCollectionIndexer:
             logger.error(f"Error updating {slug}: {e}")
             return None
     
-    def _clone_repo(self, git_url: str, repo_dir: Path, slug: str) -> Optional[Path]:
+    def _clone_repo(self, git_url: str, repo_dir: Path, slug: str, git_ref: str = "main") -> Optional[Path]:
         """Clone a repository"""
-        logger.info(f"Cloning {slug}...")
+        logger.info(f"Cloning {slug} (ref={git_ref})...")
         try:
             result = subprocess.run(
-                ["git", "clone", "--depth", "1", git_url, str(repo_dir)],
+                ["git", "clone", "--depth", "1", "--branch", git_ref or "main", git_url, str(repo_dir)],
                 capture_output=True,
                 text=True,
                 timeout=300
@@ -297,6 +297,98 @@ class CodeCollectionIndexer:
             logger.error(f"Error parsing codebundle {slug}: {e}")
             return None
     
+    def parse_plugin_skill(
+        self,
+        skill_dir: Path,
+        plugin_slug: str,
+        collection_slug: str,
+        collection_git_url: str,
+        git_ref: str = "main",
+        integration_meta: Optional[Dict[str, Any]] = None,
+    ) -> Optional[CodeBundle]:
+        """Parse a V13 plugin skill directory (`SKILL.md` + `tasks.yaml`)."""
+        skill_name = skill_dir.name
+        slug = f"{collection_slug}-{skill_name}".lower().replace(' ', '-').replace('_', '-')
+
+        try:
+            skill_md = ""
+            skill_md_file = skill_dir / "SKILL.md"
+            if skill_md_file.exists():
+                skill_md = skill_md_file.read_text(encoding='utf-8', errors='ignore')
+
+            frontmatter: Dict[str, Any] = {}
+            body = skill_md
+            if skill_md.startswith('---'):
+                parts = skill_md.split('---', 2)
+                if len(parts) >= 3:
+                    try:
+                        frontmatter = yaml.safe_load(parts[1]) or {}
+                    except Exception:
+                        frontmatter = {}
+                    body = parts[2]
+
+            tasks: List[str] = []
+            capabilities: List[str] = []
+            tasks_yaml_file = skill_dir / "tasks.yaml"
+            if tasks_yaml_file.exists():
+                with open(tasks_yaml_file, 'r', encoding='utf-8') as f:
+                    tasks_data = yaml.safe_load(f) or {}
+                for task in tasks_data.get('tasks', []) or []:
+                    if not isinstance(task, dict) or not task.get('name'):
+                        continue
+                    label = task.get('title') or task['name']
+                    tasks.append(label)
+                    if task.get('description'):
+                        capabilities.append(f"{label}: {task['description']}")
+
+            runwhen_meta = frontmatter.get('runwhen') or {}
+            role = runwhen_meta.get('role')
+            applies_to = runwhen_meta.get('appliesTo') or {}
+            if isinstance(applies_to, list):
+                applies_to_types = [str(t) for t in applies_to]
+            else:
+                applies_to_types = [str(t) for t in (applies_to.get('types') or [])]
+
+            platform_raw = (integration_meta or {}).get('platform') or plugin_slug
+            platform_map = {
+                'kubernetes': 'Kubernetes', 'aws': 'AWS', 'azure': 'Azure',
+                'gcp': 'GCP', 'postgres': 'PostgreSQL', 'misc': 'Misc',
+            }
+            platform = platform_map.get(str(platform_raw).lower(), str(platform_raw))
+
+            support_tags = [str(t).upper() for t in (
+                [plugin_slug]
+                + [str(t) for t in (runwhen_meta.get('tags') or [])]
+                + ([str(role)] if role else [])
+            )]
+
+            description = frontmatter.get('description') or ''
+            if not description:
+                for line in body.splitlines():
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        description = line[:500]
+                        break
+
+            return CodeBundle(
+                slug=slug,
+                collection_slug=collection_slug,
+                name=skill_name,
+                display_name=frontmatter.get('name') or skill_name,
+                description=description,
+                platform=platform,
+                author="RunWhen",
+                support_tags=support_tags,
+                tasks=tasks,
+                capabilities=capabilities,
+                readme=(skill_md or body)[:5000],
+                libraries=[],
+                git_url=f"{collection_git_url.rstrip('/').removesuffix('.git')}/tree/{git_ref}/plugins/{plugin_slug}/skills/{skill_name}",
+            )
+        except Exception as e:
+            logger.error(f"Error parsing plugin skill {slug}: {e}")
+            return None
+
     def parse_library(
         self,
         py_file: Path,
@@ -385,16 +477,50 @@ class CodeCollectionIndexer:
         """Index a single codecollection (codebundles and libraries)"""
         slug = collection['slug']
         git_url = collection['git_url']
+        git_ref = collection.get('git_ref', 'main')
+        plugin_path = collection.get('plugin_path')
         
         logger.info(f"Indexing collection: {slug}")
         
         # Clone/update repo
-        repo_dir = self.clone_or_update_repo(git_url, slug)
+        repo_dir = self.clone_or_update_repo(git_url, slug, git_ref)
         if not repo_dir:
             return [], []
         
         codebundles = []
         libraries = []
+
+        # --- V13 plugins: plugins/<slug>/skills/<skill> ---
+        plugin_dir = None
+        if plugin_path:
+            candidate = repo_dir / plugin_path
+            if (candidate / "plugin.yaml").exists():
+                plugin_dir = candidate
+        if plugin_dir is None:
+            candidate = repo_dir / "plugins" / slug
+            if (candidate / "plugin.yaml").exists():
+                plugin_dir = candidate
+
+        if plugin_dir is not None:
+            integration_meta = {}
+            integration_file = plugin_dir / "integration" / "integration.yaml"
+            if integration_file.exists():
+                try:
+                    with open(integration_file, 'r', encoding='utf-8') as f:
+                        integration_meta = yaml.safe_load(f) or {}
+                except Exception:
+                    integration_meta = {}
+            skills_dir = plugin_dir / "skills"
+            if skills_dir.exists():
+                for skill_dir in skills_dir.iterdir():
+                    if skill_dir.is_dir() and not skill_dir.name.startswith('.'):
+                        cb = self.parse_plugin_skill(
+                            skill_dir, slug, slug, git_url, git_ref, integration_meta
+                        )
+                        if cb:
+                            codebundles.append(cb)
+            logger.info(f"  Found {len(codebundles)} plugin skills in {slug}")
+            return codebundles, libraries
         
         # Parse codebundles
         codebundles_dir = repo_dir / "codebundles"

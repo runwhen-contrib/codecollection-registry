@@ -1,7 +1,7 @@
 """
-Skill Template Tools (internal class names preserved for backward compatibility).
+Skill registry helpers (internal class names preserved for backward compatibility).
 
-Tools for finding, listing, and getting details about Skill Templates
+Task helpers for finding, listing, and getting details about Skills
 (internally still called ``CodeBundle`` everywhere — see Phase 1 cosmetic
 rename notes in ``mcp-server/utils/terminology.py``). All data is fetched
 from the Registry API.
@@ -52,7 +52,7 @@ def _extract_search_keywords(query: str) -> str:
 
 class FindCodeBundleTool(BaseTool):
     """
-    Search to find Skill Templates (formerly "CodeBundles") matching
+    Search to find Skills (formerly "CodeBundles") matching
     natural language queries. Delegates search to the Registry API.
     """
     
@@ -63,7 +63,7 @@ class FindCodeBundleTool(BaseTool):
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="find_codebundle",
-            description="Find Skill Templates (formerly 'CodeBundles') for your use case. A Skill Template is a reusable package of Tools — Runbooks that run on demand and Monitors that run on a schedule. Describe what you need in natural language. Examples: 'troubleshoot Kubernetes pods', 'monitor AWS EKS', 'check database health'.",
+            description="Find Skills (formerly 'CodeBundles') for your use case. A Skill is a reusable package of Tasks — Runbooks that run on demand and Monitors that run on a schedule. Describe what you need in natural language. Examples: 'troubleshoot Kubernetes pods', 'monitor AWS EKS', 'check database health'.",
             category="search",
             parameters=[
                 ToolParameter(
@@ -133,7 +133,7 @@ class FindCodeBundleTool(BaseTool):
                     pass
         
         if not results:
-            return f"No Skill Templates found matching: {query}\n\nTry rephrasing your query or using broader terms."
+            return f"No Skills found matching: {query}\n\nTry rephrasing your query or using broader terms."
         
         # Compute relevance scores.  The backend already sorts by weighted
         # field relevance, so we use position-based scoring that preserves
@@ -142,8 +142,8 @@ class FindCodeBundleTool(BaseTool):
         # matched via a long description field).
         search_kws = [w.lower() for w in search_terms.split() if len(w) >= 2]
         
-        output = f"# Skill Templates for: {query}\n\n"
-        output += f"Found {len(results)} matching Skill Template(s):\n\n"
+        output = f"# Skills for: {query}\n\n"
+        output += f"Found {len(results)} matching Skill(s):\n\n"
         
         for i, cb in enumerate(results, 1):
             display_name = cb.get('display_name') or cb.get('name') or cb.get('slug', 'Unknown')
@@ -169,24 +169,28 @@ class FindCodeBundleTool(BaseTool):
             
             coll = cb.get('codecollection', {})
             collection_slug = coll.get('slug') if isinstance(coll, dict) else cb.get('collection_slug', 'N/A')
-            output += f"**Collection:** {collection_slug}\n\n"
+            output += f"**Plugin:** {collection_slug}\n\n"
             output += f"**Platform:** {cb.get('platform', cb.get('discovery_platform', 'N/A'))}\n\n"
             
             description = cb.get('description') or cb.get('doc') or ''
             if description:
                 output += f"**Description:** {description[:500]}\n\n"
             
-            # The Registry API's `tasks` field contains the Runbook entries
-            # parsed from runbook.robot (TaskSet type). SLI / Monitor entries
-            # live in a separate `slis` field. Internal field names are kept
-            # for backward compatibility; the markdown label uses the new
+            # The Registry API's `tasks` field contains the Task entries
+            # parsed from runbook.robot (Runbook / TaskSet type). SLI / Monitor
+            # entries live in a separate `slis` field. Internal field names are
+            # kept for backward compatibility; the markdown label uses the new
             # display vocabulary.
             tasks = cb.get('tasks', [])
             if tasks:
-                output += "**Runbooks:**\n"
+                output += "**Tasks:**\n"
                 for task in tasks[:8]:
-                    task_name = task if isinstance(task, str) else task.get('name', str(task))
-                    output += f"- {task_name}\n"
+                    if isinstance(task, dict):
+                        label = task.get('title') or task.get('name') or str(task)
+                        desc = task.get('description') or task.get('doc')
+                        output += f"- {label}" + (f": {str(desc)[:140]}\n" if desc else "\n")
+                    else:
+                        output += f"- {task}\n"
                 output += "\n"
             
             tags = cb.get('support_tags', [])
@@ -198,7 +202,9 @@ class FindCodeBundleTool(BaseTool):
             
             # Source link for the markdown parser
             slug = cb.get('slug', '')
-            output += f"**Source:** [{collection_slug}/codebundles/{slug}](/collections/{collection_slug}/codebundles/{slug})\n\n"
+            output += f"**Source:** [{collection_slug}/skills/{slug}](/plugins/{collection_slug}/skills/{slug})\n\n"
+            if cb.get('runbook_source_url'):
+                output += f"**GitHub:** [{cb['runbook_source_url']}]({cb['runbook_source_url']})\n\n"
             
             output += "---\n\n"
         
@@ -206,7 +212,7 @@ class FindCodeBundleTool(BaseTool):
 
 
 class ListCodeBundlesTool(BaseTool):
-    """List all Skill Templates (formerly "CodeBundles"), optionally filtered by collection."""
+    """List all Skills (formerly "CodeBundles"), optionally filtered by plugin."""
     
     def __init__(self, registry_client):
         self._client = registry_client
@@ -215,7 +221,7 @@ class ListCodeBundlesTool(BaseTool):
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="list_codebundles",
-            description="List all Skill Templates (formerly 'CodeBundles') and CodeCollections. Supports filtering by collection and output formatting.",
+            description="List all Skills (formerly 'CodeBundles') and Plugins. Supports filtering by plugin and output formatting.",
             category="info",
             parameters=[
                 ToolParameter(
@@ -240,7 +246,7 @@ class ListCodeBundlesTool(BaseTool):
         format: str = "markdown",
         collection_slug: Optional[str] = None
     ) -> str:
-        """List Skill Templates from the Registry API."""
+        """List Skills from the Registry API."""
         try:
             codebundles = await self._client.search_codebundles(
                 collection_slug=collection_slug,
@@ -248,7 +254,7 @@ class ListCodeBundlesTool(BaseTool):
             )
         except Exception as e:
             logger.error(f"Registry API list failed: {e}")
-            return f"Failed to list Skill Templates: {e}"
+            return f"Failed to list Skills: {e}"
         
         if format == "json":
             return json.dumps({"codebundles": codebundles, "count": len(codebundles)}, indent=2, default=str)
@@ -261,18 +267,18 @@ class ListCodeBundlesTool(BaseTool):
                     by_collection[coll] = []
                 by_collection[coll].append(cb)
             
-            output = f"# Skill Template Summary\n\n"
-            output += f"Total: {len(codebundles)} Skill Templates in {len(by_collection)} CodeCollections\n\n"
+            output = f"# Skill Summary\n\n"
+            output += f"Total: {len(codebundles)} Skills in {len(by_collection)} Plugins\n\n"
             for coll, cbs in sorted(by_collection.items()):
-                output += f"## {coll} ({len(cbs)} Skill Templates)\n\n"
+                output += f"## {coll} ({len(cbs)} Skills)\n\n"
             return output
         
         # Markdown format
-        output = f"# Available Skill Templates ({len(codebundles)})\n\n"
+        output = f"# Available Skills ({len(codebundles)})\n\n"
         for cb in codebundles[:50]:
             display_name = cb.get('display_name') or cb.get('name') or cb.get('slug')
             output += f"### **{display_name}**\n"
-            output += f"- Collection: {cb.get('collection_slug', cb.get('codecollection', {}).get('slug', 'N/A'))}\n"
+            output += f"- Plugin: {cb.get('collection_slug', cb.get('codecollection', {}).get('slug', 'N/A'))}\n"
             output += f"- Platform: {cb.get('platform', cb.get('discovery_platform', 'Unknown'))}\n"
             desc = cb.get('description') or cb.get('doc') or ''
             if desc:
@@ -285,7 +291,7 @@ class ListCodeBundlesTool(BaseTool):
 
 
 class SearchCodeBundlesTool(BaseTool):
-    """Keyword-based search for Skill Templates (formerly "CodeBundles")."""
+    """Keyword-based search for Skills (formerly "CodeBundles")."""
     
     def __init__(self, registry_client):
         self._client = registry_client
@@ -294,7 +300,7 @@ class SearchCodeBundlesTool(BaseTool):
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="search_codebundles",
-            description="Search for Skill Templates (formerly 'CodeBundles') by keywords, tags, or platform.",
+            description="Search for Skills (formerly 'CodeBundles') by keywords, tags, or platform.",
             category="search",
             parameters=[
                 ToolParameter(
@@ -347,7 +353,7 @@ class SearchCodeBundlesTool(BaseTool):
             return f"Search unavailable: {e}"
         
         if not results:
-            return f"No Skill Templates found matching: {query}"
+            return f"No Skills found matching: {query}"
         
         output = f"# Search Results: {query}\n\n"
         output += f"Found {len(results)} result(s):\n\n"
@@ -355,7 +361,7 @@ class SearchCodeBundlesTool(BaseTool):
         for i, cb in enumerate(results, 1):
             display_name = cb.get('display_name') or cb.get('name') or cb.get('slug')
             output += f"## {i}. **{display_name}**\n\n"
-            output += f"**Collection:** {cb.get('collection_slug', cb.get('codecollection', {}).get('slug', 'N/A'))}\n"
+            output += f"**Plugin:** {cb.get('collection_slug', cb.get('codecollection', {}).get('slug', 'N/A'))}\n"
             output += f"**Platform:** {cb.get('platform', cb.get('discovery_platform', 'Unknown'))}\n"
             desc = cb.get('description') or cb.get('doc') or ''
             if desc:
@@ -369,7 +375,7 @@ class SearchCodeBundlesTool(BaseTool):
 
 
 class GetCodeBundleDetailsTool(BaseTool):
-    """Get detailed information about a specific Skill Template (formerly "CodeBundle")."""
+    """Get detailed information about a specific Skill (formerly "CodeBundle")."""
     
     def __init__(self, registry_client):
         self._client = registry_client
@@ -378,19 +384,19 @@ class GetCodeBundleDetailsTool(BaseTool):
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="get_codebundle_details",
-            description="Get detailed information about a specific Skill Template (formerly 'CodeBundle')",
+            description="Get detailed information about a specific Skill (formerly 'CodeBundle')",
             category="info",
             parameters=[
                 ToolParameter(
                     name="slug",
                     type="string",
-                    description="Skill Template slug",
+                    description="Skill slug",
                     required=True
                 ),
                 ToolParameter(
                     name="collection_slug",
                     type="string",
-                    description="Collection slug (helps disambiguate)",
+                    description="Plugin slug (helps disambiguate)",
                     required=False
                 )
             ]
@@ -401,7 +407,7 @@ class GetCodeBundleDetailsTool(BaseTool):
         slug: str,
         collection_slug: Optional[str] = None
     ) -> str:
-        """Get Skill Template details from the Registry API."""
+        """Get Skill details from the Registry API."""
         cb = None
         
         # Try direct lookup if we have both slugs
@@ -409,7 +415,7 @@ class GetCodeBundleDetailsTool(BaseTool):
             try:
                 cb = await self._client.get_codebundle(collection_slug, slug)
             except Exception as e:
-                logger.warning(f"Direct Skill Template lookup failed: {e}")
+                logger.warning(f"Direct Skill lookup failed: {e}")
         
         # Fall back to search
         if not cb:
@@ -420,16 +426,16 @@ class GetCodeBundleDetailsTool(BaseTool):
                         cb = r
                         break
             except Exception as e:
-                logger.error(f"Skill Template search failed: {e}")
-                return f"Failed to fetch Skill Template: {e}"
+                logger.error(f"Skill search failed: {e}")
+                return f"Failed to fetch Skill: {e}"
         
         if not cb:
-            return f"Skill Template not found: {slug}"
+            return f"Skill not found: {slug}"
         
         display_name = cb.get('display_name') or cb.get('name') or cb.get('slug')
         output = f"# **{display_name}**\n\n"
         output += f"**Slug:** {cb.get('slug')}\n\n"
-        output += f"**Collection:** {cb.get('collection_slug', cb.get('codecollection', {}).get('slug', 'N/A'))}\n\n"
+        output += f"**Plugin:** {cb.get('collection_slug', cb.get('codecollection', {}).get('slug', 'N/A'))}\n\n"
         output += f"**Platform:** {cb.get('platform', cb.get('discovery_platform', 'Unknown'))}\n\n"
         
         if cb.get('author'):
@@ -443,10 +449,28 @@ class GetCodeBundleDetailsTool(BaseTool):
         # markdown label uses the new display vocabulary.
         tasks = cb.get('tasks', [])
         if tasks:
-            output += f"## Runbooks ({len(tasks)})\n\n"
+            output += f"## Tasks ({len(tasks)})\n\n"
             for task in tasks:
-                task_name = task if isinstance(task, str) else task.get('name', str(task))
-                output += f"- {task_name}\n"
+                if isinstance(task, dict):
+                    label = task.get('title') or task.get('name') or str(task)
+                    name = task.get('name')
+                    heading = f"{label} (`{name}`)" if label and name and label != name else label
+                    desc = task.get('description') or task.get('doc')
+                    read_only = task.get('readOnly')
+                    chips = []
+                    if read_only is False:
+                        chips.append("read-write")
+                    elif read_only is True:
+                        chips.append("read-only")
+                    if task.get('destructive'):
+                        chips.append("destructive")
+                    if task.get('dryRun'):
+                        chips.append("dry-run")
+                    output += f"- **{heading}**" + (f" — {', '.join(chips)}" if chips else "") + "\n"
+                    if desc:
+                        output += f"  {str(desc)[:400]}\n"
+                else:
+                    output += f"- {task}\n"
             output += "\n"
         
         tags = cb.get('support_tags', [])

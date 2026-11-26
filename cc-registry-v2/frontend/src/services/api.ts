@@ -144,7 +144,24 @@ export interface CodeBundle {
   readme: string | null;
   author: string;
   support_tags: string[];
-  tasks: Array<{name: string; doc: string; tags: string[]} | string> | null;
+  tasks: Array<{
+    id?: string;
+    name: string;
+    title?: string;
+    doc?: string;
+    description?: string;
+    tags?: string[];
+    readOnly?: boolean;
+    destructive?: boolean;
+    dryRun?: boolean;
+    idempotent?: boolean | null;
+    script?: string;
+    timeout?: string;
+    permissions?: string[];
+    inputs?: Record<string, any>;
+    settings?: Record<string, any>;
+    outputs?: Record<string, any>;
+  } | string> | null;
   slis: Array<{name: string; doc: string; tags: string[]} | string> | null;
   task_count: number;
   sli_count: number;
@@ -193,12 +210,17 @@ export interface CodeBundle {
     pattern?: string;
     example?: string;
     default?: string | null;
+    scope?: 'setting' | 'input' | string;
+    task?: string | null;
+    required?: boolean;
   }>;
 }
 
 export interface Task {
   id: string;
   name: string;
+  title?: string | null;
+  slug?: string | null;
   type: 'TaskSet' | 'SLI' | 'CodeBundle';
   codebundle_id: number;
   codebundle_name: string;
@@ -206,6 +228,10 @@ export interface Task {
   collection_name: string;
   collection_slug: string;
   description: string;
+  read_only?: boolean | null;
+  task_tags?: string[];
+  script?: string | null;
+  platform?: string | null;
   support_tags: string[];
   categories: string[];
   author: string;

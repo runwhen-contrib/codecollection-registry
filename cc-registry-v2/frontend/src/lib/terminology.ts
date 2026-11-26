@@ -8,21 +8,18 @@
  * byte-identical to the previous schema.
  *
  * Mapping (internal -> display):
- *   - Task         -> Tool
- *   - CodeBundle   -> Skill Template
+ *   - Task         -> Task (umbrella concept; Runbook and Monitor are its subtypes)
+ *   - CodeBundle   -> Skill
  *   - SLI          -> Monitor       (scheduled, continuous, numeric output)
  *   - TaskSet      -> Runbook       (on-demand, event-triggered, findings)
- *   - CodeCollection (unchanged)
+ *   - CodeCollection -> Plugin
  *
  * Lifecycle distinction:
- *   - A **Skill Template** is the registry-side, parameterised package
- *     (formerly "CodeBundle"). Vars and secrets are unresolved placeholders.
- *   - A **Skill** is the runtime instantiation of a Skill Template inside a
- *     workspace, with vars/secrets materialised against real infrastructure.
- *     The registry itself never holds Skills — only Skill Templates — but the
- *     umbrella word "Skill" is used colloquially in user-facing page titles
- *     (e.g. "All Skills") because it reads naturally and aligns with
- *     industry usage (Anthropic Agent Skills, OpenAI tools, etc.).
+ *   - A **Skill** is the registry-side, parameterised package (formerly
+ *     "CodeBundle"). Vars and secrets are unresolved placeholders.
+ *   - A **Plugin** groups Skills with their platform integration (resource
+ *     types, facets, credentials) and is backed by a git repository
+ *     (formerly "CodeCollection").
  *
  * This module is the SINGLE source of truth for those display labels. Any
  * new user-facing string that references one of the renamed concepts must
@@ -44,7 +41,7 @@ interface LabelPair {
 export const TYPE_LABELS: Record<InternalType, LabelPair> = {
   TaskSet: { singular: "Runbook", plural: "Runbooks" },
   SLI: { singular: "Monitor", plural: "Monitors" },
-  CodeBundle: { singular: "Skill Template", plural: "Skill Templates" },
+  CodeBundle: { singular: "Skill", plural: "Skills" },
 } as const;
 
 /**
@@ -53,13 +50,11 @@ export const TYPE_LABELS: Record<InternalType, LabelPair> = {
  * "Tasks"/"CodeBundles" string literals.
  */
 export const CONCEPTS = {
-  TASK: { singular: "Tool", plural: "Tools" },
-  CODEBUNDLE: { singular: "Skill Template", plural: "Skill Templates" },
-  // Runtime instantiation of a Skill Template (vars/secrets materialised
-  // inside a workspace). The registry itself only stores Skill Templates,
-  // but "Skill" is the umbrella word used in user-facing page titles.
+  TASK: { singular: "Task", plural: "Tasks" },
+  CODEBUNDLE: { singular: "Skill", plural: "Skills" },
+  // Runtime instantiation of a Skill inside a workspace.
   SKILL: { singular: "Skill", plural: "Skills" },
-  CODECOLLECTION: { singular: "CodeCollection", plural: "CodeCollections" },
+  CODECOLLECTION: { singular: "Plugin", plural: "Plugins" },
   SLI: { singular: "Monitor", plural: "Monitors" },
   TASKSET: { singular: "Runbook", plural: "Runbooks" },
 } as const;

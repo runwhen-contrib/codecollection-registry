@@ -12,7 +12,7 @@ from datetime import datetime
 from celery import Celery
 
 from app.core.database import SessionLocal
-from app.models import CodeCollection, RawYamlData, RawRepositoryData
+from app.models import CodeCollection, Codebundle, RawYamlData, RawRepositoryData
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -116,9 +116,14 @@ def clone_repositories_task(self, collection_slugs: List[str] = None):
                     
                     repo_path = os.path.join(temp_dir, collection_data['slug'])
                     try:
-                        # Clone the repository
+                        # Clone the repository at the collection's tracked ref
                         import git
-                        git.Repo.clone_from(repo_url, repo_path)
+                        git.Repo.clone_from(
+                            repo_url,
+                            repo_path,
+                            branch=collection_data.get('git_ref', 'main'),
+                            depth=1,
+                        )
                         logger.info(f"Cloned {collection_data['name']} to {repo_path}")
                         
                         # Store collection metadata in database
@@ -151,7 +156,12 @@ def clone_repositories_task(self, collection_slugs: List[str] = None):
                             collection.last_synced = datetime.utcnow()
                         
                         # Store raw repository files in database
-                        files_stored = _store_repository_files(db, collection_data['slug'], repo_path)
+                        plugin_path = collection_data.get('plugin_path')
+                        if not plugin_path and os.path.isdir(os.path.join(repo_path, 'plugins', collection_data['slug'])):
+                            plugin_path = f"plugins/{collection_data['slug']}"
+                        files_stored = _store_repository_files(
+                            db, collection_data['slug'], repo_path, plugin_path
+                        )
                         
                         db.commit()
                         collections_processed += 1
@@ -181,31 +191,48 @@ def clone_repositories_task(self, collection_slugs: List[str] = None):
         self.update_state(state='FAILURE', meta={'error': str(e)})
         raise
 
-def _store_repository_files(db, collection_slug: str, repo_path: str) -> int:
-    """Store all relevant files from repository in database"""
+def _store_repository_files(db, collection_slug: str, repo_path: str, plugin_path: str = None) -> int:
+    """Store all relevant files from repository in database.
+
+    When `plugin_path` is set, only files under that path are stored so the
+    shared V13 plugins monorepo is not persisted six times.
+    """
     files_stored = 0
+    prefix = f"{plugin_path.rstrip('/')}/" if plugin_path else None
     
-    # Find all .robot files and other relevant files
+    # Find all .robot files and other relevant files.
+    # `.md` is included for V13 plugin SKILL.md files.
     for root, dirs, files in os.walk(repo_path):
         for file in files:
-            if file.endswith(('.robot', '.yaml', '.yml', '.json')):
+            if file.endswith(('.robot', '.yaml', '.yml', '.json', '.md')):
                 file_path = os.path.join(root, file)
                 relative_path = os.path.relpath(file_path, repo_path)
+                if prefix and not (relative_path + '/').startswith(prefix):
+                    continue
                 
                 try:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         content = f.read()
                     
-                    # Store raw file data
-                    raw_file = RawRepositoryData(
-                        collection_slug=collection_slug,
-                        repository_path=repo_path,
-                        file_path=relative_path,
-                        file_content=content,
-                        file_type=file.split('.')[-1],
-                        is_processed=False
-                    )
-                    db.add(raw_file)
+                    # Store raw file data (update in place when re-syncing)
+                    raw_file = db.query(RawRepositoryData).filter(
+                        RawRepositoryData.collection_slug == collection_slug,
+                        RawRepositoryData.file_path == relative_path,
+                    ).first()
+                    if raw_file:
+                        raw_file.file_content = content
+                        raw_file.repository_path = repo_path
+                        raw_file.file_type = file.split('.')[-1]
+                        raw_file.is_processed = False
+                    else:
+                        db.add(RawRepositoryData(
+                            collection_slug=collection_slug,
+                            repository_path=repo_path,
+                            file_path=relative_path,
+                            file_content=content,
+                            file_type=file.split('.')[-1],
+                            is_processed=False
+                        ))
                     files_stored += 1
                     logger.debug(f"Stored raw file: {relative_path}")
                     
@@ -225,6 +252,47 @@ def parse_stored_data_task(self):
         
         db = SessionLocal()
         try:
+            # --- V13 plugins: reconstruct skills from stored raw files ---
+            from app.tasks.plugin_sync import (
+                parse_collection_plugin_from_files,
+                sync_plugin_collection,
+            )
+
+            all_unprocessed = db.query(RawRepositoryData).filter(
+                RawRepositoryData.is_processed == False  # noqa: E712 - SQLAlchemy comparison
+            ).all()
+            plugin_files_by_collection: Dict[str, Dict[str, str]] = {}
+            plugin_rows_by_collection: Dict[str, list] = {}
+            for raw_file in all_unprocessed:
+                path = raw_file.file_path or ""
+                if not (path.startswith("plugins/") or path in ("plugin.yaml", "integration/integration.yaml")):
+                    continue
+                plugin_files_by_collection.setdefault(raw_file.collection_slug, {})[path] = raw_file.file_content or ""
+                plugin_rows_by_collection.setdefault(raw_file.collection_slug, []).append(raw_file)
+
+            plugin_skills_created = 0
+            plugin_skills_updated = 0
+            for collection_slug, files in plugin_files_by_collection.items():
+                collection = db.query(CodeCollection).filter(
+                    CodeCollection.slug == collection_slug
+                ).first()
+                if not collection:
+                    logger.warning(f"Collection not found for plugin files: {collection_slug}")
+                    continue
+                parsed_plugin = parse_collection_plugin_from_files(
+                    collection_slug,
+                    files,
+                    git_url=collection.git_url,
+                    git_ref=collection.git_ref,
+                )
+                if parsed_plugin and parsed_plugin.get("skills"):
+                    created, updated, _ = sync_plugin_collection(db, collection, "", parsed_plugin)
+                    plugin_skills_created += created
+                    plugin_skills_updated += updated
+                for raw_file in plugin_rows_by_collection.get(collection_slug, []):
+                    raw_file.is_processed = True
+            db.commit()
+
             # Parse raw repository files
             raw_files = db.query(RawRepositoryData).filter(RawRepositoryData.is_processed == False).all()
             
@@ -303,8 +371,9 @@ def parse_stored_data_task(self):
             logger.info(f"Data parsing task {self.request.id} completed: {codebundles_created} codebundles created")
             return {
                 'status': 'success',
-                'codebundles_created': codebundles_created,
-                'message': f'Successfully created {codebundles_created} codebundles'
+                'codebundles_created': codebundles_created + plugin_skills_created,
+                'codebundles_updated': plugin_skills_updated,
+                'message': f'Successfully created {codebundles_created + plugin_skills_created} codebundles'
             }
             
         finally:

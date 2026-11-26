@@ -1065,7 +1065,7 @@ input[type="text"]:focus {
   min-height: 75px;
 }
 
-.codebundle-button {
+.skill-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1080,7 +1080,7 @@ input[type="text"]:focus {
   cursor: pointer;
 }
 
-.codebundle-button-icon {
+.skill-button-icon {
   width: 16px; 
   height: 16px;
   /* filter: var(--icon-filter);  */

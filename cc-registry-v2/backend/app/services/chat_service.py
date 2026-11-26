@@ -390,7 +390,7 @@ class ChatService:
         if not task_names:
             return f"""**No Matching Tasks Found**
 
-I couldn't find any tasks in the CodeCollection registry that match your request for "{question}".
+I couldn't find any Tasks in the Plugin registry that match your request for "{question}".
 
 **Would you like these tasks added to the registry?**
 
@@ -408,7 +408,7 @@ You can create a GitHub issue to request these tasks be added to the registry.""
         
         answer_parts.extend([
             "",
-            "These are the available tasks from the CodeCollection registry that match your query."
+            "These are the available Tasks from the Plugin registry that match your query."
         ])
         
         return "\n".join(answer_parts)

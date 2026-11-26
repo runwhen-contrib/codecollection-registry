@@ -1,7 +1,7 @@
 """
-CodeCollection Tools
+Plugin Tools
 
-Tools for finding and listing CodeCollections.
+Tools for finding and listing Plugins (formerly CodeCollections).
 All data is fetched from the Registry API.
 """
 import json
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class FindCodeCollectionTool(BaseTool):
-    """Search for codecollections matching a query."""
+    """Search for plugins matching a query."""
     
     def __init__(self, registry_client):
         self._client = registry_client
@@ -23,7 +23,7 @@ class FindCodeCollectionTool(BaseTool):
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="find_codecollection",
-            description="Find the right codecollection for your use case.",
+            description="Find the right plugin for your use case.",
             category="search",
             parameters=[
                 ToolParameter(
@@ -43,7 +43,7 @@ class FindCodeCollectionTool(BaseTool):
         )
     
     async def execute(self, query: str, max_results: int = 5) -> str:
-        """Find codecollections via the Registry API."""
+        """Find plugins via the Registry API."""
         try:
             collections = await self._client.list_collections()
         except Exception as e:
@@ -77,9 +77,9 @@ class FindCodeCollectionTool(BaseTool):
         results = [coll for _, coll in scored[:max_results]]
         
         if not results:
-            return f"No codecollections found matching: {query}"
+            return f"No plugins found matching: {query}"
         
-        output = f"# CodeCollections for: {query}\n\n"
+        output = f"# Plugins for: {query}\n\n"
         output += f"Found {len(results)} result(s):\n\n"
         
         for i, coll in enumerate(results, 1):
@@ -95,7 +95,7 @@ class FindCodeCollectionTool(BaseTool):
 
 
 class ListCodeCollectionsTool(BaseTool):
-    """List all available codecollections."""
+    """List all available plugins."""
     
     def __init__(self, registry_client):
         self._client = registry_client
@@ -104,7 +104,7 @@ class ListCodeCollectionsTool(BaseTool):
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="list_codecollections",
-            description="List all available codecollections",
+            description="List all available plugins",
             category="info",
             parameters=[
                 ToolParameter(
@@ -119,17 +119,17 @@ class ListCodeCollectionsTool(BaseTool):
         )
     
     async def execute(self, format: str = "markdown") -> str:
-        """List all codecollections from the Registry API."""
+        """List all plugins from the Registry API."""
         try:
             collections = await self._client.list_collections()
         except Exception as e:
             logger.error(f"Registry API failed: {e}")
-            return f"Failed to list collections: {e}"
+            return f"Failed to list plugins: {e}"
         
         if format == "json":
             return json.dumps({"collections": collections}, indent=2, default=str)
         
-        output = f"# CodeCollections ({len(collections)})\n\n"
+        output = f"# Plugins ({len(collections)})\n\n"
         
         for coll in collections:
             slug = coll.get('slug', '')
@@ -137,7 +137,7 @@ class ListCodeCollectionsTool(BaseTool):
             
             output += f"## **{coll.get('name')}**\n\n"
             output += f"**Slug:** {slug}\n\n"
-            output += f"**CodeBundles:** {cb_count}\n\n"
+            output += f"**Skills:** {cb_count}\n\n"
             
             if coll.get('description'):
                 output += f"**Description:** {coll['description']}\n\n"
